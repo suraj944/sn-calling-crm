@@ -292,7 +292,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.srv2=Array.isArray(j.cases);ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.srv2=Array.isArray(j.cases);S.banks=Array.isArray(j.banks)?j.banks:null;ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu){await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu)})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -1157,10 +1157,15 @@ function renderEmp(){
 /* ---------- LEAD CASES: Interested customers handed to the Team Lead ---------- */
 const CASE_HDR=["Timestamp","SM Name","Customer Name","Contact Number","Product","Amount Required","Lead Source","Connector Name","Connector Contact No","Connector Location","Lead Type","Lead Shared by","Lead Date","Monthly","Unique Lead Code","Bank Name","Banker Name","Banker Contact No","Status","Remarks","Disbursed Date","Disbursed Month","Customer Status","Contact ID","Team Lead","Telecaller ID","Last updated","Updated by"];
 const CASE_OPTS={"Product":["Personal Loan","Business Loan","Home Loan","Loan Against Property","Balance Transfer & Top-up","Car Loan","Two-wheeler Loan","Gold Loan","Education Loan","Working Capital / MSME","Machinery Loan","Professional Loan"],
-  "Status":["New","Follow-up","Documents pending","Login done","Sanctioned","Disbursed","Rejected","Customer not interested"],
+  "Status":["New","Follow Up","In Process","Login Done","Sanction Done","Disbursed","On Hold","Not Responding","Not Interested","Cancelled","Case Rejected","Case Closed"],
   "Lead Source":["Telecalling","Website","Connector","Walk-in","Reference"],"Lead Type":["Fresh","Balance Transfer","Top-up","BT + Top-up"],
-  "Customer Status":["Hot","Warm","Cold","Not reachable"]};
-const CASE_TONE={"New":"amber","Follow-up":"amber","Documents pending":"amber","Login done":"blue","Sanctioned":"blue","Disbursed":"green","Rejected":"red","Customer not interested":"red"};
+  "Customer Status":["Hot","Warm","Cold","Hold","Lost","Case Closed"]};
+/* Bank Name must be chosen from the Banks tab (sent by the server); this list is only used until the new server is live */
+const BANKS_FALLBACK=["Aditya Birla Capital","Aeon Finance","AU Small Finance Bank","Axis Bank","Bajaj Finance","Bandhan Bank","Bank of Baroda","Bank of India","Bank of Maharashtra","Canara Bank","Cholamandalam Finance","DBS Bank","Federal Bank","Finnable","Godrej Capital","HDFC Bank","Hero FinCorp","Home First Finance","ICICI Bank","IDFC First Bank","IIFL Finance","InCred Finance","IndusInd Bank","Jio Finance","Kotak Mahindra Bank","L&T Finance","Lendingkart","LIC Housing Finance","Muthoot Finance","Orange Finance","Piramal Finance","PNB Housing Finance","Poonawalla Fincorp","Protium","Punjab National Bank","Samman Capital","Shriram Finance","Standard Chartered Bank","State Bank of India","Tata Capital","Union Bank of India","Werize","Yes Bank"];
+const BANKS=()=>S.banks&&S.banks.length?S.banks:BANKS_FALLBACK;
+const CASE_PICK=new Set(["Status","Customer Status","Bank Name"]);   /* choose from the list only – no typing */
+const CASE_CLOSED=["Not Interested","Cancelled","Case Rejected","Case Closed"];
+const CASE_TONE={"New":"amber","Follow Up":"amber","In Process":"amber","On Hold":"gray","Not Responding":"gray","Login Done":"blue","Sanction Done":"blue","Disbursed":"green","Not Interested":"red","Cancelled":"red","Case Rejected":"red","Case Closed":"gray"};
 function buildCases(rows){return (rows||[]).map(r=>{const o={};CASE_HDR.forEach((h,i)=>o[h]=String(r[i]==null?"":r[i]).trim());o.code=o["Unique Lead Code"];o.at=parseT(o["Timestamp"]);o.upd=parseT(o["Last updated"]);
   const t=(S.allEmps||[]).find(e=>e.role==="Team Lead"&&(e.id===o["Team Lead"]||normName(e.name)===normName(o["Team Lead"])));o.tlId=t?t.id:"";return o}).filter(o=>o.code)}
 const CASES=()=>S.cases||[];
@@ -1183,6 +1188,8 @@ function openCase(code){
   const ro=(h,v)=>`<div><div class="small mute">${h}</div><div style="font-weight:600">${v||'<span class="mute" style="font-weight:400">—</span>'}</div></div>`;
   const inp=(h,type="text")=>{const id="cf_"+h.replace(/\W/g,"");const v=c[h]||"";
     if(!can)return ro(h,h==="Amount Required"?inr(v):esc(v));
+    if(CASE_PICK.has(h)){const opts=h==="Bank Name"?BANKS():CASE_OPTS[h];const all=v&&!opts.includes(v)?[v,...opts]:opts;
+      return `<div><label class="f" for="${id}">${h}</label><select id="${id}" style="width:100%"><option value="">${h==="Bank Name"?"— Choose bank —":"— Choose —"}</option>${all.map(o=>`<option ${o===v?"selected":""}>${esc(o)}</option>`).join("")}</select></div>`}
     const list=CASE_OPTS[h]||(h==="SM Name"?(S.allEmps||[]).filter(e=>e.role==="Sales Manager"&&e.active).map(e=>e.name):null);
     return `<div><label class="f" for="${id}">${h}</label><input id="${id}" type="${type}" value="${esc(v)}" style="width:100%" ${list?`list="${id}_l"`:""} ${h==="Amount Required"?'inputmode="numeric" placeholder="e.g. 500000"':""}>${list?`<datalist id="${id}_l">${list.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>`:""}</div>`};
   const tlSel=isMgr()&&!isTL()?`<div><label class="f">Team Lead</label><select id="cf_TL" style="width:100%"><option value="">— None —</option>${(S.allEmps||[]).filter(e=>e.role==="Team Lead"&&e.active).map(e=>`<option value="${esc(e.id)}" ${c.tlId===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select></div>`:ro("Team Lead",esc(c["Team Lead"]));
@@ -1212,12 +1219,12 @@ function aCases(){
   const f=view.cf||(view.cf={st:"all",mon:"all",q:""}),q=f.q.toLowerCase(),all=CASES();
   const months=[...new Set(all.map(c=>c.Monthly).filter(Boolean))];
   const list=all.filter(c=>(f.st==="all"||c.Status===f.st)&&(f.mon==="all"||c.Monthly===f.mon)&&(!q||(c["Customer Name"]+c["Contact Number"]+c.code+c["Bank Name"]+c["Lead Shared by"]).toLowerCase().includes(q))).sort((a,b)=>(b.at||0)-(a.at||0));
-  const cnt=st=>all.filter(c=>c.Status===st).length,disb=all.filter(c=>c.Status==="Disbursed");
+  const cnt=st=>all.filter(c=>(c.Status||"New")===st).length,disb=all.filter(c=>c.Status==="Disbursed"),closed=CASE_CLOSED.reduce((n,st)=>n+cnt(st),0);
   const amt=disb.reduce((s,c)=>s+(parseFloat(String(c["Amount Required"]).replace(/[^\d.]/g,""))||0),0);
   let h=`<div class="stats sm"><div class="card stat"><span>Lead cases</span><b>${all.length}</b><div class="small mute">${cnt("New")} new – not yet followed up</div></div>
-    <div class="card stat"><span>In progress</span><b style="color:var(--amber)">${all.length-cnt("New")-disb.length-cnt("Rejected")-cnt("Customer not interested")}</b><div class="small mute">follow-up to sanctioned</div></div>
+    <div class="card stat"><span>In progress</span><b style="color:var(--amber)">${all.length-cnt("New")-disb.length-closed}</b><div class="small mute">follow up, login, sanction, on hold</div></div>
     <div class="card stat"><span>Disbursed</span><b style="color:var(--green)">${disb.length}</b><div class="small mute">${amt?"₹"+amt.toLocaleString("en-IN"):"—"}</div></div>
-    <div class="card stat"><span>Rejected / dropped</span><b style="color:#c0392b">${cnt("Rejected")+cnt("Customer not interested")}</b><div class="small mute">closed</div></div></div>`;
+    <div class="card stat"><span>Closed / dropped</span><b style="color:#c0392b">${closed}</b><div class="small mute">not interested, cancelled, rejected, closed</div></div></div>`;
   h+=`<div class="card pad" style="margin-bottom:12px"><div class="row"><input id="cq" placeholder="Search customer, number, lead code, bank" value="${esc(f.q)}" style="flex:1;min-width:200px">
     <select id="cst"><option value="all">All statuses</option>${CASE_OPTS.Status.map(x=>`<option ${f.st===x?"selected":""}>${x}</option>`).join("")}</select>
     <select id="cmon"><option value="all">All months</option>${months.map(m=>`<option ${f.mon===m?"selected":""}>${esc(m)}</option>`).join("")}</select>

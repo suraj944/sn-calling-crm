@@ -158,7 +158,8 @@ function load_(me) {
     leads, logs,
     sheetUrl: me.role === "Admin" ? sheetUrlFor_(me) : "",   // only Admin gets the Google Sheet link
     ...meetings_(me, isLead),
-    cases: cases_(me, emps),
+    cases: (fillCodesSafe_(), cases_(me, emps)),
+    banks: banks_(),
     serverTime: now_()
   };
 }
@@ -343,6 +344,39 @@ function caseSheet_() {
   if (!sh) { sh = ss.insertSheet("Lead Cases"); sh.getRange(1, 1, 1, CASE_COLS).setValues([CASE_HDR]); sh.setFrozenRows(1); }
   return sh;
 }
+// Unique Lead Code: SNFS-1, SNFS-2 … always one more than the highest code in the sheet
+function fillCodesSafe_() {
+  const lk = LockService.getScriptLock();
+  if (!lk.tryLock(5000)) return;
+  try { fillCodes_(); } catch (e) {} finally { lk.releaseLock(); }
+}
+function nextCode_(rows) {
+  let max = 0;
+  rows.forEach(r => { const m = String(r[C_["Unique Lead Code"]]).trim().match(/^SNFS-(\d+)$/i); if (m) max = Math.max(max, +m[1]); });
+  return "SNFS-" + (max + 1);
+}
+// Rows typed straight into the Lead Cases tab without a code get the next SNFS number
+function fillCodes_() {
+  const sh = caseSheet_(), rows = caseRows_(), col = C_["Unique Lead Code"] + 1;
+  rows.forEach((r, i) => {
+    if (!String(r[C_["Unique Lead Code"]]).trim() && String(r[C_["Customer Name"]]).trim()) {
+      const code = nextCode_(rows); r[C_["Unique Lead Code"]] = code; sh.getRange(i + 2, col).setValue(code);
+    }
+  });
+}
+// Bank list lives in the Banks tab (column A, from row 2). Admin adds new banks there.
+function banks_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Banks");
+  if (!sh || sh.getLastRow() < 2) return [];
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => String(r[0]).trim()).filter(String);
+}
+function bankName_(v) {
+  v = String(v == null ? "" : v).trim();
+  if (!v) return "";
+  const b = banks_().find(x => x.toLowerCase() === v.toLowerCase());
+  if (!b) throw new Error("Choose the bank from the list. To add a new bank, ask Admin to add it in the Banks tab.");
+  return b;
+}
 function caseRows_() { try { const sh = caseSheet_(), n = sh.getLastRow() - 1; return n < 1 ? [] : sh.getRange(2, 1, n, CASE_COLS).getDisplayValues(); } catch (e) { return []; } }
 // the Team Lead a case belongs to: the contact's telecaller's Team Lead (or the telecaller, if they lead a team)
 function caseTL_(emps, assigneeId, me) {
@@ -363,10 +397,7 @@ function cases_(me, emps) {
 }
 function createCase_(me, lc, remark) {
   const emps = emps_(), tl = caseTL_(emps, String(lc[4]).trim(), me), now = new Date();
-  const ym = Utilities.formatDate(now, "Asia/Kolkata", "yyMM"), prefix = "SN" + ym + "-";
-  let max = 0;
-  caseRows_().forEach(r => { const c = String(r[C_["Unique Lead Code"]]); if (c.indexOf(prefix) === 0) max = Math.max(max, parseInt(c.slice(prefix.length), 10) || 0); });
-  const code = prefix + String(max + 1).padStart(4, "0");
+  const code = nextCode_(caseRows_());
   const tel = emps.find(x => x.id === String(lc[4]).trim());
   const row = new Array(CASE_COLS).fill("");
   row[C_["Timestamp"]] = now_(); row[C_["Customer Name"]] = lc[1]; row[C_["Contact Number"]] = text_(lc[2]);
@@ -394,7 +425,7 @@ function saveCase_(me, c) {
   const row = rows[i].slice();
   if (!canSeeCase_(me, row, emps, me.role === "Team Lead" ? teamIds_(me, emps) : new Set())) throw new Error("This case isn't in your team");
   const cl = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "'$&").trim().slice(0, 500);
-  CASE_EDIT.forEach(h => { if (c[h] !== undefined) row[C_[h]] = h === "Remarks" ? tidyText_(cl(c[h])) : h === "SM Name" || h === "Banker Name" || h === "Connector Name" || h === "Bank Name" ? properName_(cl(c[h])) : cl(c[h]); });
+  CASE_EDIT.forEach(h => { if (c[h] !== undefined) row[C_[h]] = h === "Remarks" ? tidyText_(cl(c[h])) : h === "Bank Name" ? bankName_(cl(c[h])) : h === "SM Name" || h === "Banker Name" || h === "Connector Name" ? properName_(cl(c[h])) : cl(c[h]); });
   row[C_["Contact Number"]] = text_(row[C_["Contact Number"]]);
   ["Connector Contact No", "Banker Contact No"].forEach(h => row[C_[h]] = text_(row[C_[h]]));
   const dd = String(row[C_["Disbursed Date"]]).match(/^(\d{4})-(\d{2})-(\d{2})/);
