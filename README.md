@@ -12,6 +12,10 @@ Contact details shown on the home page are set in the `CONTACT` block at the bot
 
 **Dashboard** (Admin, Manager, Team Lead): date range (today, yesterday, 7/30 days, this month, all time, custom), KPIs (calls, connected, leads, converted, new contacts, callbacks due), calls-per-day chart, outcome breakdown, telecaller performance table, calling list status and contact sources.
 
+**Teams:** in the Employees tab, column **Team Lead** says who each telecaller reports to (also set in the CRM: Employees → Edit). A Team Lead sees, calls and assigns only their own team's contacts; Admin and Manager see everyone and can filter every page by team. New (unassigned) contacts are given out by Admin / Manager.
+
+**By Employee** tab (Admin, Manager, Team Lead): pick a person to see their calling list, leads and calls, with counts for everyone side by side.
+
 **Words used:** a **contact** is any name + number on the calling list. A **lead** is a contact marked **Interested** on a call (or later Converted). The **Leads** tab in the CRM and the **Leads** tab in the sheet show only these.
 
 **Field Work** (everyone): Sales Managers log their meetings with the same 16 fields as the old Google Form (Timestamp, SM Name, Meeting Type, Meeting Entity, Name of the CP/Developer/Customer/Connector, Name of The Entity, Willing to work with SN, Existing % received in market if any, Contact no of the Entity, Purpose of Meeting, Meeting Outcome, Remarks, Any Tieup currently?, If Yes Tie up with which company, Interested / Not interested, Current pass back received, Feedback). Names are saved in proper case automatically (SBI, HDFC etc. kept in capitals). Each SM sees and edits only their own entries; Admin / Manager / Team Lead see and edit everyone's; Admin / Manager can delete. Stored in the **Field Work** tab of the CRM sheet.
