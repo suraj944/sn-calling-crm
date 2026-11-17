@@ -104,6 +104,15 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .empty{padding:36px;text-align:center;color:var(--mute)}
 .modal-bg{position:fixed;inset:0;background:rgba(17,24,39,.45);display:none;align-items:flex-end;justify-content:center;z-index:20}
 .modal-bg.show{display:flex}
+/* confirmation pop-up (sits above the case / contact window) */
+.cfm-bg{position:fixed;inset:0;background:rgba(17,24,39,.5);display:none;align-items:center;justify-content:center;z-index:40;padding:16px}
+.cfm-bg.show{display:flex}
+.cfm{background:#fff;border-radius:14px;max-width:440px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.25)}
+.cfm-h{font-weight:700;font-size:16px;padding:16px 18px 6px}
+.cfm-b{padding:0 18px 14px;color:#374151;line-height:1.5}
+.cfm-b ul{margin:6px 0 0;padding-left:18px}.cfm-b li{margin:3px 0}
+.cfm-f{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--line)}
+.btn.danger{background:var(--red);border-color:var(--red);color:#fff}
 @media(min-width:640px){.modal-bg{align-items:center}}
 .modal{background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;max-height:92vh;overflow:auto}
 @media(min-width:640px){.modal{border-radius:16px}}
@@ -151,6 +160,8 @@ a.lnk{color:var(--brand);text-decoration:none;font-weight:500}
 
 <div class="modal-bg" id="mbg"><div class="modal" id="modal"></div></div>
 <div class="toast" id="toast"></div>
+<div class="cfm-bg" id="cfmbg" role="dialog" aria-modal="true" aria-labelledby="cfmT"><div class="cfm"><div class="cfm-h" id="cfmT"></div><div class="cfm-b" id="cfmB"></div>
+ <div class="cfm-f"><button class="btn" id="cfmNo">Cancel</button><button class="btn pri" id="cfmYes">Yes</button></div></div></div>
 
 <script>
 /* ================= CONFIG ================= */
@@ -187,6 +198,13 @@ function normPhone(p){const raw=String(p).trim();let d=raw.replace(/\D/g,"");
   if(d.length===12&&d.startsWith("91"))d=d.slice(2);if(d.length===11&&d.startsWith("0"))d=d.slice(1);
   if(d.length===10)return d.slice(0,5)+" "+d.slice(5);return raw.startsWith("+")?"'"+raw:raw}
 const pill=s=>`<span class="pill ${STATUS[s].cls}">${STATUS[s].label}</span>`;
+/* Ask before anything is opened, changed or assigned. Resolves true only when the person clicks the confirm button. */
+function askOk({title,body="",ok="Yes",danger=false}){return new Promise(res=>{const bg=$("#cfmbg"),y=$("#cfmYes"),n=$("#cfmNo");
+  $("#cfmT").textContent=title;$("#cfmB").innerHTML=body;y.textContent=ok;y.className="btn "+(danger?"danger":"pri");
+  const done=v=>{bg.classList.remove("show");document.removeEventListener("keydown",key);res(v)};
+  const key=e=>{if(e.key==="Escape")done(false)};document.addEventListener("keydown",key);
+  y.onclick=()=>done(true);n.onclick=()=>done(false);bg.onclick=e=>{if(e.target===bg)done(false)};bg.classList.add("show");setTimeout(()=>n.focus(),30)})}
+const tlOf=eid=>{const e=(S.allEmps||[]).find(x=>x.id===eid);if(!e)return"";return e.role==="Team Lead"?e.name:e.tl?empName(e.tl):""};
 const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2800)};
 const rank=r=>{const i=ROLES.indexOf(r);return i<0?99:i};
 
@@ -276,6 +294,7 @@ const Live={
   async saveMeeting(){throw new Error("Open the website version of the CRM to add meetings")},
   async saveCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async createCase(){throw new Error("Open the website version of the CRM for lead cases")},
+  async removeCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async deleteMeeting(){throw new Error("Open the website version of the CRM to delete meetings")}
 };
 
@@ -308,6 +327,7 @@ const Script={
   async saveMeeting(m){await this.req("saveMeeting",{m})},
   async saveCase(c){await this.req("saveCase",{c})},
   async createCase(leadId){await this.req("createCase",{leadId})},
+  async removeCase(code){await this.req("removeCase",{code})},
   async deleteMeeting(id){await this.req("deleteMeeting",{id})}
 };
 let LIVE=Live;
@@ -567,6 +587,7 @@ function bindLeadsTab(){
   document.querySelectorAll("[data-lsel]").forEach(c=>c.onchange=()=>{c.checked?view.lsel.add(c.dataset.lsel):view.lsel.delete(c.dataset.lsel);render()});
   const la=$("#lall");if(la)la.onchange=e=>{document.querySelectorAll("[data-lsel]").forEach(c=>e.target.checked?view.lsel.add(c.dataset.lsel):view.lsel.delete(c.dataset.lsel));render()};
   const ld=$("#ldo");if(ld)ld.onclick=async()=>{const to=$("#lto").value;if(!to)return toast("Choose a person first");const ids=[...view.lsel];
+    if(!await askOk({title:"Assign "+ids.length+" lead"+(ids.length===1?"":"s")+"?",ok:"Yes, assign",body:`${ids.length} selected lead${ids.length===1?"":"s"} will move to <b>${esc(empName(to))}</b>.`}))return;
     if(await write(api=>api.assign(ids,to),`${ids.length} case${ids.length===1?"":"s"} assigned to ${empName(to)}`)){view.lsel.clear();render()}};
 }
 // A "lead" = a contact who said they're interested on a call (status Interested, or later Converted)
@@ -926,7 +947,7 @@ function openMeeting(id){
   const tuw=()=>{$("#tuw").style.visibility=segVal("m_tieup")==="Yes"?"visible":"hidden"};
   document.querySelectorAll("[data-seg]").forEach(g=>g.querySelectorAll("button").forEach(b=>b.onclick=()=>{const was=b.classList.contains("on");g.querySelectorAll("button").forEach(x=>x.classList.remove("on"));if(!was||g.dataset.seg==="m_type")b.classList.add("on");tuw()}));
   tuw();
-  if($("#mDel")){let armed=false;$("#mDel").onclick=async()=>{if(!armed){armed=true;$("#mDel").textContent="Confirm delete?";setTimeout(()=>{armed=false;if($("#mDel"))$("#mDel").textContent="Delete"},3000);return}
+  if($("#mDel")){$("#mDel").onclick=async()=>{if(!await askOk({title:"Delete this field work entry?",ok:"Yes, delete",danger:true,body:"This can't be undone."}))return;
     if(await write(api=>api.deleteMeeting(m.id),"Field work entry deleted"))close()}}
   ["#m_person","#m_entity","#m_tuw"].forEach(s=>{const el=$(s);if(el)el.addEventListener("blur",()=>{el.value=properName(el.value)})});
   ["#m_purpose","#m_outcome","#m_remarks","#m_pass","#m_exist"].forEach(s=>{const el=$(s);if(el)el.addEventListener("blur",()=>{el.value=tidyText(el.value)})});
@@ -939,6 +960,7 @@ function openMeeting(id){
     const rec={id:m?m.id:"",at:toSheetTime(parseT($("#m_at").value)||Date.now()),sm:smName,smId:smEmp?smEmp.id:(m?m.smId:""),type:segVal("m_type")||"Physical",ent:$("#m_ent").value,
       person,entity,willing:segVal("m_willing"),existing:$("#m_exist").value.trim(),phone:ph,purpose:$("#m_purpose").value.trim(),outcome:$("#m_outcome").value.trim(),interest:segVal("m_interest"),
       remarks:$("#m_remarks").value.trim(),tieup:segVal("m_tieup"),tieupWith:segVal("m_tieup")==="Yes"?$("#m_tuw").value.trim():"",passback:$("#m_pass").value.trim(),feedback:$("#m_fb").value.trim()};
+    if(m&&!await askOk({title:"Save changes to this field work entry?",ok:"Yes, save"}))return;
     const b=$("#mok");b.disabled=true;b.textContent="Saving…";
     if(await write(api=>api.saveMeeting(rec),m?"Field work updated":"Field work added"))close();else{b.disabled=false;b.textContent=m?"Save changes":"Add field work"}};
 }
@@ -1021,9 +1043,12 @@ function bindAdmin(){
   document.querySelectorAll("[data-sel]").forEach(c=>c.onchange=()=>{c.checked?view.sel.add(c.dataset.sel):view.sel.delete(c.dataset.sel);render()});
   on("#all","onchange",e=>{document.querySelectorAll("[data-sel]").forEach(c=>e.target.checked?view.sel.add(c.dataset.sel):view.sel.delete(c.dataset.sel));render()});
   on("#doAssign","onclick",async()=>{const to=$("#toEmp").value;if(!to)return toast("Choose a person first");const ids=[...view.sel];
+    if(!await askOk({title:"Assign "+ids.length+" contact"+(ids.length===1?"":"s")+"?",ok:"Yes, assign",body:`${ids.length} selected contact${ids.length===1?"":"s"} will go to <b>${esc(empName(to))}</b> for calling.`}))return;
     if(await write(api=>api.assign(ids,to),`${ids.length} contact(s) assigned to ${empName(to)}`)){view.sel.clear();render()}});
   on("#auto","onclick",async()=>{const un=S.leads.filter(l=>!l.assignedTo).map(l=>l.id);if(!un.length)return toast("No unassigned contacts");
-    const plan=distributePlan(un);await write(async api=>{for(const [eid,ids] of Object.entries(plan))await api.assign(ids,eid)},`${un.length} contacts distributed`)});
+    const plan=distributePlan(un);
+    if(!await askOk({title:"Share out "+un.length+" contacts?",ok:"Yes, share out",body:`<ul>${Object.entries(plan).map(([eid,ids])=>`<li><b>${esc(empName(eid))}</b>: ${ids.length}</li>`).join("")}</ul>`}))return;
+    await write(async api=>{for(const [eid,ids] of Object.entries(plan))await api.assign(ids,eid)},`${un.length} contacts distributed`)});
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false));
   on("#addOne","onclick",async()=>{const n=$("#nName").value.trim(),p=$("#nPhone").value.trim();if(!n||!p)return toast("Name and number are required");
     if(isTL()&&!$("#nEmp").value)return toast("Choose who in your team should call this contact");
@@ -1032,6 +1057,7 @@ function bindAdmin(){
     lines.forEach(ln=>{const p=ln.split(/\t|,/).map(s=>s.trim());if(p.length<2||p[1].replace(/\D/g,"").length<6)return;list.push({name:p[0],phone:p[1],city:p[2]||""})});
     if(!list.length)return toast("No valid lines – use: Name, Number, City");
     if(to==="__auto"){const plan=distributePlan(list.map((_,i)=>i));Object.entries(plan).forEach(([eid,idx])=>idx.forEach(i=>list[i].assignedTo=eid))}else list.forEach(x=>x.assignedTo=to);
+    if(!await askOk({title:"Import "+list.length+" contact"+(list.length===1?"":"s")+"?",ok:"Yes, import",body:`${list.length} contact${list.length===1?"":"s"} will be added${to==="__auto"?" and shared out across the team":to?` and assigned to <b>${esc(empName(to))}</b>`:" without an owner"}.${lines.length-list.length?` ${lines.length-list.length} line(s) will be skipped.`:""}`}))return;
     if(await write(api=>api.addLeads(list),`${list.length} contact(s) imported`+(lines.length-list.length?`, ${lines.length-list.length} skipped`:""))){view.tab="assign";render()}});
   on("#addEmp","onclick",async()=>{const n=$("#eName").value.trim(),ph=$("#ePhone").value.trim(),pin=$("#ePin").value.trim(),role=$("#eRole").value,tl=$("#eTl").value;
     if(n.length<2)return toast("Enter a name – it's used to log in");if(ph&&ph.replace(/\D/g,"").length<10)return toast("Mobile must be 10 digits (or leave it empty)");if(!validPin(pin))return toast("First PIN must be 4 digits");
@@ -1040,7 +1066,8 @@ function bindAdmin(){
   document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEditEmp(b.dataset.edit));
   document.querySelectorAll("[data-pin]").forEach(b=>b.onclick=()=>openResetPin(b.dataset.pin));
   on("#myPin2","onclick",()=>openChangePin());
-  document.querySelectorAll("[data-del]").forEach(b=>{let armed=false;b.onclick=async()=>{if(!armed){armed=true;b.textContent="Confirm remove?";b.style.color="var(--red)";setTimeout(()=>{armed=false;b.textContent="Remove";b.style.color=""},3000);return}
+  document.querySelectorAll("[data-del]").forEach(b=>{b.onclick=async()=>{
+    if(!await askOk({title:"Remove "+empName(b.dataset.del)+"?",ok:"Yes, remove",danger:true,body:"They can't log in any more and their contacts become unassigned."}))return;
     await write(api=>api.removeEmp(b.dataset.del),"Removed – their contacts are now unassigned")}});
   document.querySelectorAll("[data-as]").forEach(b=>b.onclick=()=>{view.who=b.dataset.as;view.tab="my";render()});
   on("#lEmp","onchange",e=>{view.logEmp=e.target.value;render()});
@@ -1069,11 +1096,13 @@ function openEditEmp(id){const e=emp(id);if(!e)return;const self=ME&&e.id===ME.i
     const name=$("#fN").value.trim(),phone=$("#fP").value.trim(),role=self?e.role:$("#fR").value,tl=["Telecaller Executive","Sales Manager"].includes(role)?$("#fT").value:"";
     if(name.length<2)return "Enter a name";if(phone&&phone.replace(/\D/g,"").length<10)return "Mobile must be 10 digits (or leave it empty)";
     if(S.employees.some(x=>x.id!==id&&normName(x.name)===normName(name)))return "Someone else already has this name";
+    if(!await askOk({title:"Save changes for "+e.name+"?",ok:"Yes, save",body:`Name: <b>${esc(name)}</b> · Role: <b>${esc(role)}</b>${tl?` · Team Lead: <b>${esc(empName(tl))}</b>`:""}`}))return "";
     return await write(api=>api.updateEmp({id,name,phone,role,tl}),"Saved")?true:"Not saved – see the message at the bottom"})}
 function openResetPin(id){const e=emp(id);if(!e)return;
   formModal("Reset PIN – "+esc(e.name),`<p class="small mute" style="margin-top:0">Set a new 4-digit PIN and tell ${esc(e.name.split(" ")[0])}. Their old PIN stops working, they're logged out of other devices, and the new PIN shows in the sheet's PIN column.</p>
    <label class="f">New PIN (4 digits)</label><input id="fPin" inputmode="numeric" maxlength="4" style="width:100%">`,"Set PIN",async()=>{
     const pin=$("#fPin").value.trim();if(!validPin(pin))return "PIN must be 4 digits";
+    if(!await askOk({title:"Change "+e.name+"'s PIN?",ok:"Yes, change PIN",body:`The old PIN stops working and ${esc(e.name.split(" ")[0])} is logged out of other devices.`}))return "";
     return await write(api=>api.resetPin(id,pin),"PIN updated for "+e.name)?true:"Not saved"})}
 function openChangePin(){
   formModal("Change my PIN",`<label class="f">Current PIN</label><input id="fO" type="password" inputmode="numeric" maxlength="4" style="width:100%">
@@ -1192,7 +1221,9 @@ function casesTable(list,{empty="No lead cases yet."}={}){
      <td><button class="btn sm" data-case="${esc(c.code)}">${isLead()?"Open":"View"}</button></td></tr>`).join("")||`<tr><td colspan="11"><div class="empty">${empty}</div></td></tr>`}</table></div>`;
 }
 function bindCases(){document.querySelectorAll("[data-case]").forEach(b=>b.onclick=e=>{e.preventDefault();openCase(b.dataset.case)});
-  document.querySelectorAll("[data-mkcase]").forEach(b=>b.onclick=async()=>{b.disabled=true;if(!await write(api=>api.createCase(b.dataset.mkcase),"Lead case opened"))b.disabled=false})}
+  document.querySelectorAll("[data-mkcase]").forEach(b=>b.onclick=async()=>{const l=S.leads.find(x=>x.id===b.dataset.mkcase)||{},tl=tlOf(l.assignedTo);
+    if(!await askOk({title:"Open a lead case?",ok:"Yes, open case",body:`A new lead case will be opened for <b>${esc(l.name||"this customer")}</b> (${esc(l.phone||"")})${tl?` and sent to <b>${esc(tl)}</b> to follow up`:""}.<div class="small mute" style="margin-top:8px">Opened by mistake? Only Admin can remove a case.</div>`}))return;
+    b.disabled=true;if(!await write(api=>api.createCase(b.dataset.mkcase),"Lead case opened"))b.disabled=false})}
 function openCase(code){
   const c=CASES().find(x=>x.code===code);if(!c)return;const can=isLead();
   const ro=(h,v)=>`<div><div class="small mute">${h}</div><div style="font-weight:600">${v||'<span class="mute" style="font-weight:400">—</span>'}</div></div>`;
@@ -1217,12 +1248,20 @@ function openCase(code){
     ${can?`<label class="f" for="cf_Remarks">Remarks</label><textarea id="cf_Remarks" style="width:100%;min-height:70px">${esc(c.Remarks)}</textarea>`:`<div style="margin-top:10px">${ro("Remarks",esc(c.Remarks))}</div>`}
     <div class="small mute" style="margin-top:8px">Monthly: ${esc(c.Monthly)} · Last update ${c.upd?fmt(c.upd):"—"} by ${esc(c["Updated by"])}</div>
    </div>
-   <div class="mf"><button class="btn" id="mc">${can?"Cancel":"Close"}</button>${can?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
+   <div class="mf">${ME&&ME.role==="Admin"?`<button class="btn" id="crm" style="margin-right:auto;color:var(--red)">🗑 Remove case</button>`:""}<button class="btn" id="mc">${can?"Cancel":"Close"}</button>${can?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
   $("#modal").style.maxWidth="880px";$("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#mc").onclick=close;
+  const rmb=$("#crm");if(rmb)rmb.onclick=async()=>{
+    if(!await askOk({title:"Remove case "+c.code+"?",ok:"Yes, remove",danger:true,body:`<b>${esc(c["Customer Name"])}</b> · ${esc(c["Contact Number"])}<br>The case leaves Lead Cases for everyone. A copy is kept in the <b>Removed Cases</b> tab of the sheet with your name and the time. The contact stays in the Calling List and can get a new case later.`}))return;
+    rmb.disabled=true;if(await write(api=>api.removeCase(c.code),"Case "+c.code+" removed"))close();else rmb.disabled=false};
   const sv=$("#csave");if(sv)sv.onclick=async()=>{const o={code:c.code};
     ["SM Name","Status","Customer Status","Product","Amount Required","Lead Type","Lead Source","Bank Name","Banker Name","Banker Contact No","Disbursed Date","Connector Name","Connector Contact No","Connector Location","Remarks"].forEach(h=>{const el=$("#cf_"+h.replace(/\W/g,""));if(el)o[h]=el.value.trim()});
     if(o.Status==="Disbursed"&&!o["Disbursed Date"])return toast("Add the disbursed date");
     const tl=$("#cf_TL");if(tl)o["Team Lead"]=tl.value;
+    const ch=Object.keys(o).filter(h=>h!=="code"&&h!=="Team Lead"&&String(o[h])!==String(c[h]||"")).map(h=>[h,c[h]||"",o[h]]);
+    if(tl&&tl.value!==c.tlId)ch.push(["Team Lead",c["Team Lead"]||"",empName(tl.value)||"None"]);
+    if(!ch.length)return toast("Nothing changed");
+    const cut=v=>esc(String(v).length>60?String(v).slice(0,60)+"…":v)||'<span class="mute">empty</span>';
+    if(!await askOk({title:"Save changes to "+c.code+"?",ok:"Yes, save",body:`<ul>${ch.map(([h,a,b])=>`<li><b>${esc(h)}</b>: ${cut(a)} → ${cut(b)}</li>`).join("")}</ul>`}))return;
     sv.disabled=true;sv.textContent="Saving…";if(await write(api=>api.saveCase(o),"Case "+c.code+" saved"))close();else{sv.disabled=false;sv.textContent="Save case"}};
 }
 function aCases(){
@@ -1274,13 +1313,17 @@ function openLead(id,fromCall){
   $("#mbg").classList.add("show");
   const close=()=>$("#mbg").classList.remove("show");
   $("#mx").onclick=close;$("#mc").onclick=close;
-  const ma=$("#mAsg");if(ma)ma.onchange=async()=>{const to=ma.value;if(!to)return;ma.disabled=true;
+  const ma=$("#mAsg");if(ma)ma.onchange=async()=>{const to=ma.value;if(!to)return;
+    if(!await askOk({title:"Assign this contact?",ok:"Yes, assign",body:`<b>${esc(l.name)}</b> will move to <b>${esc(empName(to))}</b>.`})){ma.value=l.assignedTo||"";return}
+    ma.disabled=true;
     const ok=await write(api=>api.assign([l.id],to),`${l.name} assigned to ${empName(to)}`);
     if(ok){close();return}ma.value=l.assignedTo||"";ma.disabled=false};
   document.querySelectorAll("[data-out]").forEach(b=>b.onclick=()=>{M.out=b.dataset.out;document.querySelectorAll("[data-out]").forEach(x=>x.classList.toggle("on",x===b));
     $("#fuWrap").style.display=M.out==="cb"?"block":"none";
     if(M.out==="cb"&&!$("#fu").value){const d=new Date(Date.now()+864e5);$("#fu").value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T11:00`}});
   $("#ms").onclick=async()=>{if(!M.out)return toast("Select a call outcome");
+    if(M.out==="int"&&!caseOf(l.id)&&S.srv2){const tl=tlOf(l.assignedTo);
+      if(!await askOk({title:"Mark as Interested?",ok:"Yes, open case",body:`This opens a lead case for <b>${esc(l.name)}</b>${tl?` and sends it to <b>${esc(tl)}</b>`:" for the Team Lead"} to follow up. After that the telecaller can only view updates.`}))return}
     const btn=$("#ms");btn.disabled=true;btn.textContent="Saving…";
     const fu=M.out==="cb"&&$("#fu").value?parseT($("#fu").value):null;
     const by=ME?ME.id:(view.who!=="admin"?view.who:(l.assignedTo||"ADMIN_LOG"));

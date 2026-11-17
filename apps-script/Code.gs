@@ -78,6 +78,7 @@ function doPost(e) {
         case "deleteMeeting": need_(me, "Manager"); return deleteMeeting_(b.id);
         case "saveCase":   need_(me, "Team Lead"); return saveCase_(me, b.c || {});
         case "createCase": need_(me, "Team Lead"); return createCaseFor_(me, b.leadId);
+        case "removeCase": need_(me, "Admin"); return removeCase_(me, b.code);
         default: throw new Error("Unknown action: " + b.action);
       }
     } finally { lock.releaseLock(); }
@@ -352,6 +353,8 @@ function fillCodesSafe_() {
 }
 function nextCode_(rows) {
   let max = 0;
+  const rm = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Removed Cases");   // never reuse a removed case's code
+  if (rm && rm.getLastRow() > 1) rows = rows.concat(rm.getRange(2, 1, rm.getLastRow() - 1, CASE_COLS).getDisplayValues());
   rows.forEach(r => { const m = String(r[C_["Unique Lead Code"]]).trim().match(/^SNFS-(\d+)$/i); if (m) max = Math.max(max, +m[1]); });
   return "SNFS-" + (max + 1);
 }
@@ -441,6 +444,20 @@ function createCaseFor_(me, leadId) {                                  // open a
   if (caseRows_().some(x => String(x[C_["Contact ID"]]).trim() === String(lc[0]).trim())) throw new Error("This customer already has a case");
   if (me.role === "Team Lead" && !teamIds_(me, emps_()).has(String(lc[4]).trim())) throw new Error("This contact isn't in your team");
   return { saved: true, caseCode: createCase_(me, lc, String(lc[7] || "")) };
+}
+// Admin only: take a case out of Lead Cases (e.g. opened by mistake). The row is kept in the "Removed Cases" tab
+// with who removed it and when, so nothing is lost. The contact stays in the Calling List and can get a new case later.
+function removeCase_(me, code) {
+  const sh = caseSheet_(), rows = caseRows_();
+  const i = rows.findIndex(r => String(r[C_["Unique Lead Code"]]).trim() === String(code || "").trim());
+  if (i < 0) throw new Error("Case " + code + " not found");
+  const ss = SpreadsheetApp.getActiveSpreadsheet(), nc = sh.getLastColumn();
+  const hdr = sh.getRange(1, 1, 1, nc).getDisplayValues()[0], row = sh.getRange(i + 2, 1, 1, nc).getValues()[0];
+  let rm = ss.getSheetByName("Removed Cases");
+  if (!rm) { rm = ss.insertSheet("Removed Cases"); rm.getRange(1, 1, 1, nc + 2).setValues([hdr.concat(["Removed at", "Removed by"])]); rm.setFrozenRows(1); }
+  rm.appendRow(row.concat(Array(Math.max(0, nc - row.length)).fill(""), [now_(), me.name]));
+  sh.deleteRow(i + 2);
+  return { saved: true, removed: code };
 }
 function saveCase_(me, c) {
   const sh = caseSheet_(), rows = caseRows_(), emps = emps_();
