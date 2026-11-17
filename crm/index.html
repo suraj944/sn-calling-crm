@@ -295,7 +295,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.srv2=Array.isArray(j.cases);S.banks=Array.isArray(j.banks)?j.banks:null;ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.srv2=Array.isArray(j.cases);S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu){await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu)})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -1169,14 +1169,18 @@ const BANKS=()=>S.banks&&S.banks.length?S.banks:BANKS_FALLBACK;
 const CASE_PICK=new Set(["SM Name","Status","Customer Status","Product","Lead Type","Lead Source","Bank Name"]);   /* real drop-downs: choose from the list only – no typing */
 const SM_NAMES=["Abhilash Shandilya","Amol","Anita Gupta","Apeksha","Arshiya Shaikh","Ashish","Iram","Ishwar","Jyotsna Rokade","Khushi","Komal","Management Lead","Mayur","Omkar Shinde","Prerna","Presika Vishwakarma","Priyanka Singh","Sahil","Sana Momin","Surojit Ghosh"];
 const smNames=()=>[...new Set([...SM_NAMES,...(S.allEmps||[]).filter(e=>e.role==="Sales Manager"&&e.active).map(e=>e.name),...CASES().map(c=>c["SM Name"]).filter(Boolean)])].sort((a,b)=>a.localeCompare(b));
-const caseOpts=h=>h==="Bank Name"?BANKS():h==="SM Name"?smNames():CASE_OPTS[h];
+/* Drop-down choices come from the Lists tab of the sheet (sent by the server); the built-in lists are only a fallback */
+const caseOpts=h=>{const L=S.lists&&S.lists[h];if(L&&L.length)return L;return h==="Bank Name"?BANKS():h==="SM Name"?smNames():CASE_OPTS[h]};
+/* How a status counts on the dashboard: "Counts as" column next to Status in the Lists tab, else the built-in rule */
+const stType=st=>{const t=String((S.stype||{})[st]||"").toLowerCase();if(t.startsWith("new"))return"new";if(t.startsWith("disb"))return"disb";if(t.startsWith("clos")||t.startsWith("drop")||t.startsWith("lost"))return"closed";if(t)return"prog";
+  return !st||st==="New"?"new":st==="Disbursed"?"disb":CASE_CLOSED.includes(st)?"closed":"prog"};
 const CASE_CLOSED=["Not Interested","Cancelled","Case Rejected","Case Closed"];
 const CASE_TONE={"New":"amber","Follow Up":"amber","In Process":"amber","On Hold":"gray","Not Responding":"gray","Login Done":"blue","Sanction Done":"blue","Disbursed":"green","Not Interested":"red","Cancelled":"red","Case Rejected":"red","Case Closed":"gray"};
 function buildCases(rows){return (rows||[]).map(r=>{const o={};CASE_HDR.forEach((h,i)=>o[h]=String(r[i]==null?"":r[i]).trim());o.code=o["Unique Lead Code"];o.at=parseT(o["Timestamp"]);o.upd=parseT(o["Last updated"]);
   const t=(S.allEmps||[]).find(e=>e.role==="Team Lead"&&(e.id===o["Team Lead"]||normName(e.name)===normName(o["Team Lead"])));o.tlId=t?t.id:"";return o}).filter(o=>o.code)}
 const CASES=()=>S.cases||[];
 const caseOf=leadId=>CASES().find(c=>c["Contact ID"]===leadId);
-const casePill=c=>{const t=CASE_TONE[c.Status]||"gray";return `<span class="pill" style="${t==="green"?"background:var(--green-soft);color:var(--green)":t==="red"?"background:#fdecec;color:#c0392b":t==="blue"?"background:#e8f0fe;color:var(--brand)":t==="amber"?"background:#fff4e0;color:#b26a00":"background:#eef0f3;color:#555"}">${esc(c.Status||"New")}</span>`};
+const casePill=c=>{const t=CASE_TONE[c.Status]||{new:"amber",disb:"green",closed:"red",prog:"amber"}[stType(c.Status)];return `<span class="pill" style="${t==="green"?"background:var(--green-soft);color:var(--green)":t==="red"?"background:#fdecec;color:#c0392b":t==="blue"?"background:#e8f0fe;color:var(--brand)":t==="amber"?"background:#fff4e0;color:#b26a00":"background:#eef0f3;color:#555"}">${esc(c.Status||"New")}</span>`};
 const inr=v=>{const n=parseFloat(String(v).replace(/[^\d.]/g,""));return isFinite(n)&&n>0?"₹"+n.toLocaleString("en-IN"):esc(v||"")};
 function casesTable(list,{empty="No lead cases yet."}={}){
   return `<div class="card tw"><table class="ctab"><tr><th>Lead code</th><th>Lead date</th><th>Customer</th><th>Product</th><th>Amount</th><th>Shared by</th><th>Team Lead</th><th>Bank</th><th>Status</th><th>Last update</th><th></th></tr>
@@ -1225,17 +1229,17 @@ function aCases(){
   const f=view.cf||(view.cf={st:"all",mon:"all",q:""}),q=f.q.toLowerCase(),all=CASES();
   const months=[...new Set(all.map(c=>c.Monthly).filter(Boolean))];
   const list=all.filter(c=>(f.st==="all"||c.Status===f.st)&&(f.mon==="all"||c.Monthly===f.mon)&&(!q||(c["Customer Name"]+c["Contact Number"]+c.code+c["Bank Name"]+c["Lead Shared by"]).toLowerCase().includes(q))).sort((a,b)=>(b.at||0)-(a.at||0));
-  const cnt=st=>all.filter(c=>(c.Status||"New")===st).length,disb=all.filter(c=>c.Status==="Disbursed"),closed=CASE_CLOSED.reduce((n,st)=>n+cnt(st),0);
+  const ofType=t=>all.filter(c=>stType(c.Status)===t),disb=ofType("disb"),closed=ofType("closed").length,newN=ofType("new").length,cnt=st=>st==="New"?newN:all.filter(c=>c.Status===st).length;
   const amt=disb.reduce((s,c)=>s+(parseFloat(String(c["Amount Required"]).replace(/[^\d.]/g,""))||0),0);
   let h=`<div class="stats sm"><div class="card stat"><span>Lead cases</span><b>${all.length}</b><div class="small mute">${cnt("New")} new – not yet followed up</div></div>
     <div class="card stat"><span>In progress</span><b style="color:var(--amber)">${all.length-cnt("New")-disb.length-closed}</b><div class="small mute">follow up, login, sanction, on hold</div></div>
     <div class="card stat"><span>Disbursed</span><b style="color:var(--green)">${disb.length}</b><div class="small mute">${amt?"₹"+amt.toLocaleString("en-IN"):"—"}</div></div>
     <div class="card stat"><span>Closed / dropped</span><b style="color:#c0392b">${closed}</b><div class="small mute">not interested, cancelled, rejected, closed</div></div></div>`;
   h+=`<div class="card pad" style="margin-bottom:12px"><div class="row"><input id="cq" placeholder="Search customer, number, lead code, bank" value="${esc(f.q)}" style="flex:1;min-width:200px">
-    <select id="cst"><option value="all">All statuses</option>${CASE_OPTS.Status.map(x=>`<option ${f.st===x?"selected":""}>${x}</option>`).join("")}</select>
+    <select id="cst"><option value="all">All statuses</option>${[...new Set([...caseOpts("Status"),...all.map(c=>c.Status).filter(Boolean)])].map(x=>`<option ${f.st===x?"selected":""}>${x}</option>`).join("")}</select>
     <select id="cmon"><option value="all">All months</option>${months.map(m=>`<option ${f.mon===m?"selected":""}>${esc(m)}</option>`).join("")}</select>
     <span class="small mute">${list.length} case${list.length===1?"":"s"}</span></div>
-    <div class="small mute" style="margin-top:8px">A case opens by itself when a telecaller marks a customer <b>Interested</b>. It goes to that telecaller's Team Lead, who follows up and fills in the details. Telecallers can only view their cases.</div></div>`;
+    <div class="small mute" style="margin-top:8px">A case opens by itself when a telecaller marks a customer <b>Interested</b>. It goes to that telecaller's Team Lead, who follows up and fills in the details. Telecallers can only view their cases.</div>${ME&&ME.role==="Admin"?`<div class="small" style="margin-top:6px;padding:8px 10px;background:var(--brand-soft);border-radius:8px">➕ <b>New status, product, bank or other choice?</b> Type it at the bottom of its column in the <b>Lists</b> tab of the sheet${SHEET_URL?` (<a class="lnk" href="${esc(SHEET_URL)}" target="_blank" rel="noopener">Open sheet ↗</a>)`:""}, then press <b>⟳ Refresh</b> here. For a new status, also fill <b>Counts as</b>: New, In progress, Disbursed or Closed.</div>`:""}</div>`;
   return h+casesTable(list,{empty:all.length?"No cases match these filters.":"No lead cases yet – they appear when a customer is marked Interested."});
 }
 function bindCasesTab(){const q=$("#cq");if(!q)return;

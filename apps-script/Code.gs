@@ -159,7 +159,7 @@ function load_(me) {
     sheetUrl: me.role === "Admin" ? sheetUrlFor_(me) : "",   // only Admin gets the Google Sheet link
     ...meetings_(me, isLead),
     cases: (fillCodesSafe_(), cases_(me, emps)),
-    banks: banks_(),
+    ...listsOut_(),
     serverTime: now_()
   };
 }
@@ -364,18 +364,42 @@ function fillCodes_() {
     }
   });
 }
-// Bank list lives in the Banks tab (column A, from row 2). Admin adds new banks there.
-function banks_() {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Banks");
-  if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 1).getDisplayValues().map(r => String(r[0]).trim()).filter(String);
+// Every drop-down list lives in the Lists tab of the sheet: one column per drop-down, name in row 1.
+// Admin adds a new choice by typing it at the bottom of the right column. "Counts as" (next to Status)
+// tells the dashboard how a status counts: New, In progress, Disbursed or Closed.
+const LIST_COLS = ["Status", "Customer Status", "Product", "Lead Type", "Lead Source", "SM Name", "Bank Name"];
+function listsOut_() { const L = lists_(); return { lists: L.lists, statusType: L.statusType, banks: L.lists["Bank Name"] || [] }; }
+function lists_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet(), sh = ss.getSheetByName("Lists"), lists = {}, statusType = {};
+  if (sh && sh.getLastRow() >= 1) {
+    const d = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getDisplayValues(), hdr = d[0].map(h => String(h).trim()), ti = hdr.indexOf("Counts as");
+    hdr.forEach((h, j) => {
+      if (LIST_COLS.indexOf(h) < 0) return;
+      const seen = new Set(); lists[h] = [];
+      d.slice(1).forEach(r => {
+        const v = String(r[j]).trim();
+        if (!v || seen.has(v.toLowerCase())) return;
+        seen.add(v.toLowerCase()); lists[h].push(v);
+        if (h === "Status" && ti >= 0 && String(r[ti]).trim()) statusType[v] = String(r[ti]).trim();
+      });
+    });
+  }
+  if (!lists["Bank Name"] || !lists["Bank Name"].length) {        // older sheets: banks in a separate Banks tab
+    const b = ss.getSheetByName("Banks");
+    if (b && b.getLastRow() > 1) lists["Bank Name"] = b.getRange(2, 1, b.getLastRow() - 1, 1).getDisplayValues().map(r => String(r[0]).trim()).filter(String);
+  }
+  return { lists, statusType };
 }
-function bankName_(v) {
+// A drop-down value must come from its list. A value the case already had (e.g. from old data) is kept as it is.
+function pick_(h, v, old, L) {
   v = String(v == null ? "" : v).trim();
   if (!v) return "";
-  const b = banks_().find(x => x.toLowerCase() === v.toLowerCase());
-  if (!b) throw new Error("Choose the bank from the list. To add a new bank, ask Admin to add it in the Banks tab.");
-  return b;
+  const list = L.lists[h] || [];
+  if (!list.length) return h === "SM Name" ? properName_(v) : v;
+  const hit = list.find(x => x.toLowerCase() === v.toLowerCase());
+  if (hit) return hit;
+  if (v === String(old || "").trim()) return v;
+  throw new Error("Choose " + h + " from the list. To add a new choice, Admin types it in the Lists tab of the sheet.");
 }
 function caseRows_() { try { const sh = caseSheet_(), n = sh.getLastRow() - 1; return n < 1 ? [] : sh.getRange(2, 1, n, CASE_COLS).getDisplayValues(); } catch (e) { return []; } }
 // the Team Lead a case belongs to: the contact's telecaller's Team Lead (or the telecaller, if they lead a team)
@@ -425,7 +449,8 @@ function saveCase_(me, c) {
   const row = rows[i].slice();
   if (!canSeeCase_(me, row, emps, me.role === "Team Lead" ? teamIds_(me, emps) : new Set())) throw new Error("This case isn't in your team");
   const cl = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "'$&").trim().slice(0, 500);
-  CASE_EDIT.forEach(h => { if (c[h] !== undefined) row[C_[h]] = h === "Remarks" ? tidyText_(cl(c[h])) : h === "Bank Name" ? bankName_(cl(c[h])) : h === "SM Name" || h === "Banker Name" || h === "Connector Name" ? properName_(cl(c[h])) : cl(c[h]); });
+  const L = lists_();
+  CASE_EDIT.forEach(h => { if (c[h] !== undefined) row[C_[h]] = h === "Remarks" ? tidyText_(cl(c[h])) : LIST_COLS.indexOf(h) >= 0 ? pick_(h, cl(c[h]), rows[i][C_[h]], L) : h === "Banker Name" || h === "Connector Name" ? properName_(cl(c[h])) : cl(c[h]); });
   row[C_["Contact Number"]] = text_(row[C_["Contact Number"]]);
   ["Connector Contact No", "Banker Contact No"].forEach(h => row[C_[h]] = text_(row[C_[h]]));
   const dd = String(row[C_["Disbursed Date"]]).match(/^(\d{4})-(\d{2})-(\d{2})/);
