@@ -194,6 +194,7 @@ let view={who:"admin",tab:"dash",filter:"all",q:"",sel:new Set(),assignFilter:"a
 const emp=id=>S.allEmps.find(e=>e.id===id);
 const empName=id=>id==="ADMIN_LOG"?"Admin":(emp(id)?.name||id||"—");
 const isLead=()=>!ME||rank(ME.role)<=rank("Team Lead");
+const canViewAs=()=>!ME||ME.role==="Admin";          // "Viewing as" (open anyone's page) is for Admin only
 const isTL=()=>!!ME&&ME.role==="Team Lead";                 // Team Leads get only their own team from the server
 // Teams: a Team Lead + everyone whose "Team Lead" is them. Admin / Manager can filter every page by team.
 const teamLeads=(R=RAW||S)=>R.allEmps.filter(e=>e.role==="Team Lead"&&e.active);
@@ -385,7 +386,7 @@ function setSync(){
   const live=MODE==="live";
   const os=$("#openSheet");const showSheet=live&&isLead()&&!!SHEET_URL;os.style.display=showSheet?"":"none";if(showSheet)os.href=SHEET_URL;
   $("#refresh").style.display=MODE==="login"?"none":"";
-  $("#whoBox").style.display=(MODE==="login"||!isLead())?"none":"";
+  $("#whoBox").style.display=(MODE==="login"||!isLead()||!canViewAs())?"none":"";
   $("#userBox").innerHTML=ME&&MODE!=="login"?`<div class="userchip"><div class="av">${initials(ME.name)}</div><div><b>${esc(ME.name)}</b><div class="small mute">${esc(ME.role)}</div></div></div>
     <button class="btn sm" id="chPin">🔑 PIN</button><button class="btn sm" id="logout">Log out</button>`:"";
   if($("#logout"))$("#logout").onclick=async()=>{await Script.logout();view={...view,who:"admin",tab:"dash",sel:new Set()};showLogin()};
@@ -416,6 +417,7 @@ function showLogin(err){
 function renderWho(){
   $("#who").innerHTML=`<option value="admin">${ME?"Team overview":"Admin / Manager"}</option>`+S.employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)}${ME&&e.id===ME.id?" (me)":""} – ${esc(e.role)}</option>`).join("");
   if(view.who!=="admin"&&!emp(view.who))view.who="admin";
+  if(!canViewAs()&&ME&&view.who!=="admin"&&view.who!==ME.id)view.who="admin";   // only Admin may open other people's pages
   $("#who").value=view.who;
 }
 $("#who").onchange=e=>{view.who=e.target.value;view.tab=view.who==="admin"?"dash":"my";view.filter="all";view.q="";render()};
@@ -432,7 +434,7 @@ function render(){
 
 /* ---------- ADMIN / MANAGER / TEAM LEAD ---------- */
 function renderAdmin(){
-  const tabs=[["dash","Dashboard"],["lead","Leads"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(isMgr()?[["reports","⬇ Reports"]]:[])];
+  const tabs=[["dash","Dashboard"],["lead","Leads"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine","My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(isMgr()?[["reports","⬇ Reports"]]:[])];
   if(!tabs.some(t=>t[0]===view.tab))view.tab="dash";
   let h=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${view.tab===k?"on":""}" data-tab="${k}">${l}</button>`).join("")}</div>`;
   const TLs=teamLeads();
@@ -442,7 +444,7 @@ function renderAdmin(){
   else if(isTL())h+=`<div class="small mute" style="margin:-4px 0 12px">Showing your team: ${esc(S.employees.map(e=>e.name).join(", "))}</div>`;
   h+=({dash:aDash,lead:aLeadsTab,byemp:aByEmp,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings})[view.tab]();
   $("#app").innerHTML=h;
-  document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{view.tab=b.dataset.tab;render()});
+  document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{if(b.dataset.tab==="mine"){view.who=ME.id;view.etab="leads";render();return}view.tab=b.dataset.tab;render()});
   const ts=$("#teamSel");if(ts)ts.onchange=()=>{view.team=ts.value;view.sel.clear();if(view.lsel)view.lsel.clear();render()};
   bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();
 }
@@ -466,7 +468,7 @@ function aByEmp(){
     <div class="small mute" style="padding:8px 12px">Calls = in the selected period. Calling list and leads = as of now.</div></div>`;
   h+=`<div><div class="card pad" style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div class="av">${initials(P.e.name)}</div>
       <div style="flex:1"><div style="font-size:18px;font-weight:700">${esc(P.e.name)}</div><div class="small mute">${esc(P.e.role)}${P.e.phone?" · "+esc(P.e.phone):""}</div></div>
-      <button class="btn sm" data-goemp="${esc(P.e.id)}">Open their page</button></div>
+      ${canViewAs()?`<button class="btn sm" data-goemp="${esc(P.e.id)}">Open their page</button>`:""}</div>
     <div class="stats sm">
       <div class="card stat"><span>Calling list</span><b>${P.list.length}</b><div class="small mute">${P.notCalled} not yet called</div></div>
       <div class="card stat"><span>Calls made</span><b>${P.calls.length}</b><div class="small mute">${P.calls.length?pct(P.connected,P.calls.length)+"% connected":"in this period"}</div></div>
@@ -966,7 +968,7 @@ function aTeam(){
     return `<tr><td class="mute">${esc(e.id)}</td><td><b>${esc(e.name)}</b>${self?' <span class="small mute">(you)</span>':""}</td><td class="num">${esc(e.phone)||'<span class="mute">—</span>'}</td><td>${esc(e.role)}</td><td>${e.role==="Team Lead"?'<span class="small mute">leads a team</span>':e.tl?esc(empName(e.tl)):'<span class="mute">—</span>'}</td><td class="num">${m.length}</td>
     <td class="small">${e.pinSet?"✓ PIN set":'<span style="color:var(--amber)">No PIN</span>'}</td>
     <td style="text-align:right;white-space:nowrap">${can?`<button class="btn sm" data-edit="${esc(e.id)}">Edit</button> <button class="btn sm" data-pin="${esc(e.id)}">Reset PIN</button>${self?"":` <button class="btn sm" data-del="${esc(e.id)}">Remove</button>`}`:'<span class="small mute">Admin only</span>'}
-    <button class="btn sm" data-as="${esc(e.id)}">View list</button></td></tr>`}).join("");
+    ${canViewAs()?`<button class="btn sm" data-as="${esc(e.id)}">View list</button>`:""}</td></tr>`}).join("");
   return h+`</table></div>`;
 }
 const filteredLogs=()=>allLogs().filter(g=>(view.logEmp==="all"||g.by===view.logEmp)&&(view.logOut==="all"||g.outcome===view.logOut));
@@ -1077,7 +1079,8 @@ function renderEmp(){
   const ctab=view.ctab||"leads";
   const myLeadsP=leadsIn(mine),myLeads=mine.filter(isLeadC);
   const tlBtn=me.role==="Team Lead"&&isMgr()&&!isTL()&&!own?`<button class="btn sm" id="seeTeam">👥 See ${esc(me.name.split(" ")[0])}'s team view</button>`:"";
-  let h=etabs()+`<div style="margin-bottom:14px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap"><div style="flex:1"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>${tlBtn}</div>`;
+  const backBtn=ME&&own&&isLead()&&!canViewAs()?`<button class="btn sm" id="backTeam">← Team overview</button>`:"";
+  let h=etabs()+`<div style="margin-bottom:14px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">${backBtn}<div style="flex:1"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>${tlBtn}</div>`;
   h+=rangeBar();
   h+=`<div class="stats">
   <div class="card stat"><span>Calls made</span><b>${calls.length}</b><div class="small mute">${calls.length?new Set(calls.map(g=>g.lead.id)).size+" different customers":"in this period"}</div></div>
@@ -1114,6 +1117,7 @@ function renderEmp(){
   $("#app").innerHTML=h;
   bindEtabs();bindRange();bindTips();
   document.querySelectorAll("[data-ctab]").forEach(b=>b.onclick=()=>{view.ctab=b.dataset.ctab;render()});
+  const bt=$("#backTeam");if(bt)bt.onclick=()=>{view.who="admin";view.tab="dash";render()};
   const st=$("#seeTeam");if(st)st.onclick=()=>{view.team=me.id;view.who="admin";view.tab="byemp";render()};
   const cs=$("#cOut");if(cs)cs.onchange=()=>{view.cOut=cs.value;render()};
   document.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{view.filter=b.dataset.f;render()});
