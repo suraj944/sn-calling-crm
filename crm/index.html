@@ -1056,7 +1056,7 @@ function openLead(id,fromCall){
   $("#mx").onclick=close;$("#mc").onclick=close;
   const ma=$("#mAsg");if(ma)ma.onchange=async()=>{const to=ma.value;if(!to)return;ma.disabled=true;
     const ok=await write(api=>api.assign([l.id],to),`${l.name} assigned to ${empName(to)}`);
-    if(!ok){ma.value=l.assignedTo||""}ma.disabled=false};
+    if(ok){close();return}ma.value=l.assignedTo||"";ma.disabled=false};
   document.querySelectorAll("[data-out]").forEach(b=>b.onclick=()=>{M.out=b.dataset.out;document.querySelectorAll("[data-out]").forEach(x=>x.classList.toggle("on",x===b));
     $("#fuWrap").style.display=M.out==="cb"?"block":"none";
     if(M.out==="cb"&&!$("#fu").value){const d=new Date(Date.now()+864e5);$("#fu").value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T11:00`}});
