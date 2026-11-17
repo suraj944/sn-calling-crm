@@ -66,7 +66,7 @@ tr:last-child td{border-bottom:0}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;cursor:pointer;font-size:13px}
 .userchip{display:flex;align-items:center;gap:8px;font-size:13px}.userchip .av{width:30px;height:30px;font-size:12px}
-.rangebar{margin-bottom:14px}.rangebar .chips .chip{padding:5px 11px}.rangebar input[type=date]{padding:5px 8px;margin-left:4px}
+table.ch{table-layout:fixed;min-width:760px}.rangebar{margin-bottom:14px}.rangebar input[type=month]{padding:5px 8px;margin-left:4px}.rangebar .chips .chip{padding:5px 11px}.rangebar input[type=date]{padding:5px 8px;margin-left:4px}
 .dash h3{margin-bottom:10px}
 svg.chart{width:100%;height:auto;display:block}svg.chart .grid{stroke:var(--line);stroke-width:1}svg.chart .ax{font-size:11px;fill:var(--mute)}svg.chart .val{font-size:12px;font-weight:600;fill:var(--ink)}svg.chart .bar-m{fill:var(--brand)}
 svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,214,.06)}
@@ -420,11 +420,12 @@ const callers=()=>S.employees.filter(e=>e.role==="Telecaller Executive"||e.role=
 const DAY=864e5;
 const sod=t=>{const d=new Date(t);d.setHours(0,0,0,0);return d.getTime()};
 const ymd=t=>{const d=new Date(t);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
-const RANGES=[["today","Today"],["yesterday","Yesterday"],["7d","Last 7 days"],["30d","Last 30 days"],["month","This month"],["all","All time"],["custom","Custom"]];
+const RANGES=[["today","Today"],["yesterday","Yesterday"],["7d","Last 7 days"],["30d","Last 30 days"],["month","This month"],["pickm","Pick month"],["all","All time"],["custom","Custom"]];
 if(!view.range)view.range={key:"7d",from:ymd(Date.now()-6*DAY),to:ymd(Date.now())};
 if(!view.fwRange)view.fwRange={key:"all",from:ymd(Date.now()-29*DAY),to:ymd(Date.now())};
 const onFieldWork=()=>(view.who==="admin"&&view.tab==="meet")||(view.who!=="admin"&&(view.etab==="meet"||(typeof pageKind==="function"&&pageKind(emp(view.who))==="field")));
-const curRange=()=>onFieldWork()?view.fwRange:view.range;
+if(!view.cRange)view.cRange={key:"today",from:ymd(Date.now()-6*DAY),to:ymd(Date.now())};
+const curRange=()=>onFieldWork()?view.fwRange:(view.who!=="admin"?view.cRange:view.range);
 function rangeBounds(){
   const r=curRange(),t0=sod(Date.now());
   switch(r.key){
@@ -433,6 +434,7 @@ function rangeBounds(){
     case"7d":return[t0-6*DAY,t0+DAY-1];
     case"30d":return[t0-29*DAY,t0+DAY-1];
     case"month":{const d=new Date();return[new Date(d.getFullYear(),d.getMonth(),1).getTime(),t0+DAY-1]}
+    case"pickm":{const [y,mo]=String(r.month||ymd(Date.now()).slice(0,7)).split("-").map(Number);return[new Date(y,mo-1,1).getTime(),new Date(y,mo,1).getTime()-1]}
     case"all":{const ts=[...S.leads.flatMap(l=>[l.created,...l.logs.map(g=>g.at)]),...(S.meetings||[]).map(m=>m.at)].filter(Boolean);return[ts.length?sod(Math.min(...ts)):t0,t0+DAY-1]}
     default:{const a=parseT(r.from+" 00:00")||t0,b=parseT(r.to+" 00:00")||t0;return[Math.min(a,b),Math.max(a,b)+DAY-1]}
   }
@@ -443,6 +445,7 @@ function rangeBar(){
   const r=curRange();
   return `<div class="card pad rangebar"><div class="row">
     <div class="chips" style="margin:0">${RANGES.map(([k,l])=>`<button class="chip ${r.key===k?"on":""}" data-range="${k}">${l}</button>`).join("")}</div>
+    ${r.key==="pickm"?`<label class="small mute">Month <input type="month" id="rMonth" value="${esc(r.month||ymd(Date.now()).slice(0,7))}" max="${ymd(Date.now()).slice(0,7)}"></label>`:""}
     ${r.key==="custom"?`<label class="small mute">From <input type="date" id="rFrom" value="${esc(r.from)}" max="${ymd(Date.now())}"></label><label class="small mute">To <input type="date" id="rTo" value="${esc(r.to)}" max="${ymd(Date.now())}"></label>`:""}
     <span class="spacer"></span><span class="small mute" id="rLabel">${esc(rangeLabel())}</span></div></div>`;
 }
@@ -451,6 +454,7 @@ function bindRange(){
   const f=$("#rFrom"),t=$("#rTo");
   if(f)f.onchange=()=>{curRange().from=f.value;render()};
   if(t)t.onchange=()=>{curRange().to=t.value;render()};
+  const mo=$("#rMonth");if(mo)mo.onchange=()=>{if(mo.value){curRange().month=mo.value;render()}};
 }
 
 /* ================= METRICS ================= */
@@ -919,25 +923,49 @@ function renderEmp(){
   if(ME&&pageKind(me)==="leads")view.etab="leads";
   if(showEtabs()&&view.etab==="meet"){$("#app").innerHTML=etabs()+(ME&&view.who!==ME.id?`<div style="margin-bottom:14px"><div class="mute small">Field work of</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>`:"")+aMeetings();bindEtabs();bindRange();bindMeetings();bindTips();return}
   const mine=S.leads.filter(l=>l.assignedTo===me.id);
-  const todayCalls=mine.flatMap(l=>l.logs).filter(g=>g.by===me.id&&today(g.at)).length;
   const due=mine.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<=Date.now()+30*60e3);
-  const f=view.filter,q=view.q.toLowerCase();
-  const list=mine.filter(l=>(f==="all"||l.status===f)&&(!q||(l.name+l.phone+l.city).toLowerCase().includes(q))).sort((a,b)=>(a.status==="new"?0:1)-(b.status==="new"?0:1));
   const own=ME&&me.id===ME.id;
-  let h=etabs()+`<div style="margin-bottom:14px"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>
-  <div class="stats"><div class="card stat"><span>${own?"My leads":"Leads"}</span><b>${mine.length}</b></div>
-  <div class="card stat"><span>Not yet called</span><b>${mine.filter(l=>l.status==="new").length}</b></div>
-  <div class="card stat"><span>Calls today</span><b>${todayCalls}</b></div>
-  <div class="card stat"><span>Interested</span><b style="color:var(--green)">${mine.filter(l=>l.status==="int").length}</b></div></div>`;
-  if(due.length)h+=`<div class="card due pad" style="margin-bottom:14px"><h3 style="color:var(--amber)">⏰ Callbacks due now (${due.length})</h3>${due.map(l=>leadRow(l)).join("")}</div>`;
-  const counts=k=>k==="all"?mine.length:mine.filter(l=>l.status===k).length;
-  h+=`<div class="row" style="margin-bottom:10px"><input id="eq" placeholder="Search leads" value="${esc(view.q)}" style="flex:1;min-width:180px"></div>
-  <div class="chips">${["all","new",...Object.keys(OUTCOMES)].map(k=>`<button class="chip ${f===k?"on":""}" data-f="${k}">${k==="all"?"All":STATUS[k].label} · ${counts(k)}</button>`).join("")}</div>
-  <div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No leads here${mine.length?"":" yet – your manager will assign a list"}.</div>`}</div>`;
+  // calls this person made in the selected period
+  const calls=allLogs().filter(g=>g.by===me.id&&inRange(g.at));
+  const con=calls.filter(g=>g.outcome!=="na"&&g.outcome!=="wn").length;
+  const oc=k=>calls.filter(g=>g.outcome===k).length;
+  const ctab=view.ctab||"leads";
+  let h=etabs()+`<div style="margin-bottom:14px"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>`;
+  h+=rangeBar();
+  h+=`<div class="stats">
+  <div class="card stat"><span>Calls made</span><b>${calls.length}</b><div class="small mute">${calls.length?new Set(calls.map(g=>g.lead.id)).size+" different leads":"in this period"}</div></div>
+  <div class="card stat"><span>Connected</span><b>${con}</b><div class="small mute">${calls.length?Math.round(con/calls.length*100)+"% of calls":"—"}</div></div>
+  <div class="card stat"><span>Interested</span><b style="color:var(--green)">${oc("int")}</b><div class="small mute">${oc("ni")} not interested</div></div>
+  <div class="card stat"><span>Converted</span><b style="color:var(--brand)">${oc("conv")}</b><div class="small mute">${oc("cb")} call back later</div></div>
+  <div class="card stat"><span>${own?"My leads":"Leads"}</span><b>${mine.length}</b><div class="small mute">${mine.filter(l=>l.status==="new").length} not yet called</div></div>
+  <div class="card stat"><span>Callbacks due</span><b style="color:var(--amber)">${due.length}</b><div class="small mute">now</div></div></div>`;
+  h+=`<div class="tabs" style="margin-bottom:12px">${[["leads",(own?"My leads":"Leads")+" · "+mine.length],["calls","Call history · "+calls.length]].map(([k,l])=>`<button class="tab ${ctab===k?"on":""}" data-ctab="${k}">${l}</button>`).join("")}</div>`;
+  if(ctab==="calls"){
+    const co=view.cOut||"all";const list=calls.filter(g=>co==="all"||g.outcome===co);
+    h+=`<div class="row" style="margin-bottom:10px"><select id="cOut"><option value="all">All outcomes</option>${Object.entries(OUTCOMES).map(([k,o])=>`<option value="${k}" ${co===k?"selected":""}>${o.label} · ${oc(k)}</option>`).join("")}</select>
+      <span class="mute small">${list.length} call${list.length===1?"":"s"} · ${esc(rangeLabel())}</span></div>`;
+    if(!list.length)h+=`<div class="card empty">No calls in this period${curRange().key==="today"?" yet – calls you log today will appear here":" – try another date or month"}.</div>`;
+    else{const days={};list.forEach(g=>{const k=ymd(g.at);(days[k]=days[k]||[]).push(g)});
+      h+=Object.entries(days).map(([d,gs])=>`<div class="card" style="margin-bottom:12px"><div class="pad" style="padding:10px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between"><b>${new Date(gs[0].at).toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short",year:"numeric"})}</b><span class="small mute">${gs.length} call${gs.length===1?"":"s"} · ${gs.filter(g=>g.outcome==="int"||g.outcome==="conv").length} interested/converted</span></div>
+        <div class="tw"><table class="ch"><colgroup><col style="width:90px"><col style="width:20%"><col style="width:140px"><col style="width:170px"><col><col style="width:150px"><col style="width:80px"></colgroup><tr><th>Time</th><th>Customer</th><th>Number</th><th>Outcome</th><th>Remark</th><th>Follow-up</th><th></th></tr>
+        ${gs.map(g=>`<tr><td class="num small">${new Date(g.at).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</td><td><b>${esc(g.lead.name)}</b><div class="small mute">${esc(g.lead.city)}</div></td>
+          <td class="num"><a class="lnk" href="${telHref(g.lead.phone)}">${esc(g.lead.phone)}</a></td><td>${pill(g.outcome)}</td><td class="small" style="max-width:280px">${esc(g.remark)||'<span class="mute">—</span>'}</td>
+          <td class="small num">${g.followUp?fmt(g.followUp):"—"}</td><td><button class="btn sm" data-open="${esc(g.lead.id)}">Open</button></td></tr>`).join("")}</table></div></div>`).join("");}
+  }else{
+    const f=view.filter,q=view.q.toLowerCase();
+    const list=mine.filter(l=>(f==="all"||l.status===f)&&(!q||(l.name+l.phone+l.city).toLowerCase().includes(q))).sort((a,b)=>(a.status==="new"?0:1)-(b.status==="new"?0:1));
+    if(due.length)h+=`<div class="card due pad" style="margin-bottom:14px"><h3 style="color:var(--amber)">⏰ Callbacks due now (${due.length})</h3>${due.map(l=>leadRow(l)).join("")}</div>`;
+    const counts=k=>k==="all"?mine.length:mine.filter(l=>l.status===k).length;
+    h+=`<div class="row" style="margin-bottom:10px"><input id="eq" placeholder="Search leads" value="${esc(view.q)}" style="flex:1;min-width:180px"></div>
+    <div class="chips">${["all","new",...Object.keys(OUTCOMES)].map(k=>`<button class="chip ${f===k?"on":""}" data-f="${k}">${k==="all"?"All":STATUS[k].label} · ${counts(k)}</button>`).join("")}</div>
+    <div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No leads here${mine.length?"":" yet – your manager will assign a list"}.</div>`}</div>`;
+  }
   $("#app").innerHTML=h;
-  bindEtabs();
+  bindEtabs();bindRange();bindTips();
+  document.querySelectorAll("[data-ctab]").forEach(b=>b.onclick=()=>{view.ctab=b.dataset.ctab;render()});
+  const cs=$("#cOut");if(cs)cs.onchange=()=>{view.cOut=cs.value;render()};
   document.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{view.filter=b.dataset.f;render()});
-  $("#eq").oninput=e=>{view.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#eq");n.focus();n.setSelectionRange(p,p)};
+  const eq=$("#eq");if(eq)eq.oninput=e=>{view.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#eq");n.focus();n.setSelectionRange(p,p)};
   document.querySelectorAll("[data-call]").forEach(a=>a.onclick=()=>{setTimeout(()=>openLead(a.dataset.call,true),400)});
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false));
 }
