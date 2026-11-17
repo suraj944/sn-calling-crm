@@ -19,9 +19,10 @@
  *   - PIN: exactly 4 digits. Type it in the PIN column for a new person OR to reset someone's PIN –
  *     a PIN typed here always wins over the old one. On the next login it is replaced by a salted hash and cleared.
  * LoginLog tab: every login attempt (time, name entered, result).
- * Website enquiries (home page callback form) are added to Leads as new, unassigned leads.
+ * Website enquiries (home page callback form) are added to the Calling List as new, unassigned contacts.
+ * "Leads" tab = read-only view of customers marked Interested / Converted (a FILTER formula on the Calling List).
  * Field Work tab: SM meetings (same fields as the old Google Form) – see saveMeeting_.
- * Leads tab column K "Source" = Website / Import / Manual, column L "Customer request" = what a website visitor asked for.
+ * Calling List tab (all contacts to call; was "Leads") column K "Source" = Website / Import / Manual, column L "Customer request" = what a website visitor asked for.
  */
 
 const ROLES = ["Admin", "Manager", "Team Lead", "Sales Manager", "Telecaller Executive"];
@@ -364,8 +365,10 @@ function respond_(fn) {
   catch (err) { const m = String(err && err.message || err); out = { ok: false, auth: m.startsWith("AUTH: "), error: m.replace(/^AUTH: /, "") }; }
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
+// The contacts tab is called "Calling List" (it was "Leads" before; a "Leads" tab now shows only interested customers).
 function sheet_(name) {
-  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = name === "Leads" ? (ss.getSheetByName("Calling List") || ss.getSheetByName("Leads")) : ss.getSheetByName(name);
   if (!sh) throw new Error("Tab '" + name + "' not found in the sheet");
   return sh;
 }
