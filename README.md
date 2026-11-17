@@ -34,27 +34,28 @@ The sheet ID is set at the top of the script in `index.html` (`SHEET_ID`). The s
 
 ## How it runs
 
-`index.html` is a single self-contained page that works in two places:
-
-### 1. As a website (GitHub Pages): uses a Google Apps Script
+### Website (GitHub Pages) with personal logins
 **Live site:** https://suraj944.github.io/sn-calling-crm/
 
-One-time setup by the admin:
-1. Open the Google Sheet → **Extensions → Apps Script**.
-2. Replace the contents of `Code.gs` with [`apps-script/Code.gs`](apps-script/Code.gs) and set `API_KEY` to your own long secret.
-3. **Deploy → New deployment → Web app**. Set *Execute as*: **Me** and *Who has access*: **Anyone**. Authorize it and copy the **Web app URL**.
-4. Open the website → **⚙ Connect sheet** → paste the URL and the key → **Save & connect**.
-5. In the same dialog, click **Copy setup link** and send that link to employees. Opening it connects their phone automatically.
+Everyone logs in with **their own mobile number and PIN**. The Google Apps Script in [`apps-script/Code.gs`](apps-script/Code.gs) checks every login and request, so the rules below are enforced by the server, not just hidden in the page.
 
-The key is never stored in this repo; each device keeps it in its own browser storage. Anyone who has the setup link can read and edit the CRM data, so share it only with your team. To revoke access, change `API_KEY` in Apps Script and redeploy (**Manage deployments → Edit → New version**).
+| Role | Sees | Can do | Open Google Sheet |
+|---|---|---|---|
+| **Admin** | Everything | Everything, incl. creating Admins/Managers | ✅ |
+| **Manager** | Everything | Assign/import leads, add/edit Team Leads & Employees, reset their PINs | ✅ |
+| **Team Lead** | All leads, team dashboard, call logs | Assign/import leads, log calls | ✅ |
+| **Employee** | Only leads assigned to them | Call, log outcome + remark | ❌ |
 
-> After you change `Code.gs`, always redeploy as a **new version**, or the website keeps using the old code.
+- **Employees tab columns:** ID · Name · Phone · Active · Role · PIN · PIN Hash
+- To give someone a first-time PIN, type it in the **PIN** column (or use *Reset PIN* in the app). On their first login it is replaced by a salted SHA-256 hash and the PIN cell is cleared.
+- After 5 wrong PINs, that login is locked for 15 minutes. Sessions last 30 days, and a PIN reset logs the person out of all devices.
+- Anyone can change their own PIN with **🔑 PIN**.
+- **Open sheet** only works for people whose Google account also has access to the sheet, so share the sheet with your managers and team leads.
 
-### 2. As a Claude artifact: uses the claude.ai Google Sheets connector
-Opened inside claude.ai, the page reads and writes through the viewer's own Google Sheets connector (`get_values`, `update_values`, `append_values`). Each user needs the artifact shared with them, the Google Sheets connector added, and edit access to the sheet.
+**One-time deployment:** open the sheet → Extensions → Apps Script → paste `Code.gs` → Deploy → New deployment → Web app (Execute as: **Me**, Who has access: **Anyone**) → copy the `/exec` URL into `BUILTIN_API` at the top of the script in `index.html`. After editing `Code.gs`, redeploy via **Manage deployments → Edit → New version**.
 
-If the page isn't connected to the sheet, it shows a banner and runs on sample data that is **not saved**.
+### Claude artifact (claude.ai)
+Inside claude.ai the page uses the viewer's own Google Sheets connector and gives full (admin) access. Use it only for people who already have edit access to the sheet.
 
 ## Notes
-- "Viewing as" is a role picker, not a login. A next step would be an Email column in *Employees* so each person only sees their own leads.
 - The Call button dials on phones, or on desktops that have a calling app set up. The number is always shown so it can be dialled by hand.

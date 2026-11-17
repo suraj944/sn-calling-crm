@@ -65,6 +65,7 @@ tr:last-child td{border-bottom:0}
 .lead .last{color:var(--mute);font-size:12.5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;cursor:pointer;font-size:13px}
+.userchip{display:flex;align-items:center;gap:8px;font-size:13px}.userchip .av{width:30px;height:30px;font-size:12px}
 .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .empty{padding:36px;text-align:center;color:var(--mute)}
 .modal-bg{position:fixed;inset:0;background:rgba(17,24,39,.45);display:none;align-items:flex-end;justify-content:center;z-index:20}
@@ -105,10 +106,11 @@ a.lnk{color:var(--brand);text-decoration:none;font-weight:500}
   <div class="logo"><i>☎</i>SN Calling CRM</div>
   <div class="spacer"></div>
   <div class="sync"><span class="dot" id="dot"></span><span id="syncTxt">Connecting…</span></div>
-  <button class="btn sm" id="cfgBtn" style="display:none">⚙ Connect sheet</button>
+  <button class="btn sm" id="cfgBtn" style="display:none">⚙ Settings</button>
   <button class="btn sm" id="refresh" title="Reload from Google Sheet">⟳ Refresh</button>
-  <a class="btn sm" href="https://docs.google.com/spreadsheets/d/1Aw73vwzpFFdyT08j8BZ4klGE7uamFJwpew7kBCSHLrU/edit" target="_blank" rel="noopener">Open sheet ↗</a>
-  <div class="role">Viewing as <select id="who"></select></div>
+  <a class="btn sm" id="openSheet" style="display:none" href="#" target="_blank" rel="noopener">Open sheet ↗</a>
+  <div class="role" id="whoBox">Viewing as <select id="who"></select></div>
+  <div id="userBox" class="row" style="gap:6px"></div>
 </div></header>
 <div class="banner" id="banner"></div>
 <main id="app"></main>
@@ -119,7 +121,11 @@ a.lnk{color:var(--brand);text-decoration:none;font-weight:500}
 <script>
 /* ================= CONFIG ================= */
 const SHEET_ID="1Aw73vwzpFFdyT08j8BZ4klGE7uamFJwpew7kBCSHLrU";
+const SHEET_URL_DEFAULT="https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/edit";
 const SRV="Google Sheets";
+// Apps Script Web app URL for this team's sheet. Logins are checked by the Apps Script; no secrets live in this file.
+const BUILTIN_API="";
+const ROLES=["Admin","Manager","Team Lead","Employee"];
 const OUTCOMES={
   int:{label:"Interested",cls:"s-int"},
   cb:{label:"Call back later",cls:"s-cb"},
@@ -147,16 +153,36 @@ function normPhone(p){const raw=String(p).trim();let d=raw.replace(/\D/g,"");
   if(d.length===12&&d.startsWith("91"))d=d.slice(2);if(d.length===11&&d.startsWith("0"))d=d.slice(1);
   if(d.length===10)return d.slice(0,5)+" "+d.slice(5);return raw.startsWith("+")?"'"+raw:raw}
 const pill=s=>`<span class="pill ${STATUS[s].cls}">${STATUS[s].label}</span>`;
-const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2600)};
+const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2800)};
+const rank=r=>{const i=ROLES.indexOf(r);return i<0?99:i};
 
 /* ================= STATE ================= */
 let S={employees:[],allEmps:[],leads:[]};
 let MODE="loading", BUSY=false, lastSync=null, demoReason="";
+let ME=null, SHEET_URL="";              // ME is set only for personal logins (website). null = full access (claude.ai / demo)
 let view={who:"admin",tab:"dash",filter:"all",q:"",sel:new Set(),assignFilter:"all",logEmp:"all",logOut:"all"};
 const emp=id=>S.allEmps.find(e=>e.id===id);
-const empName=id=>id==="ADMIN"?"Admin":(emp(id)?.name||id||"—");
+const empName=id=>id==="ADMIN_LOG"?"Admin":(emp(id)?.name||id||"—");
+const isLead=()=>!ME||rank(ME.role)<=rank("Team Lead");
+const isMgr=()=>!ME||rank(ME.role)<=rank("Manager");
+const canManageRole=r=>!ME||ME.role==="Admin"||rank(r)>rank(ME.role);
 
-/* ================= GOOGLE SHEETS BACKEND ================= */
+/* ================= BUILD FROM SHEET ROWS ================= */
+function build(eRows,lRows,cRows){
+  const allEmps=eRows.map((r,i)=>({id:String(r[0]||"").trim(),name:String(r[1]||"").trim(),phone:String(r[2]??""),
+    active:String(r[3]||"Yes").trim().toLowerCase()!=="no",role:ROLES.find(x=>x.toLowerCase()===String(r[4]||"").trim().toLowerCase())||"Employee",
+    pinSet:!!(String(r[5]||"").trim()||String(r[6]||"").trim()),row:i+2})).filter(e=>e.id&&e.name);
+  const findEmp=v=>{v=String(v||"").trim();if(!v)return null;const lv=v.toLowerCase();const e=allEmps.find(e=>e.id.toLowerCase()===lv||e.name.toLowerCase()===lv);return e?e.id:v};
+  const leads=lRows.map((r,i)=>({id:String(r[0]||"").trim(),name:String(r[1]||""),phone:String(r[2]??""),city:String(r[3]||""),assignedTo:findEmp(r[4]),
+    status:statusCode(r[5]),followUp:parseT(r[6]),lastRemark:String(r[7]||""),lastAt:parseT(r[8]),row:i+2,logs:[]})).filter(l=>l.id||l.name);
+  const byId=Object.fromEntries(leads.map(l=>[l.id,l]));
+  cRows.forEach(r=>{const l=byId[String(r[2]||"").trim()];if(!l)return;
+    l.logs.push({id:r[0],at:parseT(r[1]),by:findEmp(r[5])||"ADMIN_LOG",outcome:statusCode(r[7])==="new"?"na":statusCode(r[7]),remark:String(r[8]||""),followUp:parseT(r[9])})});
+  leads.forEach(l=>l.logs.sort((a,b)=>(b.at||0)-(a.at||0)));
+  return {allEmps,employees:allEmps.filter(e=>e.active),leads};
+}
+
+/* ================= BACKEND 1: claude.ai Google Sheets connector ================= */
 let mcp=null;
 async function call(tool,input){
   const r=await mcp.callTool(SRV,tool,{spreadsheetId:SHEET_ID,...input},{cache:false});
@@ -165,21 +191,10 @@ async function call(tool,input){
   return p||{};
 }
 const rows=p=>Array.isArray(p.values)?p.values:[];
-function build(eRows,lRows,cRows){
-  const allEmps=eRows.map((r,i)=>({id:String(r[0]||"").trim(),name:String(r[1]||"").trim(),phone:String(r[2]??""),active:String(r[3]||"Yes").trim().toLowerCase()!=="no",row:i+2})).filter(e=>e.id&&e.name);
-  const findEmp=v=>{v=String(v||"").trim();if(!v)return null;const lv=v.toLowerCase();const e=allEmps.find(e=>e.id.toLowerCase()===lv||e.name.toLowerCase()===lv);return e?e.id:v};
-  const leads=lRows.map((r,i)=>({id:String(r[0]||"").trim(),name:String(r[1]||""),phone:String(r[2]??""),city:String(r[3]||""),assignedTo:findEmp(r[4]),
-    status:statusCode(r[5]),followUp:parseT(r[6]),lastRemark:String(r[7]||""),lastAt:parseT(r[8]),row:i+2,logs:[]})).filter(l=>l.id||l.name);
-  const byId=Object.fromEntries(leads.map(l=>[l.id,l]));
-  cRows.forEach(r=>{const l=byId[String(r[2]||"").trim()];if(!l)return;
-    l.logs.push({id:r[0],at:parseT(r[1]),by:findEmp(r[5])||"ADMIN",outcome:statusCode(r[7])==="new"?"na":statusCode(r[7]),remark:String(r[8]||""),followUp:parseT(r[9])})});
-  leads.forEach(l=>l.logs.sort((a,b)=>(b.at||0)-(a.at||0)));
-  return {allEmps,employees:allEmps.filter(e=>e.active),leads};
-}
 const Live={
   async load(){
-    const [e,l,c]=await Promise.all([call("get_values",{range:"Employees!A2:D"}),call("get_values",{range:"Leads!A2:J"}),call("get_values",{range:"CallLogs!A2:J"})]);
-    S=build(rows(e),rows(l),rows(c));lastSync=Date.now();
+    const [e,l,c]=await Promise.all([call("get_values",{range:"Employees!A2:G"}),call("get_values",{range:"Leads!A2:J"}),call("get_values",{range:"CallLogs!A2:J"})]);
+    S=build(rows(e),rows(l),rows(c));lastSync=Date.now();SHEET_URL=SHEET_URL_DEFAULT;
   },
   async logCall(leadId,out,remark,fu,by){
     await this.load();const l=S.leads.find(x=>x.id===leadId);if(!l)throw new Error("Lead not found in sheet – it may have been deleted");
@@ -189,18 +204,20 @@ const Live={
   },
   async assign(ids,to){
     const p=await call("get_values",{range:"Leads!A2:E"});const R=rows(p);if(!R.length)return;
-    const set=new Set(ids);const col=R.map(r=>[set.has(String(r[0]||"").trim())?(to||""):(r[4]??"")]);
-    await call("update_values",{range:`Leads!E2:E${R.length+1}`,values:col});
+    const set=new Set(ids);await call("update_values",{range:`Leads!E2:E${R.length+1}`,values:R.map(r=>[set.has(String(r[0]||"").trim())?(to||""):(r[4]??"")])});
   },
   async addLeads(list){
-    await this.load();let max=S.leads.reduce((m,l)=>Math.max(m,parseInt(String(l.id).replace(/\D/g,""))||0),1000);
-    const now=toSheetTime(Date.now());
+    await this.load();let max=S.leads.reduce((m,l)=>Math.max(m,parseInt(String(l.id).replace(/\D/g,""))||0),1000);const now=toSheetTime(Date.now());
     await call("append_values",{range:"Leads!A1",values:list.map(x=>["L"+(++max),x.name,normPhone(x.phone),x.city||"",x.assignedTo||"","New","","","",now])});
   },
-  async addEmp(name,phone){
+  async addEmp(o){
     await this.load();const max=S.allEmps.reduce((m,e)=>Math.max(m,parseInt(e.id.replace(/\D/g,""))||0),0);
-    await call("append_values",{range:"Employees!A1",values:[["E"+(max+1),name,normPhone(phone||""),"Yes"]]});
+    await call("append_values",{range:"Employees!A1",values:[["E"+(max+1),o.name,normPhone(o.phone||""),"Yes",o.role,o.pin,""]]});
   },
+  async updateEmp(o){await this.load();const e=emp(o.id);if(!e)throw new Error("Employee not found");
+    await call("update_values",{range:`Employees!B${e.row}:E${e.row}`,values:[[o.name,normPhone(o.phone||""),"Yes",o.role]]})},
+  async resetPin(id,pin){await this.load();const e=emp(id);if(!e)throw new Error("Employee not found");
+    await call("update_values",{range:`Employees!F${e.row}:G${e.row}`,values:[[pin,""]]})},   // first-time PIN; hashed on next login
   async removeEmp(id){
     await this.load();const e=S.allEmps.find(x=>x.id===id);if(!e)return;
     await call("update_values",{range:`Employees!D${e.row}`,values:[["No"]]});
@@ -208,30 +225,39 @@ const Live={
   }
 };
 
-/* ================= APPS SCRIPT BACKEND (GitHub Pages / any website) ================= */
-const CFG_KEY="sn-crm-sheet";
-function getCfg(){try{return JSON.parse(localStorage.getItem(CFG_KEY))||{}}catch(e){return{}}}
-function setCfg(c){try{c?localStorage.setItem(CFG_KEY,JSON.stringify(c)):localStorage.removeItem(CFG_KEY)}catch(e){}}
-(function takeSetupLink(){try{const q=new URLSearchParams(location.search);if(q.get("api")&&q.get("key")){setCfg({url:q.get("api"),key:q.get("key")});history.replaceState(null,"",location.pathname+location.hash)}}catch(e){}})();
+/* ================= BACKEND 2: Apps Script (website) with personal logins ================= */
+const AUTH_KEY="sn-crm-auth", CFG_KEY="sn-crm-sheet";
+function store(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function stored(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
+const apiUrl=()=>BUILTIN_API||(stored(CFG_KEY)||{}).url||"";
+const authErr=m=>Object.assign(new Error(m),{auth:true});
 const Script={
-  async req(action,data){const c=getCfg();let r;
-    if(action==="load")r=await fetch(c.url+(c.url.includes("?")?"&":"?")+"action=load&key="+encodeURIComponent(c.key));
-    else r=await fetch(c.url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({key:c.key,action,...data})});
-    let j;try{j=await r.json()}catch(e){throw new Error("The Apps Script URL didn't return data – check it's the Web app URL and that access is set to 'Anyone'.")}
-    if(!j.ok)throw new Error(j.error||"Request failed");return j},
-  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);lastSync=Date.now()},
-  async logCall(leadId,out,remark,fu,by){await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),by,byName:empName(by)})},
+  async req(action,data){
+    const url=apiUrl(),a=stored(AUTH_KEY)||{};let r;
+    if(action==="load"){if(!a.token)throw authErr("Please log in");r=await fetch(url+(url.includes("?")?"&":"?")+"token="+encodeURIComponent(a.token))}
+    else r=await fetch(url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({token:a.token,action,...data})});
+    let j;try{j=await r.json()}catch(e){throw new Error("The CRM server didn't answer properly. Check the Apps Script deployment (access: Anyone).")}
+    if(!j.ok){if(j.auth){store(AUTH_KEY,null);throw authErr(j.error)}throw new Error(j.error||"Request failed")}
+    return j},
+  async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
+  async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
+  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);ME=j.me;SHEET_URL=j.sheetUrl||"";
+    const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
+  async logCall(leadId,out,remark,fu){await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu)})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
   async addLeads(list){await this.req("addLeads",{leads:list.map(x=>({...x,phone:normPhone(x.phone)}))})},
-  async addEmp(name,phone){await this.req("addEmp",{name,phone:normPhone(phone||"")})},
+  async addEmp(o){await this.req("addEmp",{...o,phone:normPhone(o.phone||"")})},
+  async updateEmp(o){await this.req("updateEmp",{...o,phone:normPhone(o.phone||"")})},
+  async resetPin(id,pin){await this.req("resetPin",{id,pin})},
+  async changePin(oldPin,newPin){await this.req("changePin",{oldPin,newPin})},
   async removeEmp(id){await this.req("removeEmp",{id})}
 };
 let LIVE=Live;
 
-/* ================= DEMO BACKEND (used when the sheet can't be reached) ================= */
+/* ================= BACKEND 3: demo data ================= */
 function demoSeed(){
   const H=3600e3,now=Date.now(),T=t=>toSheetTime(t);
-  const E=[["E1","Rahul Sharma","98100 11223","Yes"],["E2","Priya Nair","98200 33445","Yes"],["E3","Amit Verma","98300 55667","Yes"]];
+  const E=[["E1","Rahul Sharma","98100 11223","Yes","Employee"],["E2","Priya Nair","98200 33445","Yes","Employee"],["E3","Amit Verma","98300 55667","Yes","Team Lead"]];
   const names=["Ankit Gupta","Sneha Patel","Vikram Singh","Neha Joshi","Rohit Mehta","Pooja Reddy","Arjun Kapoor","Kavya Iyer","Sandeep Yadav","Ritu Malhotra","Manish Jain","Divya Menon","Karan Bhatia","Swati Kulkarni","Rajesh Kumar"];
   const cities=["Delhi","Mumbai","Pune","Bengaluru","Jaipur","Hyderabad","Chennai","Ahmedabad","Lucknow","Kolkata"];
   const L=names.map((n,i)=>["L"+(1001+i),n,"98"+(123+i)+" "+(10000+i*3217),cities[i%10],i<12?"E"+(i%3+1):"","New","","","",""]);
@@ -246,79 +272,114 @@ const Demo={
     D.C.push(["C"+Date.now(),now,leadId,r[1],r[2],by,"",lb,remark,f]);r[5]=lb;r[6]=f;r[7]=remark;r[8]=now},
   async assign(ids,to){D.L.forEach(r=>{if(ids.includes(r[0]))r[4]=to||""})},
   async addLeads(list){let m=D.L.length+1001;list.forEach(x=>D.L.push(["L"+(m++),x.name,normPhone(x.phone).replace(/^'/,""),x.city||"",x.assignedTo||"","New","","","",""]))},
-  async addEmp(n,p){D.E.push(["E"+(D.E.length+1),n,p,"Yes"])},
+  async addEmp(o){D.E.push(["E"+(D.E.length+1),o.name,o.phone,"Yes",o.role])},
+  async updateEmp(o){const e=D.E.find(x=>x[0]===o.id);if(e){e[1]=o.name;e[2]=o.phone;e[4]=o.role}},
+  async resetPin(){},
   async removeEmp(id){const e=D.E.find(x=>x[0]===id);if(e)e[3]="No";D.L.forEach(r=>{if(r[4]===id)r[4]=""})}
 };
 const API=()=>MODE==="live"?LIVE:Demo;
 
-/* ================= ERROR HANDLING ================= */
+/* ================= CONNECTION ================= */
 function explain(err){
   const c=err&&err.code;
   if(c==="needs_reauth")return "Your Google Sheets connection has expired. Reconnect Google Sheets in claude.ai → Settings → Connectors, then press Refresh.";
   if(c==="server_not_connected"||c==="selection_required")return "Google Sheets isn't connected for your account. Add it in claude.ai → Settings → Connectors, then press Refresh.";
   if(c==="not_in_manifest"||c==="approval_required"||c==="consent_required")return "This page needs your permission to use Google Sheets. Press Refresh and choose Allow.";
   if(c==="blocked_by_policy")return "Your organization's policy blocks Google Sheets for this page.";
-  if(c==="tool_error")return "Google Sheets refused the request – check that your Google account can edit the sheet. ("+(err.message||"").slice(0,140)+")";
+  if(c==="tool_error")return "Google Sheets refused the request – check that your Google account can edit the sheet.";
   if(c==="server_unavailable")return "Google Sheets didn't respond. Press Refresh to try again.";
+  if(err&&/Failed to fetch|NetworkError|Load failed/i.test(err.message||""))return "Can't reach the CRM server – check your internet connection and press Refresh.";
   return (err&&err.message)||"Something went wrong talking to Google Sheets.";
 }
+const websiteMode=()=>!window.claude;
 async function connect(){
   setSync();
-  const inClaude=!!window.claude;
-  $("#cfgBtn").style.display=inClaude?"none":"";
-  if(!inClaude){
-    const c=getCfg();
-    if(c.url&&c.key){LIVE=Script;mcp=true;await reload(true);return}
-    MODE="demo";demoReason="Not connected to the Google Sheet yet, so you're seeing sample data (changes are not saved). Click ⚙ Connect sheet and paste the Apps Script link + key from your manager.";await Demo.load();render();return}
+  if(websiteMode()){
+    if(!apiUrl()){MODE="demo";demoReason="This website isn't linked to a Google Sheet yet, so you're seeing sample data (changes are not saved).";await Demo.load();render();return}
+    LIVE=Script;mcp=true;
+    const a=stored(AUTH_KEY);if(!a||!a.token)return showLogin();
+    ME=a.me||null;await reload(true);return;
+  }
   try{mcp=await window.claude.use("mcp")}catch(e){mcp=null}
   if(!mcp){MODE="demo";demoReason="Google Sheets isn't available in this view, so you're seeing sample data. Open this page on claude.ai (signed in, with the Google Sheets connector added) to work on the live sheet.";await Demo.load();render();return}
   LIVE=Live;await reload(true);
 }
-async function reload(first){
+async function reload(){
   if(!mcp){render();return}
   BUSY=true;setSync();
   try{
     try{await LIVE.load()}catch(e){if(e&&e.retryable){await new Promise(r=>setTimeout(r,(e.retryAfterMs||800)+Math.random()*600));await LIVE.load()}else throw e}
     MODE="live";demoReason="";
   }catch(e){
+    BUSY=false;
+    if(e&&e.auth)return showLogin(e.message);
     if(MODE!=="live"){MODE="demo";await Demo.load()}
     demoReason=explain(e)+(MODE==="demo"?" Showing sample data meanwhile – changes are NOT saved.":"");
   }
   BUSY=false;render();
 }
 async function write(fn,okMsg){
-  if(BUSY)return toast("Please wait – still saving…");
+  if(BUSY){toast("Please wait – still saving…");return false}
   BUSY=true;setSync();
-  try{await fn(API());if(MODE==="live"){await LIVE.load();toast(okMsg+" · saved to Google Sheet ✓")}else{await Demo.load();toast(okMsg+" (demo – not saved)")}BUSY=false;render();return true}
-  catch(e){BUSY=false;setSync();toast("Not saved: "+explain(e).slice(0,120));
-    // write outcome may be uncertain – re-read to show the truth
-    if(MODE==="live")reload();return false}
+  try{await fn(API());if(MODE==="live"){await LIVE.load();toast(okMsg+" · saved ✓")}else{await Demo.load();toast(okMsg+" (demo – not saved)")}BUSY=false;render();return true}
+  catch(e){BUSY=false;setSync();if(e&&e.auth){showLogin(e.message);return false}
+    toast("Not saved: "+explain(e).slice(0,140));if(MODE==="live")reload();return false}
 }
 function setSync(){
   const dot=$("#dot"),t=$("#syncTxt");
   dot.className="dot "+(BUSY?"busy":MODE==="live"?"live":MODE==="demo"?"demo":"");
-  t.textContent=BUSY?(MODE==="loading"?"Connecting to Google Sheet…":"Syncing…"):MODE==="live"?"Live · Google Sheet · "+new Date(lastSync).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}):MODE==="demo"?"Demo data":"Connecting…";
+  t.textContent=BUSY?(MODE==="loading"?"Connecting…":"Syncing…"):MODE==="live"?"Live · "+new Date(lastSync).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}):MODE==="demo"?"Demo data":MODE==="login"?"Not logged in":"Connecting…";
   $("#banner").innerHTML=demoReason?`<div>⚠ ${esc(demoReason)}</div>`:"";
+  // header controls by role
+  const live=MODE==="live";
+  const os=$("#openSheet");const showSheet=live&&isLead()&&!!SHEET_URL;os.style.display=showSheet?"":"none";if(showSheet)os.href=SHEET_URL;
+  $("#refresh").style.display=MODE==="login"?"none":"";
+  $("#whoBox").style.display=(MODE==="login"||!isLead())?"none":"";
+  $("#userBox").innerHTML=ME&&MODE!=="login"?`<div class="userchip"><div class="av">${initials(ME.name)}</div><div><b>${esc(ME.name)}</b><div class="small mute">${esc(ME.role)}</div></div></div>
+    <button class="btn sm" id="chPin">🔑 PIN</button><button class="btn sm" id="logout">Log out</button>`:"";
+  if($("#logout"))$("#logout").onclick=async()=>{await Script.logout();view={...view,who:"admin",tab:"dash",sel:new Set()};showLogin()};
+  if($("#chPin"))$("#chPin").onclick=openChangePin;
 }
-$("#refresh").onclick=()=>{if(!BUSY)reload()};
+$("#refresh").onclick=()=>{if(!BUSY&&MODE!=="login")reload()};
 setInterval(()=>{if(MODE==="live"&&!BUSY&&document.visibilityState==="visible"&&!$("#mbg").classList.contains("show"))reload()},60000);
+
+/* ================= LOGIN ================= */
+function showLogin(err){
+  MODE="login";ME=null;demoReason="";S={employees:[],allEmps:[],leads:[]};setSync();
+  $("#app").innerHTML=`<div class="card pad" style="max-width:380px;margin:40px auto">
+   <div style="text-align:center"><div class="av" style="margin:0 auto 12px;width:52px;height:52px;font-size:22px">☎</div>
+   <h3 style="font-size:18px;margin-bottom:4px">Log in</h3><p class="small mute" style="margin:0 0 8px">Use your own mobile number and PIN.</p></div>
+   <form id="lg"><label class="f">Mobile number</label><input id="lgId" inputmode="tel" autocomplete="username" placeholder="10-digit mobile number" style="width:100%">
+   <label class="f">PIN</label><input id="lgPin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Your PIN" style="width:100%">
+   <div id="lgErr" class="small" style="color:var(--red);margin-top:8px;min-height:1em">${err&&!/please log in/i.test(err)?esc(err):""}</div>
+   <button class="btn pri" id="lgBtn" style="width:100%;justify-content:center;margin-top:6px">Log in</button></form>
+   <p class="small mute" style="text-align:center;margin:14px 0 0">Forgot your PIN? Ask your manager to reset it.</p></div>`;
+  const id=$("#lgId");id.focus();
+  $("#lg").onsubmit=async e=>{e.preventDefault();const l=id.value.trim(),p=$("#lgPin").value.trim();if(!l||!p)return;
+    const b=$("#lgBtn");b.disabled=true;b.textContent="Logging in…";
+    try{await Script.login(l,p);MODE="loading";view.who=ME.id;view.tab=isLead()?"dash":"my";if(isLead())view.who="admin";render();await reload();if(MODE==="live")toast("Welcome, "+ME.name.split(" ")[0])}
+    catch(x){b.disabled=false;b.textContent="Log in";$("#lgErr").textContent=x.auth||/wrong|too many|enter/i.test(x.message)?x.message:explain(x)}};
+}
 
 /* ================= RENDER ================= */
 function renderWho(){
-  $("#who").innerHTML=`<option value="admin">Admin / Manager</option>`+S.employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)} (Employee)</option>`).join("");
+  $("#who").innerHTML=`<option value="admin">${ME?"Team overview":"Admin / Manager"}</option>`+S.employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)}${ME&&e.id===ME.id?" (me)":""} – ${esc(e.role)}</option>`).join("");
   if(view.who!=="admin"&&!emp(view.who))view.who="admin";
   $("#who").value=view.who;
 }
 $("#who").onchange=e=>{view.who=e.target.value;view.tab=view.who==="admin"?"dash":"my";view.filter="all";view.q="";render()};
 function render(){
   setSync();
+  if(MODE==="login")return;
   if(MODE==="loading"){$("#app").innerHTML=`<div class="card empty">Connecting to your Google Sheet…</div>`;return}
+  if(ME&&!isLead())view.who=ME.id;          // employees only ever see their own list
   renderWho();view.who==="admin"?renderAdmin():renderEmp();
 }
 
-/* ---------- ADMIN ---------- */
+/* ---------- ADMIN / MANAGER / TEAM LEAD ---------- */
 function renderAdmin(){
-  const tabs=[["dash","Dashboard"],["assign","Leads & Assign"],["import","Add / Import Leads"],["team","Employees"],["logs","Call Logs"]];
+  const tabs=[["dash","Dashboard"],["assign","Leads & Assign"],["import","Add / Import Leads"],...(isMgr()?[["team","Employees"]]:[]),["logs","Call Logs"]];
+  if(!tabs.some(t=>t[0]===view.tab))view.tab="dash";
   let h=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${view.tab===k?"on":""}" data-tab="${k}">${l}</button>`).join("")}</div>`;
   h+=({dash:aDash,assign:aAssign,import:aImport,team:aTeam,logs:aLogs})[view.tab]();
   $("#app").innerHTML=h;
@@ -326,6 +387,7 @@ function renderAdmin(){
   bindAdmin();
 }
 function allLogs(){return S.leads.flatMap(l=>l.logs.map(g=>({...g,lead:l}))).sort((a,b)=>(b.at||0)-(a.at||0))}
+const callers=()=>S.employees.filter(e=>e.role==="Employee"||e.role==="Team Lead"||S.leads.some(l=>l.assignedTo===e.id));
 function aDash(){
   const L=S.leads,logs=allLogs(),tl=logs.filter(g=>today(g.at));const c=k=>L.filter(l=>l.status===k).length;
   let h=`<div class="stats">
@@ -335,22 +397,22 @@ function aDash(){
   <div class="card stat"><span>Interested</span><b style="color:var(--green)">${c("int")}</b></div>
   <div class="card stat"><span>Converted</span><b style="color:var(--brand)">${c("conv")}</b></div>
   <div class="card stat"><span>Callbacks pending</span><b style="color:var(--amber)">${c("cb")}</b></div></div>`;
-  h+=`<div class="grid2"><div class="card"><div class="pad"><h3>Employee performance</h3></div><div class="tw"><table><tr><th>Employee</th><th>Assigned</th><th>Called</th><th>Today</th><th>Interested</th><th style="width:28%">Progress</th></tr>`;
-  S.employees.forEach(e=>{const mine=L.filter(l=>l.assignedTo===e.id),called=mine.filter(l=>l.status!=="new").length,pct=mine.length?Math.round(called/mine.length*100):0;
-    h+=`<tr><td><b>${esc(e.name)}</b></td><td class="num">${mine.length}</td><td class="num">${called}</td><td class="num">${tl.filter(g=>g.by===e.id).length}</td><td class="num">${mine.filter(l=>l.status==="int"||l.status==="conv").length}</td><td><div class="bar"><i style="width:${pct}%"></i></div><span class="small mute">${pct}%</span></td></tr>`});
+  h+=`<div class="grid2"><div class="card"><div class="pad"><h3>Team performance</h3></div><div class="tw"><table><tr><th>Name</th><th>Assigned</th><th>Called</th><th>Today</th><th>Interested</th><th style="width:26%">Progress</th></tr>`;
+  callers().forEach(e=>{const mine=L.filter(l=>l.assignedTo===e.id),called=mine.filter(l=>l.status!=="new").length,pct=mine.length?Math.round(called/mine.length*100):0;
+    h+=`<tr><td><b>${esc(e.name)}</b><div class="small mute">${esc(e.role)}</div></td><td class="num">${mine.length}</td><td class="num">${called}</td><td class="num">${tl.filter(g=>g.by===e.id).length}</td><td class="num">${mine.filter(l=>l.status==="int"||l.status==="conv").length}</td><td><div class="bar"><i style="width:${pct}%"></i></div><span class="small mute">${pct}%</span></td></tr>`});
   h+=`</table></div></div><div class="card"><div class="pad"><h3>Recent activity</h3>`;
   h+=logs.slice(0,7).map(g=>`<div class="hi"><b>${esc(empName(g.by))}</b> called <b>${esc(g.lead.name)}</b> ${pill(g.outcome)}<div class="mute small" style="margin-top:3px">${esc(g.remark)||"<i>No remark</i>"} · ${fmt(g.at)}</div></div>`).join("")||`<div class="empty">No calls yet</div>`;
   return h+`</div></div></div>`;
 }
+const empOpts=()=>S.employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)} (${esc(e.role)})</option>`).join("");
 function aAssign(){
   const f=view.assignFilter,q=view.q.toLowerCase();
   const list=S.leads.filter(l=>(f==="all"||(f==="none"?!l.assignedTo:l.assignedTo===f))&&(!q||(l.name+l.phone+l.city).toLowerCase().includes(q)));
-  const opts=S.employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)}</option>`).join("");
   let h=`<div class="card pad" style="margin-bottom:12px"><div class="row">
    <input id="q" placeholder="Search name, number, city" value="${esc(view.q)}" style="flex:1;min-width:180px">
-   <select id="af"><option value="all">All leads</option><option value="none">Unassigned</option>${opts}</select>
+   <select id="af"><option value="all">All leads</option><option value="none">Unassigned</option>${empOpts()}</select>
    <span class="mute small">${view.sel.size} selected</span>
-   <select id="toEmp"><option value="">Assign selected to…</option>${opts}<option value="__un">— Unassign —</option></select>
+   <select id="toEmp"><option value="">Assign selected to…</option>${empOpts()}<option value="__un">— Unassign —</option></select>
    <button class="btn pri" id="doAssign" ${view.sel.size?"":"disabled"}>Assign</button>
    <button class="btn" id="auto">⚖ Auto-distribute unassigned</button></div></div>
   <div class="card tw"><table><tr><th style="width:36px"><input type="checkbox" id="all" ${list.length&&list.every(r=>view.sel.has(r.id))?"checked":""}></th><th>Name</th><th>Number</th><th>City</th><th>Assigned to</th><th>Status</th><th>Last remark</th><th></th></tr>`;
@@ -359,47 +421,58 @@ function aAssign(){
   return h+`</table></div>`;
 }
 function aImport(){
-  const opts=S.employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)}</option>`).join("");
   return `<div class="grid2"><div class="card pad"><h3>Add a single lead</h3>
    <label class="f">Name</label><input id="nName" style="width:100%" placeholder="Customer name">
-   <label class="f">Mobile number</label><input id="nPhone" style="width:100%" placeholder="98XXX XXXXX">
+   <label class="f">Mobile number</label><input id="nPhone" inputmode="tel" style="width:100%" placeholder="98XXX XXXXX">
    <label class="f">City / note</label><input id="nCity" style="width:100%" placeholder="Optional">
-   <label class="f">Assign to</label><select id="nEmp" style="width:100%"><option value="">Unassigned</option>${opts}</select>
+   <label class="f">Assign to</label><select id="nEmp" style="width:100%"><option value="">Unassigned</option>${empOpts()}</select>
    <div style="margin-top:14px"><button class="btn pri" id="addOne">Add lead</button></div></div>
    <div class="card pad"><h3>Bulk import (paste from Excel)</h3>
-   <p class="mute small" style="margin-top:-4px">One lead per line: <b>Name, Number, City</b>. Copy columns straight from Excel / Google Sheets – tabs work too. You can also add rows directly in the <b>Leads</b> tab of the sheet.</p>
+   <p class="mute small" style="margin-top:-4px">One lead per line: <b>Name, Number, City</b>. Copy columns straight from Excel / Google Sheets – tabs work too.</p>
    <textarea id="bulk" style="min-height:170px" placeholder="Ramesh Kumar, 9876543210, Delhi&#10;Sunita Shah, 9123456780, Surat"></textarea>
-   <label class="f">Assign imported leads to</label><select id="bEmp" style="width:100%"><option value="">Leave unassigned</option><option value="__auto">Auto-distribute equally</option>${opts}</select>
+   <label class="f">Assign imported leads to</label><select id="bEmp" style="width:100%"><option value="">Leave unassigned</option><option value="__auto">Auto-distribute equally</option>${empOpts()}</select>
    <div style="margin-top:14px"><button class="btn pri" id="doBulk">Import leads</button></div></div></div>`;
 }
+const roleOpts=sel=>ROLES.filter(r=>canManageRole(r)).map(r=>`<option ${r===sel?"selected":""}>${r}</option>`).join("");
 function aTeam(){
-  let h=`<div class="card pad" style="margin-bottom:12px"><div class="row"><input id="eName" placeholder="Employee name" style="flex:1;min-width:160px"><input id="ePhone" placeholder="Mobile" style="flex:1;min-width:140px"><button class="btn pri" id="addEmp">Add employee</button></div></div>
-  <div class="card tw"><table><tr><th>ID</th><th>Employee</th><th>Mobile</th><th>Leads assigned</th><th>Not yet called</th><th></th></tr>`;
-  h+=S.employees.map(e=>{const m=S.leads.filter(l=>l.assignedTo===e.id);return `<tr><td class="mute">${esc(e.id)}</td><td><b>${esc(e.name)}</b></td><td class="num">${esc(e.phone)}</td><td class="num">${m.length}</td><td class="num">${m.filter(l=>l.status==="new").length}</td><td style="text-align:right;white-space:nowrap"><button class="btn sm" data-as="${esc(e.id)}">Open their view</button> <button class="btn sm" data-del="${esc(e.id)}">Remove</button></td></tr>`}).join("");
+  let h=`<div class="card pad" style="margin-bottom:12px"><h3>Add a team member</h3><div class="row">
+   <input id="eName" placeholder="Full name" style="flex:2;min-width:150px">
+   <input id="ePhone" inputmode="tel" placeholder="Mobile (used to log in)" style="flex:2;min-width:150px">
+   <select id="eRole">${roleOpts("Employee")}</select>
+   <input id="ePin" inputmode="numeric" placeholder="First PIN (4–8 digits)" style="flex:1;min-width:140px">
+   <button class="btn pri" id="addEmp">Add</button></div>
+   <p class="small mute" style="margin:8px 0 0">They log in with this mobile number and PIN, and can change the PIN later. Only Admin, Manager and Team Lead can see the Google Sheet and the full team.</p></div>
+  <div class="card tw"><table><tr><th>ID</th><th>Name</th><th>Mobile (login)</th><th>Role</th><th>Leads</th><th>Login</th><th></th></tr>`;
+  h+=S.employees.map(e=>{const m=S.leads.filter(l=>l.assignedTo===e.id),can=canManageRole(e.role)||(ME&&e.id===ME.id),self=ME&&e.id===ME.id;
+    return `<tr><td class="mute">${esc(e.id)}</td><td><b>${esc(e.name)}</b>${self?' <span class="small mute">(you)</span>':""}</td><td class="num">${esc(e.phone)||'<span class="mute">—</span>'}</td><td>${esc(e.role)}</td><td class="num">${m.length}</td>
+    <td class="small">${e.pinSet?"✓ PIN set":'<span style="color:var(--amber)">No PIN</span>'}</td>
+    <td style="text-align:right;white-space:nowrap">${can?`<button class="btn sm" data-edit="${esc(e.id)}">Edit</button> <button class="btn sm" data-pin="${esc(e.id)}">Reset PIN</button>${self?"":` <button class="btn sm" data-del="${esc(e.id)}">Remove</button>`}`:'<span class="small mute">Admin only</span>'}
+    <button class="btn sm" data-as="${esc(e.id)}">View list</button></td></tr>`}).join("");
   return h+`</table></div>`;
 }
 const filteredLogs=()=>allLogs().filter(g=>(view.logEmp==="all"||g.by===view.logEmp)&&(view.logOut==="all"||g.outcome===view.logOut));
 function aLogs(){
   const logs=filteredLogs();
   let h=`<div class="card pad" style="margin-bottom:12px"><div class="row">
-   <select id="lEmp"><option value="all">All employees</option>${S.employees.map(e=>`<option value="${esc(e.id)}" ${view.logEmp===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select>
+   <select id="lEmp"><option value="all">Everyone</option>${S.employees.map(e=>`<option value="${esc(e.id)}" ${view.logEmp===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select>
    <select id="lOut"><option value="all">All outcomes</option>${Object.entries(OUTCOMES).map(([k,o])=>`<option value="${k}" ${view.logOut===k?"selected":""}>${o.label}</option>`).join("")}</select>
    <span class="spacer"></span><span class="mute small">${logs.length} calls</span><button class="btn" id="copyCsv">⧉ Copy as CSV</button></div></div>
-  <div class="card tw"><table><tr><th>Date & time</th><th>Employee</th><th>Customer</th><th>Number</th><th>Outcome</th><th>Remark</th><th>Follow-up</th></tr>`;
+  <div class="card tw"><table><tr><th>Date & time</th><th>Called by</th><th>Customer</th><th>Number</th><th>Outcome</th><th>Remark</th><th>Follow-up</th></tr>`;
   h+=logs.map(g=>`<tr><td class="num small">${fmt(g.at)}</td><td>${esc(empName(g.by))}</td><td><b>${esc(g.lead.name)}</b></td><td class="num">${esc(g.lead.phone)}</td><td>${pill(g.outcome)}</td><td class="small" style="max-width:260px">${esc(g.remark)||'<span class="mute">—</span>'}</td><td class="small num">${g.followUp?fmt(g.followUp):"—"}</td></tr>`).join("")||`<tr><td colspan="7"><div class="empty">No calls logged</div></td></tr>`;
   return h+`</table></div>`;
 }
-function distributePlan(ids){const E=S.employees;const plan={};if(!E.length)return plan;
+function distributePlan(ids){const E=callers().length?callers():S.employees;const plan={};if(!E.length)return plan;
   const load=Object.fromEntries(E.map(e=>[e.id,S.leads.filter(l=>l.assignedTo===e.id).length]));
   ids.forEach(id=>{const e=E.reduce((a,b)=>load[a.id]<=load[b.id]?a:b);(plan[e.id]=plan[e.id]||[]).push(id);load[e.id]++});return plan}
+const validPin=p=>/^\d{4,8}$/.test(p);
 function bindAdmin(){
   const on=(s,ev,fn)=>{const el=$(s);if(el)el[ev]=fn};
   on("#q","oninput",e=>{view.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#q");n.focus();n.setSelectionRange(p,p)});
   if($("#af")){$("#af").value=view.assignFilter;$("#af").onchange=e=>{view.assignFilter=e.target.value;render()}}
   document.querySelectorAll("[data-sel]").forEach(c=>c.onchange=()=>{c.checked?view.sel.add(c.dataset.sel):view.sel.delete(c.dataset.sel);render()});
   on("#all","onchange",e=>{document.querySelectorAll("[data-sel]").forEach(c=>e.target.checked?view.sel.add(c.dataset.sel):view.sel.delete(c.dataset.sel));render()});
-  on("#doAssign","onclick",async()=>{const to=$("#toEmp").value;if(!to)return toast("Choose an employee first");const ids=[...view.sel];
-    if(await write(api=>api.assign(ids,to==="__un"?"":to),`${ids.length} lead(s) ${to==="__un"?"unassigned":"assigned to "+empName(to)}`))view.sel.clear(),render()});
+  on("#doAssign","onclick",async()=>{const to=$("#toEmp").value;if(!to)return toast("Choose a person first");const ids=[...view.sel];
+    if(await write(api=>api.assign(ids,to==="__un"?"":to),`${ids.length} lead(s) ${to==="__un"?"unassigned":"assigned to "+empName(to)}`)){view.sel.clear();render()}});
   on("#auto","onclick",async()=>{const un=S.leads.filter(l=>!l.assignedTo).map(l=>l.id);if(!un.length)return toast("No unassigned leads");
     const plan=distributePlan(un);await write(async api=>{for(const [eid,ids] of Object.entries(plan))await api.assign(ids,eid)},`${un.length} leads distributed`)});
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false));
@@ -408,22 +481,54 @@ function bindAdmin(){
   on("#doBulk","onclick",async()=>{const lines=$("#bulk").value.split("\n").map(s=>s.trim()).filter(Boolean);const to=$("#bEmp").value;const list=[];
     lines.forEach(ln=>{const p=ln.split(/\t|,/).map(s=>s.trim());if(p.length<2||p[1].replace(/\D/g,"").length<6)return;list.push({name:p[0],phone:p[1],city:p[2]||""})});
     if(!list.length)return toast("No valid lines – use: Name, Number, City");
-    if(to==="__auto"){const E=S.employees;const load=Object.fromEntries(E.map(e=>[e.id,S.leads.filter(l=>l.assignedTo===e.id).length]));
-      list.forEach(x=>{if(!E.length)return;const e=E.reduce((a,b)=>load[a.id]<=load[b.id]?a:b);x.assignedTo=e.id;load[e.id]++})}
-    else list.forEach(x=>x.assignedTo=to);
+    if(to==="__auto"){const plan=distributePlan(list.map((_,i)=>i));Object.entries(plan).forEach(([eid,idx])=>idx.forEach(i=>list[i].assignedTo=eid))}else list.forEach(x=>x.assignedTo=to);
     if(await write(api=>api.addLeads(list),`${list.length} lead(s) imported`+(lines.length-list.length?`, ${lines.length-list.length} skipped`:""))){view.tab="assign";render()}});
-  on("#addEmp","onclick",async()=>{const n=$("#eName").value.trim();if(!n)return toast("Enter a name");await write(api=>api.addEmp(n,$("#ePhone").value.trim()),"Employee added")});
+  on("#addEmp","onclick",async()=>{const n=$("#eName").value.trim(),ph=$("#ePhone").value.trim(),pin=$("#ePin").value.trim(),role=$("#eRole").value;
+    if(!n)return toast("Enter a name");if(ph.replace(/\D/g,"").length<10)return toast("Enter a valid 10-digit mobile number");if(!validPin(pin))return toast("First PIN must be 4–8 digits");
+    if(S.employees.some(e=>e.phone.replace(/\D/g,"").slice(-10)===ph.replace(/\D/g,"").slice(-10)))return toast("Someone already uses this mobile number");
+    await write(api=>api.addEmp({name:n,phone:ph,role,pin}),`${n} added as ${role}`)});
+  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEditEmp(b.dataset.edit));
+  document.querySelectorAll("[data-pin]").forEach(b=>b.onclick=()=>openResetPin(b.dataset.pin));
   document.querySelectorAll("[data-del]").forEach(b=>{let armed=false;b.onclick=async()=>{if(!armed){armed=true;b.textContent="Confirm remove?";b.style.color="var(--red)";setTimeout(()=>{armed=false;b.textContent="Remove";b.style.color=""},3000);return}
-    await write(api=>api.removeEmp(b.dataset.del),"Employee removed – their leads are now unassigned")}});
+    await write(api=>api.removeEmp(b.dataset.del),"Removed – their leads are now unassigned")}});
   document.querySelectorAll("[data-as]").forEach(b=>b.onclick=()=>{view.who=b.dataset.as;view.tab="my";render()});
   on("#lEmp","onchange",e=>{view.logEmp=e.target.value;render()});
   on("#lOut","onchange",e=>{view.logOut=e.target.value;render()});
   on("#copyCsv","onclick",async()=>{const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
-    const csv=["Date,Employee,Customer,Number,City,Outcome,Remark,Follow-up",...filteredLogs().map(g=>[fmt(g.at),empName(g.by),g.lead.name,g.lead.phone,g.lead.city,OUTCOMES[g.outcome].label,g.remark,g.followUp?fmt(g.followUp):""].map(q).join(","))].join("\n");
-    try{await navigator.clipboard.writeText(csv);toast("Copied – paste into Excel")}catch(e){toast("Copy blocked by browser – use Open sheet instead")}});
+    const csv=["Date,Called by,Customer,Number,City,Outcome,Remark,Follow-up",...filteredLogs().map(g=>[fmt(g.at),empName(g.by),g.lead.name,g.lead.phone,g.lead.city,OUTCOMES[g.outcome].label,g.remark,g.followUp?fmt(g.followUp):""].map(q).join(","))].join("\n");
+    try{await navigator.clipboard.writeText(csv);toast("Copied – paste into Excel")}catch(e){toast("Copy blocked by browser")}});
 }
 
-/* ---------- EMPLOYEE ---------- */
+/* ---------- small form modals ---------- */
+function formModal(title,body,okLabel,onOk){
+  $("#modal").innerHTML=`<div class="mh"><div style="font-weight:700">${title}</div><button class="x" id="mx">×</button></div><form id="mf"><div class="mb">${body}<div id="mErr" class="small" style="color:var(--red);margin-top:8px"></div></div>
+   <div class="mf"><button type="button" class="btn" id="mc">Cancel</button><button class="btn pri" id="mok">${okLabel}</button></div></form>`;
+  $("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");
+  $("#mx").onclick=close;$("#mc").onclick=close;
+  $("#mf").onsubmit=async e=>{e.preventDefault();$("#mErr").textContent="";const b=$("#mok");b.disabled=true;
+    const err=await onOk();if(err===true||err===undefined){close()}else{b.disabled=false;if(err)$("#mErr").textContent=err}};
+  const f=$("#modal input");if(f)f.focus();
+}
+function openEditEmp(id){const e=emp(id);if(!e)return;const self=ME&&e.id===ME.id;
+  formModal("Edit "+esc(e.name),`<label class="f">Full name</label><input id="fN" style="width:100%" value="${esc(e.name)}">
+   <label class="f">Mobile (used to log in)</label><input id="fP" inputmode="tel" style="width:100%" value="${esc(e.phone)}">
+   <label class="f">Role</label><select id="fR" style="width:100%" ${self?"disabled":""}>${self?`<option>${esc(e.role)}</option>`:roleOpts(e.role)}</select>`,"Save",async()=>{
+    const name=$("#fN").value.trim(),phone=$("#fP").value.trim(),role=self?e.role:$("#fR").value;
+    if(!name)return "Enter a name";if(phone.replace(/\D/g,"").length<10)return "Enter a valid 10-digit mobile number";
+    return await write(api=>api.updateEmp({id,name,phone,role}),"Saved")?true:"Not saved – see the message at the bottom"})}
+function openResetPin(id){const e=emp(id);if(!e)return;
+  formModal("Reset PIN – "+esc(e.name),`<p class="small mute" style="margin-top:0">Set a new PIN and tell ${esc(e.name.split(" ")[0])}. They'll be logged out of other devices.</p>
+   <label class="f">New PIN (4–8 digits)</label><input id="fPin" inputmode="numeric" style="width:100%">`,"Set PIN",async()=>{
+    const pin=$("#fPin").value.trim();if(!validPin(pin))return "PIN must be 4–8 digits";
+    return await write(api=>api.resetPin(id,pin),"PIN updated for "+e.name)?true:"Not saved"})}
+function openChangePin(){
+  formModal("Change my PIN",`<label class="f">Current PIN</label><input id="fO" type="password" inputmode="numeric" style="width:100%">
+   <label class="f">New PIN (4–8 digits)</label><input id="fN1" type="password" inputmode="numeric" style="width:100%">
+   <label class="f">Repeat new PIN</label><input id="fN2" type="password" inputmode="numeric" style="width:100%">`,"Change PIN",async()=>{
+    const o=$("#fO").value.trim(),n=$("#fN1").value.trim();if(!validPin(n))return "PIN must be 4–8 digits";if(n!==$("#fN2").value.trim())return "New PINs don't match";
+    try{await Script.changePin(o,n);toast("PIN changed ✓");return true}catch(e){if(e.auth){showLogin(e.message);return true}return e.message}})}
+
+/* ---------- EMPLOYEE VIEW ---------- */
 const lastOf=l=>l.logs[0]||(l.lastRemark||l.lastAt?{remark:l.lastRemark,at:l.lastAt}:null);
 function renderEmp(){
   const me=emp(view.who);if(!me){view.who="admin";return render()}
@@ -432,16 +537,17 @@ function renderEmp(){
   const due=mine.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<=Date.now()+30*60e3);
   const f=view.filter,q=view.q.toLowerCase();
   const list=mine.filter(l=>(f==="all"||l.status===f)&&(!q||(l.name+l.phone+l.city).toLowerCase().includes(q))).sort((a,b)=>(a.status==="new"?0:1)-(b.status==="new"?0:1));
-  let h=`<div style="margin-bottom:14px"><div class="mute small">Good day,</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>
-  <div class="stats"><div class="card stat"><span>My leads</span><b>${mine.length}</b></div>
+  const own=ME&&me.id===ME.id;
+  let h=`<div style="margin-bottom:14px"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>
+  <div class="stats"><div class="card stat"><span>${own?"My leads":"Leads"}</span><b>${mine.length}</b></div>
   <div class="card stat"><span>Not yet called</span><b>${mine.filter(l=>l.status==="new").length}</b></div>
   <div class="card stat"><span>Calls today</span><b>${todayCalls}</b></div>
   <div class="card stat"><span>Interested</span><b style="color:var(--green)">${mine.filter(l=>l.status==="int").length}</b></div></div>`;
   if(due.length)h+=`<div class="card due pad" style="margin-bottom:14px"><h3 style="color:var(--amber)">⏰ Callbacks due now (${due.length})</h3>${due.map(l=>leadRow(l)).join("")}</div>`;
   const counts=k=>k==="all"?mine.length:mine.filter(l=>l.status===k).length;
-  h+=`<div class="row" style="margin-bottom:10px"><input id="eq" placeholder="Search my leads" value="${esc(view.q)}" style="flex:1;min-width:180px"></div>
+  h+=`<div class="row" style="margin-bottom:10px"><input id="eq" placeholder="Search leads" value="${esc(view.q)}" style="flex:1;min-width:180px"></div>
   <div class="chips">${["all","new",...Object.keys(OUTCOMES)].map(k=>`<button class="chip ${f===k?"on":""}" data-f="${k}">${k==="all"?"All":STATUS[k].label} · ${counts(k)}</button>`).join("")}</div>
-  <div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No leads here${mine.length?"":" – ask your manager to assign a list"}.</div>`}</div>`;
+  <div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No leads here${mine.length?"":" yet – your manager will assign a list"}.</div>`}</div>`;
   $("#app").innerHTML=h;
   document.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{view.filter=b.dataset.f;render()});
   $("#eq").oninput=e=>{view.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#eq");n.focus();n.setSelectionRange(p,p)};
@@ -463,10 +569,9 @@ function leadRow(l){
 let M={};
 function openLead(id,fromCall){
   const l=S.leads.find(x=>x.id===id);if(!l)return;M={id,out:null};
-  const isEmp=view.who!=="admin";
   $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(l.name)}</div><div><div style="font-weight:700">${esc(l.name)}</div><div class="num mute small">${esc(l.phone)} · ${esc(l.city)}</div></div><button class="x" id="mx">×</button></div>
   <div class="mb">
-   ${fromCall?`<div class="card pad" style="background:var(--green-soft);border-color:#c7e8d2;margin-bottom:6px"><b style="color:var(--green)">📞 Dialing ${esc(l.phone)}…</b><div class="small mute" style="margin-top:3px">Your phone's dialer should open. After the call, record the outcome below. If it didn't open, dial the number shown.</div></div>`:""}
+   ${fromCall?`<div class="card pad" style="background:var(--green-soft);border-color:#c7e8d2;margin-bottom:6px"><b style="color:var(--green)">📞 Dialing ${esc(l.phone)}…</b><div class="small mute" style="margin-top:3px">Your phone's dialer should open. After the call, record the outcome below.</div></div>`:""}
    <div class="row"><a class="btn call" href="${telHref(l.phone)}">📞 Call ${esc(l.phone)}</a><span class="mute small">Assigned to ${esc(l.assignedTo?empName(l.assignedTo):"nobody")}</span></div>
    <label class="f">Call outcome</label>
    <div class="outs">${Object.entries(OUTCOMES).map(([k,o])=>`<button class="out" data-out="${k}"><span class="pill ${o.cls}">${o.label}</span></button>`).join("")}</div>
@@ -480,34 +585,16 @@ function openLead(id,fromCall){
   $("#mx").onclick=close;$("#mc").onclick=close;
   document.querySelectorAll("[data-out]").forEach(b=>b.onclick=()=>{M.out=b.dataset.out;document.querySelectorAll("[data-out]").forEach(x=>x.classList.toggle("on",x===b));
     $("#fuWrap").style.display=M.out==="cb"?"block":"none";
-    if(M.out==="cb"&&!$("#fu").value){const d=new Date(Date.now()+864e5);d.setHours(11,0,0,0);$("#fu").value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T11:00`}});
+    if(M.out==="cb"&&!$("#fu").value){const d=new Date(Date.now()+864e5);$("#fu").value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T11:00`}});
   $("#ms").onclick=async()=>{if(!M.out)return toast("Select a call outcome");
     const btn=$("#ms");btn.disabled=true;btn.textContent="Saving…";
     const fu=M.out==="cb"&&$("#fu").value?parseT($("#fu").value):null;
-    const by=isEmp?view.who:(l.assignedTo||"ADMIN");
+    const by=ME?ME.id:(view.who!=="admin"?view.who:(l.assignedTo||"ADMIN_LOG"));
     const ok=await write(api=>api.logCall(l.id,M.out,$("#rem").value.trim(),fu,by),"Call logged");
     if(ok)close();else{btn.disabled=false;btn.textContent="Save call log"}};
 }
-function openCfg(){
-  const c=getCfg();
-  $("#modal").innerHTML=`<div class="mh"><div style="font-weight:700">Connect to Google Sheet</div><button class="x" id="mx">×</button></div>
-  <div class="mb"><p class="small mute" style="margin-top:0">Paste the <b>Apps Script Web app URL</b> and <b>access key</b> from your manager. This is saved on this device only.</p>
-   <label class="f">Apps Script Web app URL</label><input id="cUrl" style="width:100%" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(c.url||"")}">
-   <label class="f">Access key</label><input id="cKey" style="width:100%" placeholder="Secret key" value="${esc(c.key||"")}">
-   ${c.url&&c.key?`<div class="card pad" style="margin-top:14px"><b class="small">Setup link for employees</b><div class="small mute" style="margin:4px 0 8px">Send this link to employees – opening it connects their phone automatically. Share it only with your team.</div><button class="btn sm" id="cLink">⧉ Copy setup link</button></div>`:""}
-  </div>
-  <div class="mf">${c.url?`<button class="btn" id="cOff" style="margin-right:auto">Disconnect</button>`:""}<button class="btn" id="mc">Cancel</button><button class="btn pri" id="cSave">Save & connect</button></div>`;
-  $("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");
-  $("#mx").onclick=close;$("#mc").onclick=close;
-  $("#cSave").onclick=async()=>{const url=$("#cUrl").value.trim(),key=$("#cKey").value.trim();
-    if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(url))return toast("That doesn't look like an Apps Script Web app URL");if(!key)return toast("Enter the access key");
-    setCfg({url,key});close();MODE="loading";demoReason="";render();await connect();if(MODE==="live")toast("Connected to Google Sheet ✓")};
-  if($("#cOff"))$("#cOff").onclick=async()=>{setCfg(null);close();await connect();toast("Disconnected")};
-  if($("#cLink"))$("#cLink").onclick=async()=>{const u=location.origin+location.pathname+"?api="+encodeURIComponent(c.url)+"&key="+encodeURIComponent(c.key);
-    try{await navigator.clipboard.writeText(u);toast("Setup link copied")}catch(e){toast("Copy blocked – link: "+u)}};
-}
-$("#cfgBtn").onclick=openCfg;
 $("#mbg").onclick=e=>{if(e.target.id==="mbg")$("#mbg").classList.remove("show")};
+$("#cfgBtn").style.display="none";
 
 render();connect();
 </script>
