@@ -54,6 +54,7 @@ tr:last-child td{border-bottom:0}
 .mute{color:var(--mute)}
 .small{font-size:12.5px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.cgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 12px;margin:6px 0 4px}@media(max-width:760px){.cgrid{grid-template-columns:1fr 1fr}}
 .be{display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start}
 @media(max-width:900px){.be{grid-template-columns:1fr}}
 .bel{padding:6px}
@@ -199,11 +200,12 @@ const isTL=()=>!!ME&&ME.role==="Team Lead";                 // Team Leads get on
 const teamLeads=(R=RAW||S)=>R.allEmps.filter(e=>e.role==="Team Lead"&&e.active);
 const teamOf=e=>!e?"":e.role==="Team Lead"?e.id:(e.tl||"");
 const teamName=id=>id==="none"?"No team":(emp(id)?.name||id)+"'s team";
-let RAW=null;const SCOPED_TABS=new Set(["dash","lead","byemp","assign","logs","reports"]);
+let RAW=null;const SCOPED_TABS=new Set(["dash","lead","cases","byemp","assign","logs","reports"]);
 function scopeData(R,t){
   const inT=e=>t==="none"?(!teamOf(e)&&e.role!=="Sales Manager"):teamOf(e)===t;
   const ids=new Set(R.allEmps.filter(inT).map(e=>e.id));
-  return {...R,employees:R.employees.filter(e=>ids.has(e.id)),leads:R.leads.filter(l=>ids.has(l.assignedTo)),__scoped:true};
+  return {...R,employees:R.employees.filter(e=>ids.has(e.id)),leads:R.leads.filter(l=>ids.has(l.assignedTo)),
+    cases:(R.cases||[]).filter(c=>t==="none"?!c.tlId:(c.tlId===t||ids.has(c["Telecaller ID"]))),__scoped:true};
 }
 const isMgr=()=>!ME||rank(ME.role)<=rank("Manager");
 const canManageRole=r=>!ME||ME.role==="Admin"||rank(r)>rank(ME.role);
@@ -212,7 +214,7 @@ const canManageRole=r=>!ME||ME.role==="Admin"||rank(r)>rank(ME.role);
 function build(eRows,lRows,cRows){
   const allEmps=eRows.map((r,i)=>({id:String(r[0]||"").trim(),name:String(r[1]||"").trim(),phone:String(r[2]??""),
     active:String(r[3]||"Yes").trim().toLowerCase()!=="no",role:ROLES.find(x=>x.toLowerCase()===String(r[4]||"").trim().toLowerCase())||"Telecaller Executive",
-    pinSet:!!(String(r[5]||"").trim()||String(r[6]||"").trim()),tlRaw:String(r[6]||"").trim(),row:i+2})).filter(e=>e.id&&e.name);
+    pinSet:!!(String(r[5]||"").trim()||String(r[6]||"").trim()),tlRaw:String(r[6]||"").trim(),lastLogin:parseT(r[7]),row:i+2})).filter(e=>e.id&&e.name);
   allEmps.forEach(e=>{const t=allEmps.find(x=>x.role==="Team Lead"&&x.id===e.tlRaw&&e.role!=="Team Lead");e.tl=t?t.id:"";delete e.tlRaw});
   const findEmp=v=>{v=String(v||"").trim();if(!v)return null;const lv=v.toLowerCase();const e=allEmps.find(e=>e.id.toLowerCase()===lv||e.name.toLowerCase()===lv);return e?e.id:v};
   const leads=lRows.map((r,i)=>({id:String(r[0]||"").trim(),name:String(r[1]||""),phone:String(r[2]??""),city:String(r[3]||""),assignedTo:findEmp(r[4]),
@@ -268,6 +270,8 @@ const Live={
     await this.assign(S.leads.filter(l=>l.assignedTo===id).map(l=>l.id),"");
   },
   async saveMeeting(){throw new Error("Open the website version of the CRM to add meetings")},
+  async saveCase(){throw new Error("Open the website version of the CRM for lead cases")},
+  async createCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async deleteMeeting(){throw new Error("Open the website version of the CRM to delete meetings")}
 };
 
@@ -287,7 +291,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu){await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu)})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -298,6 +302,8 @@ const Script={
   async changePin(oldPin,newPin){await this.req("changePin",{oldPin,newPin})},
   async removeEmp(id){await this.req("removeEmp",{id})},
   async saveMeeting(m){await this.req("saveMeeting",{m})},
+  async saveCase(c){await this.req("saveCase",{c})},
+  async createCase(leadId){await this.req("createCase",{leadId})},
   async deleteMeeting(id){await this.req("deleteMeeting",{id})}
 };
 let LIVE=Live;
@@ -432,7 +438,7 @@ function render(){
 
 /* ---------- ADMIN / MANAGER / TEAM LEAD ---------- */
 function renderAdmin(){
-  const tabs=[["dash","Dashboard"],["lead","Leads"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(isMgr()?[["reports","⬇ Reports"]]:[])];
+  const tabs=[["dash","Dashboard"],["lead","Leads"],["cases","Lead Cases"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()?[["myteam","My Team"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(isMgr()?[["reports","⬇ Reports"]]:[])];
   if(!tabs.some(t=>t[0]===view.tab))view.tab="dash";
   let h=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${view.tab===k?"on":""}" data-tab="${k}">${l}</button>`).join("")}</div>`;
   const TLs=teamLeads();
@@ -440,11 +446,27 @@ function renderAdmin(){
       <select id="teamSel"><option value="all">All teams</option>${TLs.map(e=>`<option value="${esc(e.id)}" ${view.team===e.id?"selected":""}>${esc(e.name)}'s team</option>`).join("")}<option value="none" ${view.team==="none"?"selected":""}>No team</option></select></label>
       ${view.team&&view.team!=="all"?`<span class="small mute">Showing only ${esc(teamName(view.team))}${view.team!=="none"?" ("+RAW.allEmps.filter(e=>e.active&&teamOf(e)===view.team).length+" people)":""}</span>`:""}</div>`;
   else if(isTL())h+=`<div class="small mute" style="margin:-4px 0 12px">Showing your team: ${esc(S.employees.map(e=>e.name).join(", "))}</div>`;
-  h+=({dash:aDash,lead:aLeadsTab,byemp:aByEmp,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings})[view.tab]();
+  h+=({dash:aDash,lead:aLeadsTab,cases:aCases,byemp:aByEmp,myteam:aMyTeam,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings})[view.tab]();
   $("#app").innerHTML=h;
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{view.tab=b.dataset.tab;render()});
   const ts=$("#teamSel");if(ts)ts.onchange=()=>{view.team=ts.value;view.sel.clear();if(view.lsel)view.lsel.clear();render()};
-  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();
+  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();bindCasesTab();bindCases();
+}
+/* ---------- MY TEAM (Team Leads): members' details + reset PIN ---------- */
+function aMyTeam(){
+  const today=sod(Date.now()),ppl=S.employees.slice().sort((a,b)=>(a.id===ME.id?-1:b.id===ME.id?1:a.name.localeCompare(b.name)));
+  let h=`<div class="card pad" style="margin-bottom:12px"><h3>My team · ${ppl.length} people</h3>
+    <div class="small mute" style="margin-top:-6px">Your team members and how they're doing today. You can reset a forgotten PIN; to add, move or remove people ask your Manager or Admin.${SHEET_URL?` Your team's Google Sheet opens with <b>Open sheet ↗</b> at the top.`:""}</div></div>`;
+  h+=`<div class="card tw"><table><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Last login</th><th>Calling list</th><th>Not yet called</th><th>Leads</th><th>Calls today</th><th>Callbacks due</th><th>Login</th><th></th></tr>`;
+  h+=ppl.map(e=>{const list=S.leads.filter(l=>l.assignedTo===e.id),self=e.id===ME.id;
+    const callsToday=allLogs().filter(g=>g.by===e.id&&g.at>=today).length,due=list.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<=today+DAY-1).length;
+    return `<tr><td><b>${esc(e.name)}</b>${self?' <span class="small mute">(you)</span>':""}<div class="small mute">${esc(e.id)}</div></td>
+      <td class="num" style="white-space:nowrap">${e.phone?`<a class="lnk" href="${telHref(e.phone)}">${esc(e.phone)}</a>`:'<span class="mute">—</span>'}</td><td>${esc(e.role)}</td>
+      <td class="small num">${e.lastLogin?fmt(e.lastLogin):'<span class="mute">never</span>'}</td><td class="num">${list.length}</td><td class="num">${list.filter(l=>l.status==="new").length}</td>
+      <td class="num" style="color:var(--green)">${list.filter(isLeadC).length}</td><td class="num">${callsToday}</td><td class="num">${due?`<b style="color:var(--amber)">${due}</b>`:0}</td>
+      <td class="small">${e.pinSet?"✓ PIN set":'<span style="color:var(--amber)">No PIN</span>'}</td>
+      <td style="text-align:right;white-space:nowrap">${self?`<button class="btn sm" id="myPin2">🔑 My PIN</button>`:`<button class="btn sm" data-pin="${esc(e.id)}">Reset PIN</button>`} <button class="btn sm" data-as="${esc(e.id)}">View list</button></td></tr>`}).join("");
+  return h+`</table></div>`;
 }
 /* ---------- BY EMPLOYEE: each telecaller's calling list, leads and calls ---------- */
 function empSummary(e){
@@ -523,11 +545,11 @@ function aLeadsTab(){
       <select id="lto"><option value="">Assign selected to…</option>${asgOpts()}</select>
       <button class="btn pri" id="ldo" ${view.lsel.size?"":"disabled"}>Assign</button></div>`:""}</div>`;
   const ck=isLead();
-  h+=`<div class="card tw"><table><tr>${ck?`<th style="width:36px"><input type="checkbox" id="lall" ${list.length&&list.every(l=>view.lsel.has(l.id))?"checked":""}></th>`:""}<th>Lead since</th><th>Customer</th><th>Number</th><th>Telecaller</th><th>Status</th><th>Last remark</th><th>Follow-up</th><th>Source</th><th></th></tr>`;
+  h+=`<div class="card tw"><table><tr>${ck?`<th style="width:36px"><input type="checkbox" id="lall" ${list.length&&list.every(l=>view.lsel.has(l.id))?"checked":""}></th>`:""}<th>Lead since</th><th>Customer</th><th>Number</th><th>Telecaller</th><th>Status</th><th>Last remark</th><th>Follow-up</th><th>Lead case</th><th></th></tr>`;
   h+=list.map(l=>`<tr>${ck?`<td><input type="checkbox" data-lsel="${esc(l.id)}" ${view.lsel.has(l.id)?"checked":""}></td>`:""}<td class="small num">${fmt(leadAt(l))}</td><td><b>${esc(l.name)}</b><div class="small mute">${esc(l.city)}</div></td>
     <td class="num"><a class="lnk" href="${telHref(l.phone)}">${esc(l.phone)}</a></td><td>${l.assignedTo?esc(empName(l.assignedTo)):'<span class="mute">Unassigned</span>'}</td>
     <td>${pill(l.status)}</td><td class="small" style="max-width:260px">${esc(lastOf(l)?.remark||"")||'<span class="mute">—</span>'}</td><td class="small num">${l.followUp?fmt(l.followUp):"—"}</td>
-    <td class="small">${esc(l.source||"")}</td><td><button class="btn sm" data-open="${esc(l.id)}">Open</button></td></tr>`).join("")
+    <td class="small" style="white-space:nowrap">${caseOf(l.id)?`<a class="lnk" href="#" data-case="${esc(caseOf(l.id).code)}">${esc(caseOf(l.id).code)}</a><div>${casePill(caseOf(l.id))}</div>`:ck?`<button class="btn sm" data-mkcase="${esc(l.id)}">Open case</button>`:'<span class="mute">—</span>'}</td><td><button class="btn sm" data-open="${esc(l.id)}">Open</button></td></tr>`).join("")
     ||`<tr><td colspan="10"><div class="empty">No leads in this period${all.length?" match these filters":" – customers marked Interested on a call show up here"}.</div></td></tr>`;
   return h+`</table></div>`;
 }
@@ -870,7 +892,7 @@ function openMeeting(id){
   const seg=(k,opts,cur)=>`<div class="seg" data-seg="${k}">${opts.map(t=>`<button type="button" class="${cur===t?"on":""}">${t}</button>`).join("")}</div>`;
   const canPickSm=isLead(),curSm=m?m.sm:(ME?ME.name:"");
   const L=FW_LABEL;
-  $("#modal").innerHTML=`<div class="mh"><div><div style="font-weight:700">${m?"Edit field work":"Add field work"}</div>${m?`<div class="small mute">${esc(m.id)} · last updated ${m.updated?fmt(m.updated):"—"}${m.updatedBy?" by "+esc(m.updatedBy):""}</div>`:""}</div><button class="x" id="mx">×</button></div>
+  $("#modal").style.maxWidth="";$("#modal").innerHTML=`<div class="mh"><div><div style="font-weight:700">${m?"Edit field work":"Add field work"}</div>${m?`<div class="small mute">${esc(m.id)} · last updated ${m.updated?fmt(m.updated):"—"}${m.updatedBy?" by "+esc(m.updatedBy):""}</div>`:""}</div><button class="x" id="mx">×</button></div>
   <form id="mfm"><div class="mb mform">
     <div class="g2"><div><label class="f">${L.at}</label><input type="datetime-local" id="m_at" value="${dtv}" style="width:100%"></div>
       <div><label class="f">${L.sm}</label>${canPickSm?sel("m_sm",S.employees.map(e=>e.name),curSm):`<input value="${esc(curSm)}" disabled style="width:100%">`}</div></div>
@@ -922,7 +944,7 @@ function rMeetings(){
 
 const empOpts=()=>S.employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)} (${esc(e.role)})</option>`).join("");
 // who contacts can be assigned to: everyone except Sales Managers (they only see Field Work)
-const asgOpts=(sel)=>S.employees.filter(e=>e.role!=="Sales Manager").map(e=>`<option value="${esc(e.id)}" ${sel===e.id?"selected":""}>${esc(e.name)} (${esc(e.role)})</option>`).join("");
+const asgOpts=(sel)=>S.employees.filter(e=>e.role!=="Sales Manager"&&e.role!=="Admin").map(e=>`<option value="${esc(e.id)}" ${sel===e.id?"selected":""}>${esc(e.name)} (${esc(e.role)})</option>`).join("");
 function aAssign(){
   const f=view.assignFilter,q=view.q.toLowerCase();
   const list=S.leads.filter(l=>(f==="all"||(f==="none"?!l.assignedTo:l.assignedTo===f))&&(!q||(l.name+l.phone+l.city).toLowerCase().includes(q)));
@@ -1011,6 +1033,7 @@ function bindAdmin(){
     await write(api=>api.addEmp({name:n,phone:ph,role,pin,tl:role==="Team Lead"?"":tl}),`${n} added as ${role}`+(tl&&role!=="Team Lead"?` in ${empName(tl)}'s team`:""))});
   document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEditEmp(b.dataset.edit));
   document.querySelectorAll("[data-pin]").forEach(b=>b.onclick=()=>openResetPin(b.dataset.pin));
+  on("#myPin2","onclick",()=>openChangePin());
   document.querySelectorAll("[data-del]").forEach(b=>{let armed=false;b.onclick=async()=>{if(!armed){armed=true;b.textContent="Confirm remove?";b.style.color="var(--red)";setTimeout(()=>{armed=false;b.textContent="Remove";b.style.color=""},3000);return}
     await write(api=>api.removeEmp(b.dataset.del),"Removed – their contacts are now unassigned")}});
   document.querySelectorAll("[data-as]").forEach(b=>b.onclick=()=>{view.who=b.dataset.as;view.tab="my";render()});
@@ -1023,7 +1046,7 @@ function bindAdmin(){
 
 /* ---------- small form modals ---------- */
 function formModal(title,body,okLabel,onOk){
-  $("#modal").innerHTML=`<div class="mh"><div style="font-weight:700">${title}</div><button class="x" id="mx">×</button></div><form id="mf"><div class="mb">${body}<div id="mErr" class="small" style="color:var(--red);margin-top:8px"></div></div>
+  $("#modal").style.maxWidth="";$("#modal").innerHTML=`<div class="mh"><div style="font-weight:700">${title}</div><button class="x" id="mx">×</button></div><form id="mf"><div class="mb">${body}<div id="mErr" class="small" style="color:var(--red);margin-top:8px"></div></div>
    <div class="mf"><button type="button" class="btn" id="mc">Cancel</button><button class="btn pri" id="mok">${okLabel}</button></div></form>`;
   $("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");
   $("#mx").onclick=close;$("#mc").onclick=close;
@@ -1088,8 +1111,11 @@ function renderEmp(){
   h+=`<div class="tabs" style="margin-bottom:12px">${[["leads",(own?"My calling list":"Calling list")+" · "+mine.length],["int",(own?"My leads":"Leads")+" · "+myLeads.length],["calls","Call history · "+calls.length]].map(([k,l])=>`<button class="tab ${ctab===k?"on":""}" data-ctab="${k}">${l}</button>`).join("")}</div>`;
   if(ctab==="int"){
     const list=myLeads.slice().sort((a,b)=>(leadAt(b)||0)-(leadAt(a)||0));
-    h+=`<div class="small mute" style="margin-bottom:10px">Customers ${own?"you":"they"}'ve marked <b>Interested</b> (or Converted), newest first – all dates.</div>`;
-    h+=`<div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No leads yet – customers marked Interested on a call show up here.</div>`}</div>`;
+    const myCases=CASES().filter(c=>c["Telecaller ID"]===me.id||(me.role==="Team Lead"&&c.tlId===me.id)).sort((a,b)=>(b.at||0)-(a.at||0));
+    const noCase=list.filter(l=>!caseOf(l.id));
+    h+=`<div class="small mute" style="margin-bottom:10px">When ${own?"you mark":"they mark"} a customer <b>Interested</b>, a lead case goes to ${own?"your":"their"} Team Lead, who follows up. ${own&&!isLead()?"You can see every update here.":""}</div>`;
+    h+=casesTable(myCases,{empty:"No lead cases yet – mark a customer Interested on a call to hand them to your Team Lead."});
+    if(noCase.length)h+=`<h3 style="margin:18px 0 8px">Interested, no case yet</h3><div class="card">${noCase.map(l=>leadRow(l)).join("")}</div>`;
   }else if(ctab==="calls"){
     const co=view.cOut||"all";const list=calls.filter(g=>co==="all"||g.outcome===co);
     h+=`<div class="row" style="margin-bottom:10px"><select id="cOut"><option value="all">All outcomes</option>${Object.entries(OUTCOMES).map(([k,o])=>`<option value="${k}" ${co===k?"selected":""}>${o.label} · ${oc(k)}</option>`).join("")}</select>
@@ -1112,28 +1138,102 @@ function renderEmp(){
   }
   $("#app").innerHTML=h;
   bindEtabs();bindRange();bindTips();
-  document.querySelectorAll("[data-ctab]").forEach(b=>b.onclick=()=>{view.ctab=b.dataset.ctab;render()});
+  document.querySelectorAll("[data-ctab]").forEach(b=>b.onclick=()=>{view.ctab=b.dataset.ctab;render()});bindCases();
   const cs=$("#cOut");if(cs)cs.onchange=()=>{view.cOut=cs.value;render()};
   document.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{view.filter=b.dataset.f;render()});
   const eq=$("#eq");if(eq)eq.oninput=e=>{view.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#eq");n.focus();n.setSelectionRange(p,p)};
   document.querySelectorAll("[data-call]").forEach(a=>a.onclick=()=>{setTimeout(()=>openLead(a.dataset.call,true),400)});
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false));
 }
+/* ---------- LEAD CASES: Interested customers handed to the Team Lead ---------- */
+const CASE_HDR=["Timestamp","SM Name","Customer Name","Contact Number","Product","Amount Required","Lead Source","Connector Name","Connector Contact No","Connector Location","Lead Type","Lead Shared by","Lead Date","Monthly","Unique Lead Code","Bank Name","Banker Name","Banker Contact No","Status","Remarks","Disbursed Date","Disbursed Month","Customer Status","Contact ID","Team Lead","Telecaller ID","Last updated","Updated by"];
+const CASE_OPTS={"Product":["Personal Loan","Business Loan","Home Loan","Loan Against Property","Balance Transfer & Top-up","Car Loan","Two-wheeler Loan","Gold Loan","Education Loan","Working Capital / MSME","Machinery Loan","Professional Loan"],
+  "Status":["New","Follow-up","Documents pending","Login done","Sanctioned","Disbursed","Rejected","Customer not interested"],
+  "Lead Source":["Telecalling","Website","Connector","Walk-in","Reference"],"Lead Type":["Fresh","Balance Transfer","Top-up","BT + Top-up"],
+  "Customer Status":["Hot","Warm","Cold","Not reachable"]};
+const CASE_TONE={"New":"amber","Follow-up":"amber","Documents pending":"amber","Login done":"blue","Sanctioned":"blue","Disbursed":"green","Rejected":"red","Customer not interested":"red"};
+function buildCases(rows){return (rows||[]).map(r=>{const o={};CASE_HDR.forEach((h,i)=>o[h]=String(r[i]==null?"":r[i]).trim());o.code=o["Unique Lead Code"];o.at=parseT(o["Timestamp"]);o.upd=parseT(o["Last updated"]);
+  const t=(S.allEmps||[]).find(e=>e.role==="Team Lead"&&(e.id===o["Team Lead"]||normName(e.name)===normName(o["Team Lead"])));o.tlId=t?t.id:"";return o}).filter(o=>o.code)}
+const CASES=()=>S.cases||[];
+const caseOf=leadId=>CASES().find(c=>c["Contact ID"]===leadId);
+const casePill=c=>{const t=CASE_TONE[c.Status]||"gray";return `<span class="pill" style="${t==="green"?"background:var(--green-soft);color:var(--green)":t==="red"?"background:#fdecec;color:#c0392b":t==="blue"?"background:#e8f0fe;color:var(--brand)":t==="amber"?"background:#fff4e0;color:#b26a00":"background:#eef0f3;color:#555"}">${esc(c.Status||"New")}</span>`};
+const inr=v=>{const n=parseFloat(String(v).replace(/[^\d.]/g,""));return isFinite(n)&&n>0?"₹"+n.toLocaleString("en-IN"):esc(v||"")};
+function casesTable(list,{empty="No lead cases yet."}={}){
+  return `<div class="card tw"><table><tr><th>Lead code</th><th>Lead date</th><th>Customer</th><th>Product</th><th>Amount</th><th>Shared by</th><th>Team Lead</th><th>Bank</th><th>Status</th><th>Last update</th><th></th></tr>
+   ${list.map(c=>`<tr><td class="num" style="white-space:nowrap"><b>${esc(c.code)}</b></td><td class="small num" style="white-space:nowrap">${esc(c["Lead Date"])}</td>
+     <td><b>${esc(c["Customer Name"])}</b><div class="small mute num" style="white-space:nowrap">${isLead()?`<a class="lnk" href="${telHref(c["Contact Number"])}">${esc(c["Contact Number"])}</a>`:esc(c["Contact Number"])}</div></td>
+     <td class="small">${esc(c.Product)||'<span class="mute">—</span>'}</td><td class="num" style="white-space:nowrap">${inr(c["Amount Required"])||'<span class="mute">—</span>'}</td>
+     <td class="small">${esc(c["Lead Shared by"])}</td><td class="small">${esc(c["Team Lead"])||'<span style="color:var(--amber)">No Team Lead</span>'}</td><td class="small">${esc(c["Bank Name"])||'<span class="mute">—</span>'}</td>
+     <td>${casePill(c)}</td><td class="small" style="max-width:220px">${c.upd?fmt(c.upd):""}<div class="mute">${esc(c.Remarks).slice(0,80)}</div></td>
+     <td><button class="btn sm" data-case="${esc(c.code)}">${isLead()?"Open":"View"}</button></td></tr>`).join("")||`<tr><td colspan="11"><div class="empty">${empty}</div></td></tr>`}</table></div>`;
+}
+function bindCases(){document.querySelectorAll("[data-case]").forEach(b=>b.onclick=e=>{e.preventDefault();openCase(b.dataset.case)});
+  document.querySelectorAll("[data-mkcase]").forEach(b=>b.onclick=async()=>{b.disabled=true;if(!await write(api=>api.createCase(b.dataset.mkcase),"Lead case opened"))b.disabled=false})}
+function openCase(code){
+  const c=CASES().find(x=>x.code===code);if(!c)return;const can=isLead();
+  const ro=(h,v)=>`<div><div class="small mute">${h}</div><div style="font-weight:600">${v||'<span class="mute" style="font-weight:400">—</span>'}</div></div>`;
+  const inp=(h,type="text")=>{const id="cf_"+h.replace(/\W/g,"");const v=c[h]||"";
+    if(!can)return ro(h,h==="Amount Required"?inr(v):esc(v));
+    const list=CASE_OPTS[h]||(h==="SM Name"?(S.allEmps||[]).filter(e=>e.role==="Sales Manager"&&e.active).map(e=>e.name):null);
+    return `<div><label class="f" for="${id}">${h}</label><input id="${id}" type="${type}" value="${esc(v)}" style="width:100%" ${list?`list="${id}_l"`:""} ${h==="Amount Required"?'inputmode="numeric" placeholder="e.g. 500000"':""}>${list?`<datalist id="${id}_l">${list.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>`:""}</div>`};
+  const tlSel=isMgr()&&!isTL()?`<div><label class="f">Team Lead</label><select id="cf_TL" style="width:100%"><option value="">— None —</option>${(S.allEmps||[]).filter(e=>e.role==="Team Lead"&&e.active).map(e=>`<option value="${esc(e.id)}" ${c.tlId===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select></div>`:ro("Team Lead",esc(c["Team Lead"]));
+  $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(c["Customer Name"])}</div><div><div style="font-weight:700">${esc(c["Customer Name"])} · <span class="num">${esc(c.code)}</span></div>
+     <div class="num mute small">${esc(c["Contact Number"])} · lead date ${esc(c["Lead Date"])} · shared by ${esc(c["Lead Shared by"])}</div></div><button class="x" id="mx">×</button></div>
+   <div class="mb">
+    ${can?`<div class="row" style="margin-bottom:6px"><a class="btn call" href="${telHref(c["Contact Number"])}">📞 Call ${esc(c["Contact Number"])}</a>${casePill(c)}</div>`
+      :`<div class="card pad" style="background:#f5f7fb;margin-bottom:8px"><b>This customer is with your Team Lead.</b><div class="small mute">You can see every update here; your Team Lead does the follow-up.</div></div>`}
+    <div class="cgrid">
+     ${tlSel}${inp("SM Name")}${inp("Status")}${inp("Customer Status")}
+     ${inp("Product")}${inp("Amount Required")}${inp("Lead Type")}${inp("Lead Source")}
+     ${inp("Bank Name")}${inp("Banker Name")}${inp("Banker Contact No","tel")}${inp("Disbursed Date","date")}
+     ${inp("Connector Name")}${inp("Connector Contact No","tel")}${inp("Connector Location")}${ro("Disbursed Month",esc(c["Disbursed Month"]))}
+    </div>
+    ${can?`<label class="f" for="cf_Remarks">Remarks</label><textarea id="cf_Remarks" style="width:100%;min-height:70px">${esc(c.Remarks)}</textarea>`:`<div style="margin-top:10px">${ro("Remarks",esc(c.Remarks))}</div>`}
+    <div class="small mute" style="margin-top:8px">Monthly: ${esc(c.Monthly)} · Last update ${c.upd?fmt(c.upd):"—"} by ${esc(c["Updated by"])}</div>
+   </div>
+   <div class="mf"><button class="btn" id="mc">${can?"Cancel":"Close"}</button>${can?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
+  $("#modal").style.maxWidth="880px";$("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#mc").onclick=close;
+  const sv=$("#csave");if(sv)sv.onclick=async()=>{const o={code:c.code};
+    ["SM Name","Status","Customer Status","Product","Amount Required","Lead Type","Lead Source","Bank Name","Banker Name","Banker Contact No","Disbursed Date","Connector Name","Connector Contact No","Connector Location","Remarks"].forEach(h=>{const el=$("#cf_"+h.replace(/\W/g,""));if(el)o[h]=el.value.trim()});
+    if(o.Status==="Disbursed"&&!o["Disbursed Date"])return toast("Add the disbursed date");
+    const tl=$("#cf_TL");if(tl)o["Team Lead"]=tl.value;
+    sv.disabled=true;sv.textContent="Saving…";if(await write(api=>api.saveCase(o),"Case "+c.code+" saved"))close();else{sv.disabled=false;sv.textContent="Save case"}};
+}
+function aCases(){
+  const f=view.cf||(view.cf={st:"all",mon:"all",q:""}),q=f.q.toLowerCase(),all=CASES();
+  const months=[...new Set(all.map(c=>c.Monthly).filter(Boolean))];
+  const list=all.filter(c=>(f.st==="all"||c.Status===f.st)&&(f.mon==="all"||c.Monthly===f.mon)&&(!q||(c["Customer Name"]+c["Contact Number"]+c.code+c["Bank Name"]+c["Lead Shared by"]).toLowerCase().includes(q))).sort((a,b)=>(b.at||0)-(a.at||0));
+  const cnt=st=>all.filter(c=>c.Status===st).length,disb=all.filter(c=>c.Status==="Disbursed");
+  const amt=disb.reduce((s,c)=>s+(parseFloat(String(c["Amount Required"]).replace(/[^\d.]/g,""))||0),0);
+  let h=`<div class="stats sm"><div class="card stat"><span>Lead cases</span><b>${all.length}</b><div class="small mute">${cnt("New")} new – not yet followed up</div></div>
+    <div class="card stat"><span>In progress</span><b style="color:var(--amber)">${all.length-cnt("New")-disb.length-cnt("Rejected")-cnt("Customer not interested")}</b><div class="small mute">follow-up to sanctioned</div></div>
+    <div class="card stat"><span>Disbursed</span><b style="color:var(--green)">${disb.length}</b><div class="small mute">${amt?"₹"+amt.toLocaleString("en-IN"):"—"}</div></div>
+    <div class="card stat"><span>Rejected / dropped</span><b style="color:#c0392b">${cnt("Rejected")+cnt("Customer not interested")}</b><div class="small mute">closed</div></div></div>`;
+  h+=`<div class="card pad" style="margin-bottom:12px"><div class="row"><input id="cq" placeholder="Search customer, number, lead code, bank" value="${esc(f.q)}" style="flex:1;min-width:200px">
+    <select id="cst"><option value="all">All statuses</option>${CASE_OPTS.Status.map(x=>`<option ${f.st===x?"selected":""}>${x}</option>`).join("")}</select>
+    <select id="cmon"><option value="all">All months</option>${months.map(m=>`<option ${f.mon===m?"selected":""}>${esc(m)}</option>`).join("")}</select>
+    <span class="small mute">${list.length} case${list.length===1?"":"s"}</span></div>
+    <div class="small mute" style="margin-top:8px">A case opens by itself when a telecaller marks a customer <b>Interested</b>. It goes to that telecaller's Team Lead, who follows up and fills in the details. Telecallers can only view their cases.</div></div>`;
+  return h+casesTable(list,{empty:all.length?"No cases match these filters.":"No lead cases yet – they appear when a customer is marked Interested."});
+}
+function bindCasesTab(){const q=$("#cq");if(!q)return;
+  $("#cst").onchange=e=>{view.cf.st=e.target.value;render()};$("#cmon").onchange=e=>{view.cf.mon=e.target.value;render()};
+  q.oninput=e=>{view.cf.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#cq");n.focus();n.setSelectionRange(p,p)};}
 function leadRow(l){
   const last=lastOf(l);
   return `<div class="lead"><div class="av">${initials(l.name)}</div><div class="info">
-   <div class="nm">${esc(l.name)} ${pill(l.status)}</div>
+   <div class="nm">${esc(l.name)} ${pill(l.status)}${caseOf(l.id)?` <span class="pill" style="background:#efe9fd;color:#5b3cc4">🤝 ${isLead()?"Case "+esc(caseOf(l.id).code):"With Team Lead"} · ${esc(caseOf(l.id).Status)}</span>`:""}</div>
    <div class="num" style="margin-top:2px">${esc(l.phone)} <span class="mute small">· ${esc(l.city)}</span></div>
    ${last?`<div class="last">📝 ${esc(last.remark)||"No remark"} · ${fmt(last.at)}${l.status==="cb"&&l.followUp?` · <b style="color:var(--amber)">Callback ${fmt(l.followUp)}</b>`:""}</div>`:""}
   </div><div class="row acts" style="gap:6px;flex-wrap:nowrap">
-   <a class="btn call" href="${telHref(l.phone)}" data-call="${esc(l.id)}">📞 Call</a>
-   <button class="btn" data-open="${esc(l.id)}">✎ Remark</button></div></div>`;
+   ${caseOf(l.id)&&!isLead()?`<button class="btn" data-case="${esc(caseOf(l.id).code)}">View updates</button>`:`<a class="btn call" href="${telHref(l.phone)}" data-call="${esc(l.id)}">📞 Call</a>
+   <button class="btn" data-open="${esc(l.id)}">✎ Remark</button>`}</div></div>`;
 }
 
 /* ---------- LEAD MODAL (log call / remark) ---------- */
 let M={};
 function openLead(id,fromCall){
-  const l=S.leads.find(x=>x.id===id);if(!l)return;M={id,out:null};
+  const l=S.leads.find(x=>x.id===id);if(!l)return;M={id,out:null};$("#modal").style.maxWidth="";
   $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(l.name)}</div><div><div style="font-weight:700">${esc(l.name)}</div><div class="num mute small">${esc(l.phone)} · ${esc(l.city)}</div></div><button class="x" id="mx">×</button></div>
   <div class="mb">
    ${fromCall?`<div class="card pad" style="background:var(--green-soft);border-color:#c7e8d2;margin-bottom:6px"><b style="color:var(--green)">📞 Dialing ${esc(l.phone)}…</b><div class="small mute" style="margin-top:3px">Your phone's dialer should open. After the call, record the outcome below.</div></div>`:""}
@@ -1158,7 +1258,7 @@ function openLead(id,fromCall){
     const btn=$("#ms");btn.disabled=true;btn.textContent="Saving…";
     const fu=M.out==="cb"&&$("#fu").value?parseT($("#fu").value):null;
     const by=ME?ME.id:(view.who!=="admin"?view.who:(l.assignedTo||"ADMIN_LOG"));
-    const ok=await write(api=>api.logCall(l.id,M.out,$("#rem").value.trim(),fu,by),"Call logged");
+    const ok=await write(api=>api.logCall(l.id,M.out,$("#rem").value.trim(),fu,by),M.out==="int"&&!caseOf(l.id)?"Call logged · lead case opened for the Team Lead":"Call logged");
     if(ok)close();else{btn.disabled=false;btn.textContent="Save call log"}};
 }
 $("#mbg").onclick=e=>{if(e.target.id==="mbg")$("#mbg").classList.remove("show")};

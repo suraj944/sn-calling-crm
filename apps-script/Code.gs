@@ -13,6 +13,7 @@
  *
  * Employees tab = the credentials database:
  *   ID | Name (login) | Phone | Active | Role | PIN (4 digits) | PIN Hash (auto) | Last Login (auto) | Created | Team Lead
+ *   - Each Team Lead has a tab "Team – <name>" (made automatically) showing only their team; "Open sheet" opens it for them.
  *   - Team Lead (column J): the Team Lead this person reports to (name or ID). A Team Lead only sees, calls and assigns
  *     contacts of their own team. Admin and Manager see everyone. New contacts are given out by Admin / Manager.
  *   - People log in with their NAME + PIN. Names must be unique (case doesn't matter).
@@ -23,12 +24,23 @@
  * LoginLog tab: every login attempt (time, name entered, result).
  * Website enquiries (home page callback form) are added to the Calling List as new, unassigned contacts.
  * "Leads" tab = read-only view of customers marked Interested / Converted (a FILTER formula on the Calling List).
+ * Lead Cases tab: when a customer is marked Interested, a case is opened for the telecaller's Team Lead, who follows it up
+ *   (product, amount, bank, status, disbursal …). The telecaller can only view the case from then on.
  * Field Work tab: SM meetings (same fields as the old Google Form) – see saveMeeting_.
  * Calling List tab (all contacts to call; was "Leads") column K "Source" = Website / Import / Manual, column L "Customer request" = what a website visitor asked for.
  */
 
 const ROLES = ["Admin", "Manager", "Team Lead", "Sales Manager", "Telecaller Executive"];
 const MEET_COLS = 21;
+// Lead Cases tab – column order follows the team's own lead sheet, then a few columns the CRM fills in
+const CASE_HDR = ["Timestamp", "SM Name", "Customer Name", "Contact Number", "Product", "Amount Required", "Lead Source",
+  "Connector Name", "Connector Contact No", "Connector Location", "Lead Type", "Lead Shared by", "Lead Date", "Monthly",
+  "Unique Lead Code", "Bank Name", "Banker Name", "Banker Contact No", "Status", "Remarks", "Disbursed Date", "Disbursed Month",
+  "Customer Status", "Contact ID", "Team Lead", "Telecaller ID", "Last updated", "Updated by"];
+const CASE_COLS = CASE_HDR.length, C_ = Object.fromEntries(CASE_HDR.map((h, i) => [h, i]));
+// what a Team Lead / Manager / Admin may change from the CRM (everything else is filled automatically)
+const CASE_EDIT = ["SM Name", "Product", "Amount Required", "Lead Source", "Connector Name", "Connector Contact No", "Connector Location",
+  "Lead Type", "Bank Name", "Banker Name", "Banker Contact No", "Status", "Remarks", "Disbursed Date", "Customer Status"];
 const SESSION_DAYS = 30;
 const MAX_FAILS = 5, LOCK_MIN = 15;
 
@@ -59,11 +71,13 @@ function doPost(e) {
         case "addLeads":  need_(me, "Team Lead"); return addLeads_(b.leads || [], me);
         case "addEmp":    need_(me, "Manager");   return addEmp_(me, b);
         case "updateEmp": need_(me, "Manager");   return updateEmp_(me, b);
-        case "resetPin":  need_(me, "Manager");   return resetPin_(me, b.id, b.pin);
+        case "resetPin":  need_(me, "Team Lead"); return resetPin_(me, b.id, b.pin);
         case "removeEmp": need_(me, "Manager");   return removeEmp_(me, b.id);
         case "changePin": return changePin_(me, b.oldPin, b.newPin);
         case "saveMeeting":   return saveMeeting_(me, b.m || {});
         case "deleteMeeting": need_(me, "Manager"); return deleteMeeting_(b.id);
+        case "saveCase":   need_(me, "Team Lead"); return saveCase_(me, b.c || {});
+        case "createCase": need_(me, "Team Lead"); return createCaseFor_(me, b.leadId);
         default: throw new Error("Unknown action: " + b.action);
       }
     } finally { lock.releaseLock(); }
@@ -140,10 +154,11 @@ function load_(me) {
   }
   return {
     me: pub_(me),
-    employees: people.map(x => [x.id, x.name, x.phone, x.active ? "Yes" : "No", x.role, x.hash || x.pin ? "set" : "", x.tl || ""]),
+    employees: people.map(x => [x.id, x.name, x.phone, x.active ? "Yes" : "No", x.role, x.hash || x.pin ? "set" : "", x.tl || "", isLead ? x.last : ""]),
     leads, logs,
-    sheetUrl: isLead ? SpreadsheetApp.getActiveSpreadsheet().getUrl() : "",
+    sheetUrl: !isLead ? "" : sheetUrlFor_(me),   // Team Leads land on their own "Team – <name>" tab
     ...meetings_(me, isLead),
+    cases: cases_(me, emps),
     serverTime: now_()
   };
 }
@@ -155,10 +170,17 @@ function logCall_(me, b) {
   const lead = leads.getRange(r, 1, 1, 10).getDisplayValues()[0];
   if (rank_(me.role) > rank_("Team Lead") && String(lead[4]).trim() !== me.id) throw new Error("This contact isn't assigned to you");
   if (me.role === "Team Lead" && !teamIds_(me, emps_()).has(String(lead[4]).trim())) throw new Error("This contact isn't in your team");
+  const open = caseRows_().find(x => String(x[C_["Contact ID"]]).trim() === String(lead[0]).trim());
+  if (open && rank_(me.role) > rank_("Team Lead")) throw new Error("This customer is now with your Team Lead – you can view the updates only");
   const at = now_();
   sheet_("CallLogs").appendRow(["C" + Date.now().toString(36).toUpperCase(), at, lead[0], lead[1], text_(lead[2]),
     me.id, me.name, b.outcome || "", b.remark || "", b.followUp || ""]);
   leads.getRange(r, 6, 1, 4).setValues([[b.outcome || "", b.followUp || "", b.remark || "", at]]);
+  if (b.outcome === "Interested" && !open) {                      // hand the customer to the Team Lead as a lead case
+    const lc = leads.getRange(r, 1, 1, 12).getDisplayValues()[0];
+    const code = createCase_(me, lc, b.remark || "");
+    return { saved: true, caseCode: code };
+  }
   return { saved: true };
 }
 
@@ -169,6 +191,7 @@ function assign_(ids, to, me) {
   const team = me && me.role === "Team Lead" ? teamIds_(me, emps_()) : null;   // Team Leads only move contacts inside their team
   if (team && !team.has(to)) throw new Error("You can only assign to people in your team");
   if (to && !emps_().some(x => x.id === to && x.active)) throw new Error("That person isn't an active team member");
+  if (to && emps_().some(x => x.id === to && x.role === "Admin")) throw new Error("Cases can't be assigned to an Admin");
   const set = new Set(ids.map(String)); let c = 0;
   idCol.forEach((r, i) => { if (set.has(String(r[0]).trim())) {
     if (team && !team.has(String(asg[i][0]).trim())) throw new Error("Contact " + r[0] + " isn't in your team");
@@ -201,6 +224,7 @@ function addEmp_(me, b) {
   emps_().forEach(x => { const v = parseInt(x.id.replace(/\D/g, ""), 10); if (v > max) max = v; });
   const id = "E" + (max + 1);
   sheet_("Employees").appendRow([id, properName_(b.name), text_(b.phone || ""), "Yes", role, "", hash_(id, b.pin), "", now_(), tlName_(b.tl, role)]);
+  if (role === "Team Lead") ensureTeamTab_(properName_(b.name));
   return { id };
 }
 
@@ -218,6 +242,7 @@ function updateEmp_(me, b) {
   if (b.tl !== undefined) shE.getRange(e.row, 10).setValue(tlName_(b.tl, role));
   if (e.role === "Team Lead" && newName !== e.name)               // keep team members pointing at the renamed Team Lead
     emps_().filter(x => x.tl === e.id).forEach(x => shE.getRange(x.row, 10).setValue(newName));
+  if (role === "Team Lead") ensureTeamTab_(newName, e.role === "Team Lead" ? e.name : "");
   return { updated: true };
 }
 
@@ -225,6 +250,10 @@ function resetPin_(me, id, pin) {
   const e = emps_().find(x => x.id === id);
   if (!e) throw new Error("Team member not found");
   if (e.id !== me.id) canManage_(me, e.role);
+  if (me.role === "Team Lead") {                    // Team Leads: only for people in their own team
+    if (e.id === me.id) throw new Error("Use the 🔑 PIN button to change your own PIN");
+    if (!teamIds_(me, emps_()).has(e.id)) throw new Error("You can only reset PINs for your own team");
+  }
   checkPin_(pin);
   // New PIN goes into the sheet's PIN column (visible to admins); the old PIN stops working right away.
   sheet_("Employees").getRange(e.row, 6, 1, 2).setNumberFormat("@").setValues([[String(pin).trim(), ""]]);
@@ -307,6 +336,78 @@ function deleteMeeting_(id) {
   return { deleted: true };
 }
 
+/* ---------------- lead cases ("Lead Cases" tab) ---------------- */
+function caseSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName("Lead Cases");
+  if (!sh) { sh = ss.insertSheet("Lead Cases"); sh.getRange(1, 1, 1, CASE_COLS).setValues([CASE_HDR]); sh.setFrozenRows(1); }
+  return sh;
+}
+function caseRows_() { try { const sh = caseSheet_(), n = sh.getLastRow() - 1; return n < 1 ? [] : sh.getRange(2, 1, n, CASE_COLS).getDisplayValues(); } catch (e) { return []; } }
+// the Team Lead a case belongs to: the contact's telecaller's Team Lead (or the telecaller, if they lead a team)
+function caseTL_(emps, assigneeId, me) {
+  const a = emps.find(x => x.id === assigneeId);
+  if (a && a.role === "Team Lead") return a;
+  if (a && a.tl) return emps.find(x => x.id === a.tl) || null;
+  return me && me.role === "Team Lead" ? me : null;
+}
+const tlMatch_ = (val, e) => !!e && (String(val).trim() === e.id || norm_(val) === norm_(e.name));
+function canSeeCase_(me, row, emps, team) {
+  if (rank_(me.role) <= rank_("Manager")) return true;
+  if (me.role === "Team Lead") return tlMatch_(row[C_["Team Lead"]], me) || team.has(String(row[C_["Telecaller ID"]]).trim());
+  return String(row[C_["Telecaller ID"]]).trim() === me.id;            // telecallers: their own cases, view only
+}
+function cases_(me, emps) {
+  const team = me.role === "Team Lead" ? teamIds_(me, emps) : new Set();
+  return caseRows_().filter(r => r[C_["Unique Lead Code"]] && canSeeCase_(me, r, emps, team));
+}
+function createCase_(me, lc, remark) {
+  const emps = emps_(), tl = caseTL_(emps, String(lc[4]).trim(), me), now = new Date();
+  const ym = Utilities.formatDate(now, "Asia/Kolkata", "yyMM"), prefix = "SN" + ym + "-";
+  let max = 0;
+  caseRows_().forEach(r => { const c = String(r[C_["Unique Lead Code"]]); if (c.indexOf(prefix) === 0) max = Math.max(max, parseInt(c.slice(prefix.length), 10) || 0); });
+  const code = prefix + String(max + 1).padStart(4, "0");
+  const tel = emps.find(x => x.id === String(lc[4]).trim());
+  const row = new Array(CASE_COLS).fill("");
+  row[C_["Timestamp"]] = now_(); row[C_["Customer Name"]] = lc[1]; row[C_["Contact Number"]] = text_(lc[2]);
+  row[C_["Lead Source"]] = String(lc[10]).trim() === "Website" ? "Website" : "Telecalling";
+  row[C_["Lead Shared by"]] = tel ? tel.name : me.name; row[C_["Lead Date"]] = Utilities.formatDate(now, "Asia/Kolkata", "yyyy-MM-dd");
+  row[C_["Monthly"]] = Utilities.formatDate(now, "Asia/Kolkata", "MMM-yyyy"); row[C_["Unique Lead Code"]] = code;
+  row[C_["Status"]] = "New"; row[C_["Remarks"]] = remark ? "Telecaller: " + remark : "";
+  row[C_["Contact ID"]] = lc[0]; row[C_["Team Lead"]] = tl ? tl.name : ""; row[C_["Telecaller ID"]] = String(lc[4]).trim();
+  row[C_["Last updated"]] = now_(); row[C_["Updated by"]] = me.name;
+  const sh = caseSheet_(); sh.getRange(sh.getLastRow() + 1, 1, 1, CASE_COLS).setValues([row]);
+  return code;
+}
+function createCaseFor_(me, leadId) {                                  // open a case by hand for an Interested contact
+  const leads = sheet_("Leads"), r = findRow_(leads, leadId);
+  if (!r) throw new Error("Contact " + leadId + " not found");
+  const lc = leads.getRange(r, 1, 1, 12).getDisplayValues()[0];
+  if (caseRows_().some(x => String(x[C_["Contact ID"]]).trim() === String(lc[0]).trim())) throw new Error("This customer already has a case");
+  if (me.role === "Team Lead" && !teamIds_(me, emps_()).has(String(lc[4]).trim())) throw new Error("This contact isn't in your team");
+  return { saved: true, caseCode: createCase_(me, lc, String(lc[7] || "")) };
+}
+function saveCase_(me, c) {
+  const sh = caseSheet_(), rows = caseRows_(), emps = emps_();
+  const i = rows.findIndex(r => String(r[C_["Unique Lead Code"]]) === String(c.code || ""));
+  if (i < 0) throw new Error("Case " + c.code + " not found");
+  const row = rows[i].slice();
+  if (!canSeeCase_(me, row, emps, me.role === "Team Lead" ? teamIds_(me, emps) : new Set())) throw new Error("This case isn't in your team");
+  const cl = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "'$&").trim().slice(0, 500);
+  CASE_EDIT.forEach(h => { if (c[h] !== undefined) row[C_[h]] = h === "Remarks" ? tidyText_(cl(c[h])) : h === "SM Name" || h === "Banker Name" || h === "Connector Name" || h === "Bank Name" ? properName_(cl(c[h])) : cl(c[h]); });
+  row[C_["Contact Number"]] = text_(row[C_["Contact Number"]]);
+  ["Connector Contact No", "Banker Contact No"].forEach(h => row[C_[h]] = text_(row[C_[h]]));
+  const dd = String(row[C_["Disbursed Date"]]).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  row[C_["Disbursed Month"]] = dd ? Utilities.formatDate(new Date(+dd[1], +dd[2] - 1, +dd[3]), "Asia/Kolkata", "MMM-yyyy") : "";
+  if (c["Team Lead"] !== undefined && rank_(me.role) <= rank_("Manager")) {   // Admin / Manager can move a case to another Team Lead
+    const t = emps.find(x => x.role === "Team Lead" && (x.id === c["Team Lead"] || norm_(x.name) === norm_(c["Team Lead"])));
+    row[C_["Team Lead"]] = t ? t.name : "";
+  }
+  row[C_["Last updated"]] = now_(); row[C_["Updated by"]] = me.name;
+  sh.getRange(i + 2, 1, 1, CASE_COLS).setValues([row]);
+  return { saved: true };
+}
+
 /* ---------------- website enquiries ---------------- */
 // Adds a new, unassigned lead to the Leads tab. Light spam protection: honeypot field,
 // Indian mobile validation, one request per number per 6 hours, max 200 requests per hour.
@@ -350,12 +451,34 @@ function emps_() {
     id: String(r[0]).trim(), name: String(r[1]).trim(), phone: String(r[2]).trim(),
     active: String(r[3] || "Yes").trim().toLowerCase() !== "no",
     role: ROLES.find(x => x.toLowerCase() === String(r[4] || "").trim().toLowerCase()) || "Telecaller Executive",
-    pin: String(r[5] || "").trim(), hash: String(r[6] || "").trim(), tlRaw: String(r[9] || "").trim(), row: i + 2
+    pin: String(r[5] || "").trim(), hash: String(r[6] || "").trim(), tlRaw: String(r[9] || "").trim(),
+    last: String(r[7] || "").trim(), row: i + 2
   })).filter(x => x.id && x.name);
   // column J "Team Lead" may hold the Team Lead's name or ID
   const tls = list.filter(x => x.role === "Team Lead");
   list.forEach(x => { const t = x.tlRaw && x.role !== "Team Lead" ? tls.find(y => y.id.toLowerCase() === x.tlRaw.toLowerCase() || norm_(y.name) === norm_(x.tlRaw)) : null; x.tl = t ? t.id : ""; });
   return list;
+}
+// Each Team Lead gets a tab "Team – <name>": a copy of an existing team tab with the name in B1 (all formulas)
+function ensureTeamTab_(name, oldName) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet(), tab = n => n ? ss.getSheetByName("Team – " + n) : null;
+    let sh = tab(oldName) || tab(name);
+    if (!sh) {
+      const tpl = ss.getSheets().find(x => x.getName().indexOf("Team – ") === 0);
+      if (!tpl) return;
+      sh = tpl.copyTo(ss);
+      sh.protect().setDescription("Team tab fills itself – make changes in the CRM or the main tabs").setWarningOnly(true);
+    }
+    if (sh.getName() !== "Team – " + name) sh.setName("Team – " + name);
+    sh.getRange(1, 2).setValue(name);
+  } catch (err) { /* the team tab is a convenience – never block saving a person */ }
+}
+function sheetUrlFor_(me) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet(), url = ss.getUrl();
+  if (me.role !== "Team Lead") return url;
+  const t = ss.getSheetByName("Team – " + me.name);
+  return t ? url + "#gid=" + t.getSheetId() : url;
 }
 // A Team Lead's team = the Team Lead + everyone whose "Team Lead" column points at them
 function teamIds_(me, emps) { return new Set(emps.filter(x => x.id === me.id || x.tl === me.id).map(x => x.id)); }
