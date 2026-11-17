@@ -24,7 +24,7 @@
  */
 
 const ROLES = ["Admin", "Manager", "Team Lead", "Sales Manager", "Telecaller Executive"];
-const MEET_COLS = 20;
+const MEET_COLS = 21;
 const SESSION_DAYS = 30;
 const MAX_FAILS = 5, LOCK_MIN = 15;
 
@@ -167,7 +167,7 @@ function addLeads_(list) {
   rows_("Leads", 1).forEach(r => { const v = parseInt(String(r[0]).replace(/\D/g, ""), 10); if (v > max) max = v; });
   const at = now_();
   const src = list.length > 1 ? "Import" : "Manual";
-  const out = list.filter(x => x && x.name && x.phone).map(x => ["L" + (++max), x.name, text_(x.phone), x.city || "", x.assignedTo || "", "New", "", "", "", at, src]);
+  const out = list.filter(x => x && x.name && x.phone).map(x => ["L" + (++max), properName_(x.name), text_(x.phone), properName_(x.city || ""), x.assignedTo || "", "New", "", "", "", at, src]);
   if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, 11).setValues(out);
   return { added: out.length };
 }
@@ -181,7 +181,7 @@ function addEmp_(me, b) {
   let max = 0;
   emps_().forEach(x => { const v = parseInt(x.id.replace(/\D/g, ""), 10); if (v > max) max = v; });
   const id = "E" + (max + 1);
-  sheet_("Employees").appendRow([id, String(b.name).trim(), text_(b.phone || ""), "Yes", role, "", hash_(id, b.pin), "", now_()]);
+  sheet_("Employees").appendRow([id, properName_(b.name), text_(b.phone || ""), "Yes", role, "", hash_(id, b.pin), "", now_()]);
   return { id };
 }
 
@@ -194,7 +194,7 @@ function updateEmp_(me, b) {
   if (e.id === me.id && role !== me.role) throw new Error("You can't change your own role");
   if (b.name) checkName_(b.name, e.id);
   if (b.phone !== undefined) checkPhone_(b.phone, e.id);
-  sheet_("Employees").getRange(e.row, 2, 1, 4).setValues([[String(b.name || e.name).trim(), text_(b.phone !== undefined ? b.phone : e.phone), "Yes", role]]);
+  sheet_("Employees").getRange(e.row, 2, 1, 4).setValues([[properName_(b.name || e.name), text_(b.phone !== undefined ? b.phone : e.phone), "Yes", role]]);
   return { updated: true };
 }
 
@@ -232,8 +232,8 @@ function removeEmp_(me, id) {
 // Columns (same fields as the team's Google Form, plus ID / SM ID / audit):
 //  A ID | B Timestamp | C SM Name | D SM ID | E Meeting Type | F Meeting Entity | G Name of the CP/Developer/Customer/Connector |
 //  H Name of The Entity | I Willing to work with SN | J Existing % received in market if any | K Contact no of the Entity |
-//  L Purpose of Meeting | M Meeting Outcome | N Remarks | O Any Tieup currently? | P If Yes, Tie up with which company |
-//  Q Current pass back received | R Feedback | S Last updated | T Updated by
+//  L Purpose of Meeting | M Meeting Outcome | N Interested / Not interested | O Remarks | P Any Tieup currently? |
+//  Q If Yes, Tie up with which company | R Current pass back received | S Feedback | T Last updated | U Updated by
 function mSheet_() { return sheet_("Field Work"); }
 function meetings_(me, isLead) {
   try {
@@ -246,7 +246,7 @@ function meetings_(me, isLead) {
 function saveMeeting_(me, m) {
   const isLead = rank_(me.role) <= rank_("Team Lead");
   const c = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "'$&").trim();
-  const person = c(m.person).slice(0, 120), entity = c(m.entity).slice(0, 120);
+  const person = properName_(c(m.person)).slice(0, 120), entity = properName_(c(m.entity)).slice(0, 120);
   if (person.length < 2 && entity.length < 2) throw new Error("Enter the name of the person or the entity you met");
   const sh = mSheet_(), n = sh.getLastRow() - 1;
   const rows = n < 1 ? [] : sh.getRange(2, 1, n, MEET_COLS).getDisplayValues();
@@ -263,9 +263,11 @@ function saveMeeting_(me, m) {
   let id = m.id;
   if (!id) { let max = 1000; rows.forEach(r => { const v = parseInt(String(r[0]).replace(/\D/g, ""), 10); if (v > max) max = v; }); id = "M" + (max + 1); }
   const at = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(String(m.at || "")) ? m.at : now_();
-  const row = [id, at, smName, smId, c(m.type).slice(0, 20), c(m.ent).slice(0, 40), person, entity, c(m.willing).slice(0, 10), c(m.existing).slice(0, 60),
-    text_(c(m.phone).slice(0, 40)), c(m.purpose).slice(0, 100), c(m.outcome).slice(0, 120), c(m.remarks).slice(0, 300), c(m.tieup).slice(0, 10),
-    c(m.tieupWith).slice(0, 100), c(m.passback).slice(0, 100), c(m.feedback).slice(0, 1000), now_(), me.name];
+  const t = v => tidyText_(c(v));
+  const row = [id, at, smName, smId, c(m.type).slice(0, 20), c(m.ent).slice(0, 40), person, entity, c(m.willing).slice(0, 10), t(m.existing).slice(0, 60),
+    text_(c(m.phone).slice(0, 40)), t(m.purpose).slice(0, 100), t(m.outcome).slice(0, 120),
+    (/^(Interested|Not interested)$/.test(m.interest || "") ? m.interest : ""), t(m.remarks).slice(0, 300), c(m.tieup).slice(0, 10),
+    properName_(c(m.tieupWith)).slice(0, 100), t(m.passback).slice(0, 100), t(m.feedback).slice(0, 1000), now_(), me.name];
   if (idx >= 0) sh.getRange(idx + 2, 1, 1, MEET_COLS).setValues([row]);
   else sh.getRange(sh.getLastRow() + 1, 1, 1, MEET_COLS).setValues([row]);
   return { saved: true, id };
@@ -301,12 +303,21 @@ function enquiry_(b) {
   const sh = sheet_("Leads"); let max = 1000;
   rows_("Leads", 1).forEach(r => { const v = parseInt(String(r[0]).replace(/\D/g, ""), 10); if (v > max) max = v; });
   const at = now_();
-  sh.appendRow(["L" + (max + 1), clean(name), d.slice(0, 5) + " " + d.slice(5), clean(b.city).slice(0, 60), "", "New", "",
+  sh.appendRow(["L" + (max + 1), properName_(clean(name)), d.slice(0, 5) + " " + d.slice(5), properName_(clean(b.city)).slice(0, 60), "", "New", "",
     "Website enquiry – " + need + (msg ? ": " + msg : ""), "", at, "Website", need + (msg ? ": " + msg : "")]);
   return { saved: true };
 }
 
 /* ---------------- helpers ---------------- */
+const ACR_=new Set(["SBI","HDFC","ICICI","BOM","BOB","PNB","LIC","IDFC","IDBI","UCO","RBL","AU","NBFC","CRM","PSF","PL","BL","HL","LAP","CP","KYC","DSA","LLP","CR","EMI","MD","CEO","GM"]);
+const SMALL_=new Set(["of","and","in","for","the","to","at","on","by","with"]);
+// Proper case for names ("amit nagdevi" -> "Amit Nagdevi", keeps SBI / HDFC / KR in capitals)
+function properName_(s){let i=0;return String(s==null?"":s).replace(/\s+/g," ").trim().replace(/[A-Za-z][A-Za-z’']*/g,w=>{const first=i++===0;const core=w.replace(/[’']s$/i,"");
+  if(ACR_.has(core.toUpperCase()))return core.toUpperCase()+w.slice(core.length).toLowerCase();if(w===w.toUpperCase()&&w.length<=2)return w;
+  if(!first&&SMALL_.has(w.toLowerCase()))return w.toLowerCase();return w[0].toUpperCase()+w.slice(1).toLowerCase()})}
+// Tidy free text: capital first letter, "1cr" -> "1 CR"
+function tidyText_(s){s=String(s==null?"":s).replace(/[ \t]+/g," ").trim().replace(/(\d+(?:\.\d+)?)\s*cr\b/gi,"$1 CR");return s?s[0].toUpperCase()+s.slice(1):s}
+
 function emps_() {
   const sh = sheet_("Employees"), n = sh.getLastRow() - 1;
   if (n < 1) return [];

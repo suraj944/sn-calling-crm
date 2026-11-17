@@ -80,6 +80,7 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 @media(max-width:560px){.g2,.g3{grid-template-columns:1fr}}
 .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}.seg button{flex:1;border:0;background:none;padding:8px 6px;font:inherit;font-size:13.5px;cursor:pointer;border-left:1px solid var(--line)}
 .seg button:first-child{border-left:0}.seg button.on{background:var(--brand);color:#fff;font-weight:600}
+.seg-int button.on:first-child{background:var(--green)}.seg-int button.on:last-child{background:var(--red)}
 .mform .f{margin-top:12px}.mtable td{vertical-align:middle}.mrow:hover{background:#fafbff}
 .modal:has(.mform){max-width:640px}
 .mcards{display:none}.mcard{padding:14px;margin-bottom:10px}.mc-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.mc-tags{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px}
@@ -292,7 +293,7 @@ function demoSeed(){
 let D=demoSeed();
 const Demo={
   async load(){S=build(D.E,D.L,D.C);S.meetings=buildMeetings(D.M||[])},
-  async saveMeeting(m){D.M=D.M||[];const row=[m.id||"M"+(1001+D.M.length),m.at,m.sm,m.smId,m.type,m.ent,m.person,m.entity,m.willing,m.existing,m.phone,m.purpose,m.outcome,m.remarks,m.tieup,m.tieupWith,m.passback,m.feedback,toSheetTime(Date.now()),ME?ME.name:"Demo"];
+  async saveMeeting(m){D.M=D.M||[];const row=[m.id||"M"+(1001+D.M.length),m.at,m.sm,m.smId,m.type,m.ent,m.person,m.entity,m.willing,m.existing,m.phone,m.purpose,m.outcome,m.interest,m.remarks,m.tieup,m.tieupWith,m.passback,m.feedback,toSheetTime(Date.now()),ME?ME.name:"Demo"];
     const i=D.M.findIndex(r=>r[0]===m.id);if(i>=0)D.M[i]=row;else D.M.push(row)},
   async deleteMeeting(id){D.M=(D.M||[]).filter(r=>r[0]!==id)},
   async logCall(leadId,out,remark,fu,by){const r=D.L.find(x=>x[0]===leadId);const now=toSheetTime(Date.now()),lb=OUTCOMES[out].label,f=toSheetTime(fu);
@@ -421,8 +422,11 @@ const sod=t=>{const d=new Date(t);d.setHours(0,0,0,0);return d.getTime()};
 const ymd=t=>{const d=new Date(t);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
 const RANGES=[["today","Today"],["yesterday","Yesterday"],["7d","Last 7 days"],["30d","Last 30 days"],["month","This month"],["all","All time"],["custom","Custom"]];
 if(!view.range)view.range={key:"7d",from:ymd(Date.now()-6*DAY),to:ymd(Date.now())};
+if(!view.fwRange)view.fwRange={key:"all",from:ymd(Date.now()-29*DAY),to:ymd(Date.now())};
+const onFieldWork=()=>(view.who==="admin"&&view.tab==="meet")||(view.who!=="admin"&&view.etab==="meet");
+const curRange=()=>onFieldWork()?view.fwRange:view.range;
 function rangeBounds(){
-  const r=view.range,t0=sod(Date.now());
+  const r=curRange(),t0=sod(Date.now());
   switch(r.key){
     case"today":return[t0,t0+DAY-1];
     case"yesterday":return[t0-DAY,t0-1];
@@ -436,17 +440,17 @@ function rangeBounds(){
 const rangeLabel=()=>{const[a,b]=rangeBounds();const f=t=>new Date(t).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});return sod(a)===sod(b)?f(a):f(a)+" – "+f(b)};
 const inRange=t=>{const[a,b]=rangeBounds();return t&&t>=a&&t<=b};
 function rangeBar(){
-  const r=view.range;
+  const r=curRange();
   return `<div class="card pad rangebar"><div class="row">
     <div class="chips" style="margin:0">${RANGES.map(([k,l])=>`<button class="chip ${r.key===k?"on":""}" data-range="${k}">${l}</button>`).join("")}</div>
     ${r.key==="custom"?`<label class="small mute">From <input type="date" id="rFrom" value="${esc(r.from)}" max="${ymd(Date.now())}"></label><label class="small mute">To <input type="date" id="rTo" value="${esc(r.to)}" max="${ymd(Date.now())}"></label>`:""}
     <span class="spacer"></span><span class="small mute" id="rLabel">${esc(rangeLabel())}</span></div></div>`;
 }
 function bindRange(){
-  document.querySelectorAll("[data-range]").forEach(b=>b.onclick=()=>{view.range.key=b.dataset.range;render()});
+  document.querySelectorAll("[data-range]").forEach(b=>b.onclick=()=>{curRange().key=b.dataset.range;render()});
   const f=$("#rFrom"),t=$("#rTo");
-  if(f)f.onchange=()=>{view.range.from=f.value;render()};
-  if(t)t.onchange=()=>{view.range.to=t.value;render()};
+  if(f)f.onchange=()=>{curRange().from=f.value;render()};
+  if(t)t.onchange=()=>{curRange().to=t.value;render()};
 }
 
 /* ================= METRICS ================= */
@@ -632,6 +636,15 @@ function bindReports(){
   if(l)l.onchange=()=>{view.repLeadsAll=l.checked;render()};
 }
 
+const ACR_=new Set(["SBI","HDFC","ICICI","BOM","BOB","PNB","LIC","IDFC","IDBI","UCO","RBL","AU","NBFC","CRM","PSF","PL","BL","HL","LAP","CP","KYC","DSA","LLP","CR","EMI","MD","CEO","GM"]);
+const SMALL_=new Set(["of","and","in","for","the","to","at","on","by","with"]);
+// Proper case for names ("amit nagdevi" -> "Amit Nagdevi", keeps SBI / HDFC / KR in capitals)
+function properName(s){let i=0;return String(s==null?"":s).replace(/\s+/g," ").trim().replace(/[A-Za-z][A-Za-z’']*/g,w=>{const first=i++===0;const core=w.replace(/[’']s$/i,"");
+  if(ACR_.has(core.toUpperCase()))return core.toUpperCase()+w.slice(core.length).toLowerCase();if(w===w.toUpperCase()&&w.length<=2)return w;
+  if(!first&&SMALL_.has(w.toLowerCase()))return w.toLowerCase();return w[0].toUpperCase()+w.slice(1).toLowerCase()})}
+// Tidy free text: capital first letter, "1cr" -> "1 CR"
+function tidyText(s){s=String(s==null?"":s).replace(/[ \t]+/g," ").trim().replace(/(\d+(?:\.\d+)?)\s*cr\b/gi,"$1 CR");return s?s[0].toUpperCase()+s.slice(1):s}
+
 /* ================= FIELD WORK ("Field Work" tab of the CRM sheet) ================= */
 // Same fields as the team's Google Form: Timestamp · SM Name · Meeting Type · Meeting Entity ·
 // Name of the CP/Developer/Customer/Connector · Name of The Entity · Willing to work with SN ·
@@ -643,22 +656,24 @@ const M_YESNO=["Yes","No","Maybe"];
 const M_PURPOSE=["For lead","Tie-up","Login","Disbursement","Follow-up","Payout discussion","Other"];
 const FW_LABEL={at:"Timestamp",sm:"SM Name",type:"Meeting Type",ent:"Meeting Entity",person:"Name of the CP/Developer/Customer/Connector",entity:"Name of The Entity",
   willing:"Willing to work with SN",existing:"Existing % received in market if any",phone:"Contact no of the Entity",purpose:"Purpose of Meeting",outcome:"Meeting Outcome",
-  remarks:"Remarks",tieup:"Any Tieup currently?",tieupWith:"If Yes, Tie up with which company",passback:"Current pass back received",feedback:"Feedback"};
+  interest:"Interested / Not interested",remarks:"Remarks",tieup:"Any Tieup currently?",tieupWith:"If Yes, Tie up with which company",passback:"Current pass back received",feedback:"Feedback"};
 function buildMeetings(rows){
   const g=(r,i)=>String(r[i]||"").trim();
   return (rows||[]).map(r=>({id:g(r,0),at:parseT(r[1]),sm:g(r,2),smId:g(r,3),type:g(r,4),ent:g(r,5),person:g(r,6),entity:g(r,7),willing:g(r,8),existing:g(r,9),
-    phone:g(r,10),purpose:g(r,11),outcome:g(r,12),remarks:g(r,13),tieup:g(r,14),tieupWith:g(r,15),passback:g(r,16),feedback:g(r,17),updated:parseT(r[18]),updatedBy:g(r,19)}))
+    phone:g(r,10),purpose:g(r,11),outcome:g(r,12),interest:g(r,13),remarks:g(r,14),tieup:g(r,15),tieupWith:g(r,16),passback:g(r,17),feedback:g(r,18),updated:parseT(r[19]),updatedBy:g(r,20)}))
     .filter(m=>m.id||m.person||m.entity).sort((a,b)=>(b.at||0)-(a.at||0));
 }
 const canEditMeeting=m=>!ME||isLead()||m.smId===ME.id||normName(m.sm)===normName(ME.name);
-if(!view.mq){view.mq="";view.mSm="all";view.mEnt="all";view.mType="all"}
+if(!view.mq){view.mq="";view.mSm="all";view.mEnt="all";view.mType="all";view.mInt="all"}
 function meetingsInView(){
   const q=view.mq.toLowerCase();
-  return (S.meetings||[]).filter(m=>inRange(m.at)&&(view.mSm==="all"||m.sm===view.mSm)&&(view.mEnt==="all"||m.ent===view.mEnt)&&(view.mType==="all"||m.type===view.mType)
+  const pe=view.who!=="admin"&&emp(view.who);   // viewing one person's page
+  return (S.meetings||[]).filter(m=>inRange(m.at)&&(!pe||m.smId===pe.id||normName(m.sm)===normName(pe.name))&&(view.mSm==="all"||view.who!=="admin"||m.sm===view.mSm)&&(view.mEnt==="all"||m.ent===view.mEnt)&&(view.mType==="all"||m.type===view.mType)&&(view.mInt==="all"||(view.mInt==="none"?!m.interest:m.interest===view.mInt))
     &&(!q||[m.person,m.entity,m.phone,m.purpose,m.outcome,m.remarks,m.feedback,m.sm,m.tieupWith].join(" ").toLowerCase().includes(q)));
 }
 const entCls=w=>({Customer:"s-int",Banker:"s-conv",Connector:"s-cb",Developer:"s-na",CP:"s-wn"})[w]||"s-new";
 const yesCls=v=>v==="Yes"?"s-int":v==="No"?"s-ni":v?"s-cb":"";
+const intPill=v=>v==="Interested"?`<span class="pill s-int">Interested</span>`:v==="Not interested"?`<span class="pill s-ni">Not interested</span>`:"";
 function aMeetings(){
   const list=meetingsInView(),all=S.meetings||[];
   const sms=[...new Set(all.map(m=>m.sm).filter(Boolean))].sort();
@@ -667,29 +682,30 @@ function aMeetings(){
   if(S.meetErr)h+=`<div class="banner" style="padding:0;margin:0 0 12px"><div>⚠ Couldn't load field work: ${esc(S.meetErr)}</div></div>`;
   h+=`<div class="stats">
     <div class="card stat"><span>Meetings</span><b>${list.length}</b><div class="small mute">${c(m=>m.type==="Physical")} physical · ${c(m=>m.type==="Call")} call</div></div>
-    <div class="card stat"><span>Willing to work with SN</span><b style="color:var(--green)">${c(m=>m.willing==="Yes")}</b><div class="small mute">${c(m=>m.willing==="No")} said no</div></div>
+    <div class="card stat"><span>Interested</span><b style="color:var(--green)">${c(m=>m.interest==="Interested")}</b><div class="small mute">${c(m=>m.interest==="Not interested")} not interested · ${c(m=>!m.interest)} not marked</div></div>
     <div class="card stat"><span>Have a tie-up already</span><b>${c(m=>m.tieup==="Yes")}</b></div>
     <div class="card stat"><span>Connectors & CPs</span><b>${c(m=>m.ent==="Connector"||m.ent==="CP")}</b></div>
     <div class="card stat"><span>Developers</span><b>${c(m=>m.ent==="Developer")}</b></div>
     <div class="card stat"><span>Bankers & customers</span><b>${c(m=>m.ent==="Banker"||m.ent==="Customer")}</b></div></div>`;
   h+=`<div class="card pad" style="margin-bottom:12px"><div class="row">
     <input id="mq" placeholder="Search name, entity, number, remarks" value="${esc(view.mq)}" style="flex:1;min-width:200px">
-    ${isLead()?`<select id="mSm"><option value="all">All SMs</option>${sms.map(s=>`<option ${view.mSm===s?"selected":""}>${esc(s)}</option>`).join("")}</select>`:""}
+    ${isLead()&&view.who==="admin"?`<select id="mSm"><option value="all">All SMs</option>${sms.map(s=>`<option ${view.mSm===s?"selected":""}>${esc(s)}</option>`).join("")}</select>`:""}
     <select id="mEnt"><option value="all">Meeting entity: all</option>${M_ENTITY.map(s=>`<option ${view.mEnt===s?"selected":""}>${esc(s)}</option>`).join("")}</select>
+    <select id="mInt"><option value="all">Interested & not</option>${[["Interested","Interested"],["Not interested","Not interested"],["none","Not marked yet"]].map(([k,l])=>`<option value="${k}" ${view.mInt===k?"selected":""}>${l}</option>`).join("")}</select>
     <select id="mType"><option value="all">Physical & call</option>${M_TYPES.map(s=>`<option ${view.mType===s?"selected":""}>${esc(s)}</option>`).join("")}</select>
     <button class="btn pri" id="mAdd">＋ Add field work</button></div></div>`;
-  h+=`<div class="card tw"><table class="mtable"><tr><th>Timestamp</th>${isLead()?"<th>SM Name</th>":""}<th>Meeting Entity</th><th>Name of CP / Developer / Customer / Connector</th><th>Contact no</th><th>Willing</th><th>Purpose</th><th>Meeting Outcome</th><th>Remarks / Feedback</th><th></th></tr>`;
+  h+=`<div class="card tw"><table class="mtable"><tr><th>Timestamp</th>${isLead()?"<th>SM Name</th>":""}<th>Meeting Entity</th><th>Name of CP / Developer / Customer / Connector</th><th>Contact no</th><th>Interested?</th><th>Purpose</th><th>Meeting Outcome</th><th>Remarks / Feedback</th><th></th></tr>`;
   h+=list.map(m=>`<tr class="mrow"><td class="num small" style="white-space:nowrap">${m.at?fmt(m.at):"—"}<div class="mute">${esc(m.type)}</div></td>
     ${isLead()?`<td>${esc(m.sm)}</td>`:""}<td>${m.ent?`<span class="pill ${entCls(m.ent)}">${esc(m.ent)}</span>`:"—"}</td>
     <td><b>${esc(m.person)||"—"}</b>${m.entity?`<div class="small mute">${esc(m.entity)}</div>`:""}${m.tieup==="Yes"?`<div class="small" style="color:var(--amber)">Tie-up${m.tieupWith?": "+esc(m.tieupWith):""}${m.passback?" · "+esc(m.passback):""}</div>`:""}</td>
     <td class="num" style="white-space:nowrap">${m.phone?`<a href="${telHref(m.phone.split("/")[0])}" class="lnk">${esc(m.phone)}</a>`:"—"}</td>
-    <td>${m.willing?`<span class="pill ${yesCls(m.willing)}">${esc(m.willing)}</span>`:"—"}</td><td>${esc(m.purpose)||"—"}</td><td>${esc(m.outcome)||"—"}</td>
+    <td>${intPill(m.interest)||"—"}${m.willing?`<div class="small mute" style="margin-top:3px">Willing: ${esc(m.willing)}</div>`:""}</td><td>${esc(m.purpose)||"—"}</td><td>${esc(m.outcome)||"—"}</td>
     <td class="small" style="max-width:280px">${[m.remarks,m.feedback].filter(Boolean).map(esc).join("<br>")||'<span class="mute">—</span>'}</td>
     <td style="white-space:nowrap">${canEditMeeting(m)?`<button class="btn sm" data-medit="${esc(m.id)}">✎ Edit</button>`:""}</td></tr>`).join("")||`<tr><td colspan="10"><div class="empty">No field work in this period${all.length?" – try All time or clear the filters":" yet – add your first meeting"}.</div></td></tr>`;
   h+=`</table></div>`;
   h+=`<div class="mcards">${list.map(m=>`<div class="card mcard"><div class="mc-top"><div><b>${esc(m.person)||esc(m.entity)||"—"}</b>${m.person&&m.entity?`<div class="small mute">${esc(m.entity)}</div>`:""}</div>
       ${canEditMeeting(m)?`<button class="btn sm" data-medit="${esc(m.id)}">✎ Edit</button>`:""}</div>
-    <div class="mc-tags">${m.ent?`<span class="pill ${entCls(m.ent)}">${esc(m.ent)}</span>`:""}${m.type?`<span class="pill s-new">${esc(m.type)}</span>`:""}${m.willing?`<span class="pill ${yesCls(m.willing)}">Willing: ${esc(m.willing)}</span>`:""}</div>
+    <div class="mc-tags">${m.ent?`<span class="pill ${entCls(m.ent)}">${esc(m.ent)}</span>`:""}${m.type?`<span class="pill s-new">${esc(m.type)}</span>`:""}${intPill(m.interest)}${m.willing?`<span class="pill ${yesCls(m.willing)}">Willing: ${esc(m.willing)}</span>`:""}</div>
     <div class="small mute">${m.at?fmt(m.at):""}${isLead()&&m.sm?" · "+esc(m.sm):""}</div>
     ${m.phone?`<a class="btn call sm" style="margin-top:8px" href="${telHref(m.phone.split("/")[0])}">📞 ${esc(m.phone)}</a>`:""}
     ${m.purpose||m.outcome?`<div class="small" style="margin-top:8px">${m.purpose?`<b>Purpose:</b> ${esc(m.purpose)}`:""}${m.purpose&&m.outcome?" · ":""}${m.outcome?`<b>Outcome:</b> ${esc(m.outcome)}`:""}</div>`:""}
@@ -699,7 +715,7 @@ function aMeetings(){
 }
 function bindMeetings(){
   const q=$("#mq");if(q)q.oninput=e=>{view.mq=e.target.value;const p=e.target.selectionStart;render();const n=$("#mq");n.focus();n.setSelectionRange(p,p)};
-  [["#mSm","mSm"],["#mEnt","mEnt"],["#mType","mType"]].forEach(([s,k])=>{const el=$(s);if(el)el.onchange=()=>{view[k]=el.value;render()}});
+  [["#mSm","mSm"],["#mEnt","mEnt"],["#mType","mType"],["#mInt","mInt"]].forEach(([s,k])=>{const el=$(s);if(el)el.onchange=()=>{view[k]=el.value;render()}});
   const add=$("#mAdd");if(add)add.onclick=()=>openMeeting(null);
   document.querySelectorAll("[data-medit]").forEach(b=>b.onclick=e=>{e.stopPropagation();openMeeting(b.dataset.medit)});
 }
@@ -725,6 +741,7 @@ function openMeeting(id){
       <div><label class="f">${L.existing}</label><input id="m_exist" value="${v("existing")}" placeholder="e.g. 60% or Not applicable" style="width:100%" maxlength="60"></div></div>
     <div class="g2"><div><label class="f">${L.purpose}</label><input id="m_purpose" value="${v("purpose")}" list="dl_purpose" style="width:100%" maxlength="100"></div>
       <div><label class="f">${L.outcome}</label><input id="m_outcome" value="${v("outcome")}" placeholder="e.g. 1-3 files expected" style="width:100%" maxlength="120"></div></div>
+    <label class="f">${L.interest}</label><div class="seg seg-int" data-seg="m_interest">${["Interested","Not interested"].map(t=>`<button type="button" class="${m&&m.interest===t?"on":""}">${t}</button>`).join("")}</div>
     <label class="f">${L.remarks}</label><input id="m_remarks" value="${v("remarks")}" placeholder="e.g. 1 CR business" style="width:100%" maxlength="300">
     <div class="g2"><div><label class="f">${L.tieup}</label>${seg("m_tieup",["Yes","No"],m?m.tieup:"")}</div>
       <div id="tuw"><label class="f">${L.tieupWith}</label><input id="m_tuw" value="${v("tieupWith")}" style="width:100%" maxlength="100"></div></div>
@@ -741,22 +758,24 @@ function openMeeting(id){
   tuw();
   if($("#mDel")){let armed=false;$("#mDel").onclick=async()=>{if(!armed){armed=true;$("#mDel").textContent="Confirm delete?";setTimeout(()=>{armed=false;if($("#mDel"))$("#mDel").textContent="Delete"},3000);return}
     if(await write(api=>api.deleteMeeting(m.id),"Field work entry deleted"))close()}}
+  ["#m_person","#m_entity","#m_tuw"].forEach(s=>{const el=$(s);if(el)el.addEventListener("blur",()=>{el.value=properName(el.value)})});
+  ["#m_purpose","#m_outcome","#m_remarks","#m_pass","#m_exist"].forEach(s=>{const el=$(s);if(el)el.addEventListener("blur",()=>{el.value=tidyText(el.value)})});
   $("#m_person").focus();
   $("#mfm").onsubmit=async e=>{e.preventDefault();
-    const person=$("#m_person").value.trim(),entity=$("#m_entity").value.trim();
+    const person=properName($("#m_person").value),entity=properName($("#m_entity").value);
     if(person.length<2&&entity.length<2){$("#mErr").textContent="Enter the name of the person or the entity you met.";return}
     const ph=$("#m_phone").value.trim();if(ph&&ph.replace(/\D/g,"").length<10){$("#mErr").textContent="Contact number looks too short – enter 10 digits or leave it empty.";return}
     const smName=canPickSm?$("#m_sm").value:curSm;const smEmp=S.allEmps.find(x=>x.name===smName);
     const rec={id:m?m.id:"",at:toSheetTime(parseT($("#m_at").value)||Date.now()),sm:smName,smId:smEmp?smEmp.id:(m?m.smId:""),type:segVal("m_type")||"Physical",ent:$("#m_ent").value,
-      person,entity,willing:segVal("m_willing"),existing:$("#m_exist").value.trim(),phone:ph,purpose:$("#m_purpose").value.trim(),outcome:$("#m_outcome").value.trim(),
+      person,entity,willing:segVal("m_willing"),existing:$("#m_exist").value.trim(),phone:ph,purpose:$("#m_purpose").value.trim(),outcome:$("#m_outcome").value.trim(),interest:segVal("m_interest"),
       remarks:$("#m_remarks").value.trim(),tieup:segVal("m_tieup"),tieupWith:segVal("m_tieup")==="Yes"?$("#m_tuw").value.trim():"",passback:$("#m_pass").value.trim(),feedback:$("#m_fb").value.trim()};
     const b=$("#mok");b.disabled=true;b.textContent="Saving…";
     if(await write(api=>api.saveMeeting(rec),m?"Field work updated":"Field work added"))close();else{b.disabled=false;b.textContent=m?"Save changes":"Add field work"}};
 }
 function rMeetings(){
   const L=FW_LABEL;
-  return [["ID",L.at,L.sm,L.type,L.ent,L.person,L.entity,L.willing,L.existing,L.phone,L.purpose,L.outcome,L.remarks,L.tieup,L.tieupWith,L.passback,L.feedback,"Last updated","Updated by"],
-    ...(S.meetings||[]).filter(m=>inRange(m.at)).slice().reverse().map(m=>[m.id,T(m.at),m.sm,m.type,m.ent,m.person,m.entity,m.willing,m.existing,m.phone,m.purpose,m.outcome,m.remarks,m.tieup,m.tieupWith,m.passback,m.feedback,T(m.updated),m.updatedBy])];
+  return [["ID",L.at,L.sm,L.type,L.ent,L.person,L.entity,L.willing,L.existing,L.phone,L.purpose,L.outcome,L.interest,L.remarks,L.tieup,L.tieupWith,L.passback,L.feedback,"Last updated","Updated by"],
+    ...(S.meetings||[]).filter(m=>inRange(m.at)).slice().reverse().map(m=>[m.id,T(m.at),m.sm,m.type,m.ent,m.person,m.entity,m.willing,m.existing,m.phone,m.purpose,m.outcome,m.interest,m.remarks,m.tieup,m.tieupWith,m.passback,m.feedback,T(m.updated),m.updatedBy])];
 }
 
 const empOpts=()=>S.employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)} (${esc(e.role)})</option>`).join("");
@@ -887,12 +906,12 @@ function openChangePin(){
 
 /* ---------- EMPLOYEE VIEW ---------- */
 const lastOf=l=>l.logs[0]||(l.lastRemark||l.lastAt?{remark:l.lastRemark,at:l.lastAt}:null);
-const showEtabs=()=>ME&&view.who===ME.id;
-const etabs=()=>showEtabs()?`<div class="tabs">${[["leads","My leads"],["meet","My field work"]].map(([k,l])=>`<button class="tab ${(view.etab||"leads")===k?"on":""}" data-etab="${k}">${l}</button>`).join("")}</div>`:"";
+const showEtabs=()=>!!ME&&view.who!=="admin"&&(view.who===ME.id||isLead());
+const etabs=()=>showEtabs()?`<div class="tabs">${(ME&&view.who===ME.id?[["leads","My leads"],["meet","My field work"]]:[["leads","Leads"],["meet","Field work"]]).map(([k,l])=>`<button class="tab ${(view.etab||"leads")===k?"on":""}" data-etab="${k}">${l}</button>`).join("")}</div>`:"";
 function bindEtabs(){document.querySelectorAll("[data-etab]").forEach(b=>b.onclick=()=>{view.etab=b.dataset.etab;render()})}
 function renderEmp(){
   const me=emp(view.who);if(!me){view.who="admin";return render()}
-  if(showEtabs()&&view.etab==="meet"){$("#app").innerHTML=etabs()+aMeetings();bindEtabs();bindRange();bindMeetings();bindTips();return}
+  if(showEtabs()&&view.etab==="meet"){$("#app").innerHTML=etabs()+(ME&&view.who!==ME.id?`<div style="margin-bottom:14px"><div class="mute small">Field work of</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>`:"")+aMeetings();bindEtabs();bindRange();bindMeetings();bindTips();return}
   const mine=S.leads.filter(l=>l.assignedTo===me.id);
   const todayCalls=mine.flatMap(l=>l.logs).filter(g=>g.by===me.id&&today(g.at)).length;
   const due=mine.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<=Date.now()+30*60e3);
