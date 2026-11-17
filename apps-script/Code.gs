@@ -12,7 +12,9 @@
  *  After changing this code later: Deploy → Manage deployments → ✏ → Version: New version → Deploy.
  *
  * Employees tab = the credentials database:
- *   ID | Name (login) | Phone | Active | Role | PIN (first-time) | PIN Hash (auto) | Last Login (auto) | Created
+ *   ID | Name (login) | Phone | Active | Role | PIN (4 digits) | PIN Hash (auto) | Last Login (auto) | Created | Team Lead
+ *   - Team Lead (column J): the Team Lead this person reports to (name or ID). A Team Lead only sees, calls and assigns
+ *     contacts of their own team. Admin and Manager see everyone. New contacts are given out by Admin / Manager.
  *   - People log in with their NAME + PIN. Names must be unique (case doesn't matter).
  *   - Role: Admin, Manager, Team Lead, Sales Manager or Telecaller Executive (see the Roles tab).
  *     Old "Employee" values are treated as Telecaller Executive.
@@ -53,8 +55,8 @@ function doPost(e) {
     try {
       switch (b.action) {
         case "logCall":   return logCall_(me, b);
-        case "assign":    need_(me, "Team Lead"); return assign_(b.ids || [], b.to || "");
-        case "addLeads":  need_(me, "Team Lead"); return addLeads_(b.leads || []);
+        case "assign":    need_(me, "Team Lead"); if (!b.to) throw new Error("Choose a telecaller"); return assign_(b.ids || [], b.to, me);
+        case "addLeads":  need_(me, "Team Lead"); return addLeads_(b.leads || [], me);
         case "addEmp":    need_(me, "Manager");   return addEmp_(me, b);
         case "updateEmp": need_(me, "Manager");   return updateEmp_(me, b);
         case "resetPin":  need_(me, "Manager");   return resetPin_(me, b.id, b.pin);
@@ -128,15 +130,17 @@ function canManage_(me, targetRole) { // Managers can't create/edit Admins or ot
 function load_(me) {
   const isLead = rank_(me.role) <= rank_("Team Lead");
   const emps = emps_();
-  let leads = rows_("Leads", 12), logs = rows_("CallLogs", 10);
-  if (!isLead) {
-    leads = leads.filter(r => String(r[4]).trim() === me.id);
+  let leads = rows_("Leads", 12), logs = rows_("CallLogs", 10), people = isLead ? emps : [me];
+  if (!isLead || me.role === "Team Lead") {           // telecallers: own contacts; Team Leads: their team's contacts
+    const team = !isLead ? new Set([me.id]) : teamIds_(me, emps);
+    if (isLead) people = emps.filter(x => team.has(x.id));
+    leads = leads.filter(r => team.has(String(r[4]).trim()));
     const ids = new Set(leads.map(r => String(r[0]).trim()));
     logs = logs.filter(r => ids.has(String(r[2]).trim()));
   }
   return {
     me: pub_(me),
-    employees: (isLead ? emps : [me]).map(x => [x.id, x.name, x.phone, x.active ? "Yes" : "No", x.role, x.hash || x.pin ? "set" : ""]),
+    employees: people.map(x => [x.id, x.name, x.phone, x.active ? "Yes" : "No", x.role, x.hash || x.pin ? "set" : "", x.tl || ""]),
     leads, logs,
     sheetUrl: isLead ? SpreadsheetApp.getActiveSpreadsheet().getUrl() : "",
     ...meetings_(me, isLead),
@@ -149,7 +153,8 @@ function logCall_(me, b) {
   const r = findRow_(leads, b.leadId);
   if (!r) throw new Error("Lead " + b.leadId + " not found");
   const lead = leads.getRange(r, 1, 1, 10).getDisplayValues()[0];
-  if (rank_(me.role) > rank_("Team Lead") && String(lead[4]).trim() !== me.id) throw new Error("This lead isn't assigned to you");
+  if (rank_(me.role) > rank_("Team Lead") && String(lead[4]).trim() !== me.id) throw new Error("This contact isn't assigned to you");
+  if (me.role === "Team Lead" && !teamIds_(me, emps_()).has(String(lead[4]).trim())) throw new Error("This contact isn't in your team");
   const at = now_();
   sheet_("CallLogs").appendRow(["C" + Date.now().toString(36).toUpperCase(), at, lead[0], lead[1], text_(lead[2]),
     me.id, me.name, b.outcome || "", b.remark || "", b.followUp || ""]);
@@ -157,17 +162,26 @@ function logCall_(me, b) {
   return { saved: true };
 }
 
-function assign_(ids, to) {
+function assign_(ids, to, me) {
   const sh = sheet_("Leads"), n = sh.getLastRow() - 1;
   if (n < 1) return { updated: 0 };
   const idCol = sh.getRange(2, 1, n, 1).getDisplayValues(), asg = sh.getRange(2, 5, n, 1).getValues();
+  const team = me && me.role === "Team Lead" ? teamIds_(me, emps_()) : null;   // Team Leads only move contacts inside their team
+  if (team && !team.has(to)) throw new Error("You can only assign to people in your team");
+  if (to && !emps_().some(x => x.id === to && x.active)) throw new Error("That person isn't an active team member");
   const set = new Set(ids.map(String)); let c = 0;
-  idCol.forEach((r, i) => { if (set.has(String(r[0]).trim())) { asg[i][0] = to; c++; } });
+  idCol.forEach((r, i) => { if (set.has(String(r[0]).trim())) {
+    if (team && !team.has(String(asg[i][0]).trim())) throw new Error("Contact " + r[0] + " isn't in your team");
+    asg[i][0] = to; c++; } });
   sh.getRange(2, 5, n, 1).setValues(asg);
   return { updated: c };
 }
 
-function addLeads_(list) {
+function addLeads_(list, me) {
+  if (me && me.role === "Team Lead") {   // Team Leads add contacts straight to their own team
+    const team = teamIds_(me, emps_());
+    if (list.some(x => x && !team.has(String(x.assignedTo || "")))) throw new Error("Assign the new contacts to someone in your team");
+  }
   const sh = sheet_("Leads"); let max = 1000;
   rows_("Leads", 1).forEach(r => { const v = parseInt(String(r[0]).replace(/\D/g, ""), 10); if (v > max) max = v; });
   const at = now_();
@@ -186,7 +200,7 @@ function addEmp_(me, b) {
   let max = 0;
   emps_().forEach(x => { const v = parseInt(x.id.replace(/\D/g, ""), 10); if (v > max) max = v; });
   const id = "E" + (max + 1);
-  sheet_("Employees").appendRow([id, properName_(b.name), text_(b.phone || ""), "Yes", role, "", hash_(id, b.pin), "", now_()]);
+  sheet_("Employees").appendRow([id, properName_(b.name), text_(b.phone || ""), "Yes", role, "", hash_(id, b.pin), "", now_(), tlName_(b.tl, role)]);
   return { id };
 }
 
@@ -199,7 +213,11 @@ function updateEmp_(me, b) {
   if (e.id === me.id && role !== me.role) throw new Error("You can't change your own role");
   if (b.name) checkName_(b.name, e.id);
   if (b.phone !== undefined) checkPhone_(b.phone, e.id);
-  sheet_("Employees").getRange(e.row, 2, 1, 4).setValues([[properName_(b.name || e.name), text_(b.phone !== undefined ? b.phone : e.phone), "Yes", role]]);
+  const newName = properName_(b.name || e.name), shE = sheet_("Employees");
+  shE.getRange(e.row, 2, 1, 4).setValues([[newName, text_(b.phone !== undefined ? b.phone : e.phone), "Yes", role]]);
+  if (b.tl !== undefined) shE.getRange(e.row, 10).setValue(tlName_(b.tl, role));
+  if (e.role === "Team Lead" && newName !== e.name)               // keep team members pointing at the renamed Team Lead
+    emps_().filter(x => x.tl === e.id).forEach(x => shE.getRange(x.row, 10).setValue(newName));
   return { updated: true };
 }
 
@@ -328,12 +346,24 @@ function tidyText_(s){s=String(s==null?"":s).replace(/[ \t]+/g," ").trim().repla
 function emps_() {
   const sh = sheet_("Employees"), n = sh.getLastRow() - 1;
   if (n < 1) return [];
-  return sh.getRange(2, 1, n, 7).getDisplayValues().map((r, i) => ({
+  const list = sh.getRange(2, 1, n, 10).getDisplayValues().map((r, i) => ({
     id: String(r[0]).trim(), name: String(r[1]).trim(), phone: String(r[2]).trim(),
     active: String(r[3] || "Yes").trim().toLowerCase() !== "no",
     role: ROLES.find(x => x.toLowerCase() === String(r[4] || "").trim().toLowerCase()) || "Telecaller Executive",
-    pin: String(r[5] || "").trim(), hash: String(r[6] || "").trim(), row: i + 2
+    pin: String(r[5] || "").trim(), hash: String(r[6] || "").trim(), tlRaw: String(r[9] || "").trim(), row: i + 2
   })).filter(x => x.id && x.name);
+  // column J "Team Lead" may hold the Team Lead's name or ID
+  const tls = list.filter(x => x.role === "Team Lead");
+  list.forEach(x => { const t = x.tlRaw && x.role !== "Team Lead" ? tls.find(y => y.id.toLowerCase() === x.tlRaw.toLowerCase() || norm_(y.name) === norm_(x.tlRaw)) : null; x.tl = t ? t.id : ""; });
+  return list;
+}
+// A Team Lead's team = the Team Lead + everyone whose "Team Lead" column points at them
+function teamIds_(me, emps) { return new Set(emps.filter(x => x.id === me.id || x.tl === me.id).map(x => x.id)); }
+function tlName_(tlId, role) {
+  if (!tlId || role === "Team Lead" || rank_(role) < rank_("Team Lead")) return "";
+  const t = emps_().find(x => x.id === tlId && x.role === "Team Lead");
+  if (!t) throw new Error("Choose a Team Lead from the list");
+  return t.name;
 }
 const pub_ = e => ({ id: e.id, name: e.name, role: e.role, phone: e.phone });
 function checkPin_(p) { if (!/^\d{4}$/.test(String(p || "").trim())) throw new Error("PIN must be exactly 4 digits"); }

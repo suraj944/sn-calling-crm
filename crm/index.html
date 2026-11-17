@@ -54,6 +54,17 @@ tr:last-child td{border-bottom:0}
 .mute{color:var(--mute)}
 .small{font-size:12.5px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.be{display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start}
+@media(max-width:900px){.be{grid-template-columns:1fr}}
+.bel{padding:6px}
+.bep{display:block;width:100%;text-align:left;border:1px solid transparent;background:none;border-radius:10px;padding:10px 12px;cursor:pointer;font:inherit;color:inherit}
+.bep:hover{background:var(--bg)}
+.bep.on{background:var(--brand-soft,#eef3ff);border-color:var(--brand)}
+.bep .bn{font-weight:600}
+.bep .bc{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--mute)}
+.bep .bc b{color:var(--ink,#111);font-variant-numeric:tabular-nums}
+.stats.sm .stat{padding:10px 12px}.stats.sm .stat b{font-size:20px}
+.be td.num{white-space:nowrap}.be>*{min-width:0}
 @media(max-width:820px){.grid2{grid-template-columns:1fr}}
 .bar{height:8px;background:var(--gray-soft);border-radius:99px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--brand)}
@@ -183,6 +194,17 @@ let view={who:"admin",tab:"dash",filter:"all",q:"",sel:new Set(),assignFilter:"a
 const emp=id=>S.allEmps.find(e=>e.id===id);
 const empName=id=>id==="ADMIN_LOG"?"Admin":(emp(id)?.name||id||"—");
 const isLead=()=>!ME||rank(ME.role)<=rank("Team Lead");
+const isTL=()=>!!ME&&ME.role==="Team Lead";                 // Team Leads get only their own team from the server
+// Teams: a Team Lead + everyone whose "Team Lead" is them. Admin / Manager can filter every page by team.
+const teamLeads=(R=RAW||S)=>R.allEmps.filter(e=>e.role==="Team Lead"&&e.active);
+const teamOf=e=>!e?"":e.role==="Team Lead"?e.id:(e.tl||"");
+const teamName=id=>id==="none"?"No team":(emp(id)?.name||id)+"'s team";
+let RAW=null;const SCOPED_TABS=new Set(["dash","lead","byemp","assign","logs","reports"]);
+function scopeData(R,t){
+  const inT=e=>t==="none"?(!teamOf(e)&&e.role!=="Sales Manager"):teamOf(e)===t;
+  const ids=new Set(R.allEmps.filter(inT).map(e=>e.id));
+  return {...R,employees:R.employees.filter(e=>ids.has(e.id)),leads:R.leads.filter(l=>ids.has(l.assignedTo)),__scoped:true};
+}
 const isMgr=()=>!ME||rank(ME.role)<=rank("Manager");
 const canManageRole=r=>!ME||ME.role==="Admin"||rank(r)>rank(ME.role);
 
@@ -190,7 +212,8 @@ const canManageRole=r=>!ME||ME.role==="Admin"||rank(r)>rank(ME.role);
 function build(eRows,lRows,cRows){
   const allEmps=eRows.map((r,i)=>({id:String(r[0]||"").trim(),name:String(r[1]||"").trim(),phone:String(r[2]??""),
     active:String(r[3]||"Yes").trim().toLowerCase()!=="no",role:ROLES.find(x=>x.toLowerCase()===String(r[4]||"").trim().toLowerCase())||"Telecaller Executive",
-    pinSet:!!(String(r[5]||"").trim()||String(r[6]||"").trim()),row:i+2})).filter(e=>e.id&&e.name);
+    pinSet:!!(String(r[5]||"").trim()||String(r[6]||"").trim()),tlRaw:String(r[6]||"").trim(),row:i+2})).filter(e=>e.id&&e.name);
+  allEmps.forEach(e=>{const t=allEmps.find(x=>x.role==="Team Lead"&&x.id===e.tlRaw&&e.role!=="Team Lead");e.tl=t?t.id:"";delete e.tlRaw});
   const findEmp=v=>{v=String(v||"").trim();if(!v)return null;const lv=v.toLowerCase();const e=allEmps.find(e=>e.id.toLowerCase()===lv||e.name.toLowerCase()===lv);return e?e.id:v};
   const leads=lRows.map((r,i)=>({id:String(r[0]||"").trim(),name:String(r[1]||""),phone:String(r[2]??""),city:String(r[3]||""),assignedTo:findEmp(r[4]),
     status:statusCode(r[5]),followUp:parseT(r[6]),lastRemark:String(r[7]||""),lastAt:parseT(r[8]),created:parseT(r[9]),
@@ -401,18 +424,85 @@ function render(){
   if(MODE==="login")return;
   if(MODE==="loading"){$("#app").innerHTML=`<div class="card empty">Connecting to your Google Sheet…</div>`;return}
   if(ME&&!isLead())view.who=ME.id;          // employees only ever see their own list
+  if(!S.__scoped)RAW=S;                      // fresh data from the sheet
+  if(view.team&&view.team!=="all"&&!teamLeads(RAW).some(e=>e.id===view.team)&&view.team!=="none")view.team="all";
+  S=(isMgr()&&!isTL()&&view.who==="admin"&&view.team&&view.team!=="all"&&SCOPED_TABS.has(view.tab))?scopeData(RAW,view.team):RAW;
   renderWho();view.who==="admin"?renderAdmin():renderEmp();
 }
 
 /* ---------- ADMIN / MANAGER / TEAM LEAD ---------- */
 function renderAdmin(){
-  const tabs=[["dash","Dashboard"],["lead","Leads"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(isMgr()?[["reports","⬇ Reports"]]:[])];
+  const tabs=[["dash","Dashboard"],["lead","Leads"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(isMgr()?[["reports","⬇ Reports"]]:[])];
   if(!tabs.some(t=>t[0]===view.tab))view.tab="dash";
   let h=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${view.tab===k?"on":""}" data-tab="${k}">${l}</button>`).join("")}</div>`;
-  h+=({dash:aDash,lead:aLeadsTab,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings})[view.tab]();
+  const TLs=teamLeads();
+  if(isMgr()&&!isTL()&&TLs.length&&SCOPED_TABS.has(view.tab))h+=`<div class="row" style="margin:-4px 0 12px"><label class="small mute" style="display:flex;gap:8px;align-items:center">Team
+      <select id="teamSel"><option value="all">All teams</option>${TLs.map(e=>`<option value="${esc(e.id)}" ${view.team===e.id?"selected":""}>${esc(e.name)}'s team</option>`).join("")}<option value="none" ${view.team==="none"?"selected":""}>No team</option></select></label>
+      ${view.team&&view.team!=="all"?`<span class="small mute">Showing only ${esc(teamName(view.team))}${view.team!=="none"?" ("+RAW.allEmps.filter(e=>e.active&&teamOf(e)===view.team).length+" people)":""}</span>`:""}</div>`;
+  else if(isTL())h+=`<div class="small mute" style="margin:-4px 0 12px">Showing your team: ${esc(S.employees.map(e=>e.name).join(", "))}</div>`;
+  h+=({dash:aDash,lead:aLeadsTab,byemp:aByEmp,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings})[view.tab]();
   $("#app").innerHTML=h;
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{view.tab=b.dataset.tab;render()});
-  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();
+  const ts=$("#teamSel");if(ts)ts.onchange=()=>{view.team=ts.value;view.sel.clear();if(view.lsel)view.lsel.clear();render()};
+  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();
+}
+/* ---------- BY EMPLOYEE: each telecaller's calling list, leads and calls ---------- */
+function empSummary(e){
+  const list=S.leads.filter(l=>l.assignedTo===e.id),calls=allLogs().filter(g=>g.by===e.id&&inRange(g.at));
+  const endToday=sod(Date.now())+DAY-1;
+  return {e,list,calls,leads:list.filter(isLeadC),leadsP:leadsIn(list),
+    notCalled:list.filter(l=>l.status==="new").length,connected:calls.filter(g=>CONNECTED(g.outcome)).length,
+    conv:list.filter(l=>l.status==="conv").length,due:list.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<=endToday).length};
+}
+function aByEmp(){
+  const ppl=callers().filter(e=>e.role!=="Sales Manager").map(empSummary).sort((a,b)=>b.list.length-a.list.length||a.e.name.localeCompare(b.e.name));
+  if(!ppl.length)return `<div class="card empty">No telecallers yet.</div>`;
+  if(!ppl.some(p=>p.e.id===view.be))view.be=ppl[0].e.id;
+  const P=ppl.find(p=>p.e.id===view.be),bt=view.bet||"leads";
+  let h=rangeBar();
+  h+=`<div class="be"><div class="card bel">${ppl.map(p=>`<button class="bep ${p.e.id===view.be?"on":""}" data-be="${esc(p.e.id)}">
+      <div class="bn">${esc(p.e.name)}</div><div class="small mute">${esc(p.e.role)}</div>
+      <div class="bc"><span>Calling list <b>${p.list.length}</b></span><span>Leads <b style="color:var(--green)">${p.leads.length}</b></span><span>Calls <b>${p.calls.length}</b></span></div></button>`).join("")}
+    <div class="small mute" style="padding:8px 12px">Calls = in the selected period. Calling list and leads = as of now.</div></div>`;
+  h+=`<div><div class="card pad" style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div class="av">${initials(P.e.name)}</div>
+      <div style="flex:1"><div style="font-size:18px;font-weight:700">${esc(P.e.name)}</div><div class="small mute">${esc(P.e.role)}${P.e.phone?" · "+esc(P.e.phone):""}</div></div>
+      <button class="btn sm" data-goemp="${esc(P.e.id)}">Open their page</button></div>
+    <div class="stats sm">
+      <div class="card stat"><span>Calling list</span><b>${P.list.length}</b><div class="small mute">${P.notCalled} not yet called</div></div>
+      <div class="card stat"><span>Calls made</span><b>${P.calls.length}</b><div class="small mute">${P.calls.length?pct(P.connected,P.calls.length)+"% connected":"in this period"}</div></div>
+      <div class="card stat"><span>Leads</span><b style="color:var(--green)">${P.leads.length}</b><div class="small mute">${P.leadsP.length} new in this period</div></div>
+      <div class="card stat"><span>Converted</span><b style="color:var(--brand)">${P.conv}</b><div class="small mute">as of now</div></div>
+      <div class="card stat"><span>Callbacks due</span><b style="color:var(--amber)">${P.due}</b><div class="small mute">today or earlier</div></div></div>
+    <div class="tabs" style="margin-bottom:12px">${[["leads","Leads · "+P.leads.length],["list","Calling list · "+P.list.length],["calls","Calls · "+P.calls.length]].map(([k,l])=>`<button class="tab ${bt===k?"on":""}" data-bet="${k}">${l}</button>`).join("")}</div>`;
+  const openBtn=l=>`<button class="btn sm" data-open="${esc(l.id)}">Open</button>`;
+  if(bt==="leads"){
+    const L=P.leads.slice().sort((a,b)=>(leadAt(b)||0)-(leadAt(a)||0));
+    h+=`<div class="card tw"><table><tr><th>Lead since</th><th>Customer</th><th>Number</th><th>Status</th><th>Last remark</th><th>Follow-up</th><th>Calls</th><th></th></tr>
+      ${L.map(l=>`<tr><td class="small num">${fmt(leadAt(l))}</td><td><b>${esc(l.name)}</b><div class="small mute">${esc(l.city)}${l.source?" · "+esc(l.source):""}</div></td><td class="num"><a class="lnk" href="${telHref(l.phone)}">${esc(l.phone)}</a></td>
+        <td>${pill(l.status)}</td><td class="small" style="max-width:260px">${esc(lastOf(l)?.remark||"")||'<span class="mute">—</span>'}</td><td class="small num">${l.followUp?fmt(l.followUp):"—"}</td><td class="num">${l.logs.length}</td><td>${openBtn(l)}</td></tr>`).join("")
+      ||`<tr><td colspan="8"><div class="empty">${esc(P.e.name.split(" ")[0])} has no leads yet – customers they mark Interested show up here.</div></td></tr>`}</table></div>`;
+  }else if(bt==="list"){
+    const f=view.bef||"all",L=P.list.filter(l=>f==="all"||l.status===f).sort((a,b)=>(a.status==="new"?0:1)-(b.status==="new"?0:1)||(b.lastAt||0)-(a.lastAt||0));
+    const cnt=k=>k==="all"?P.list.length:P.list.filter(l=>l.status===k).length;
+    h+=`<div class="chips">${["all","new",...Object.keys(OUTCOMES)].map(k=>`<button class="chip ${f===k?"on":""}" data-bef="${k}">${k==="all"?"All":STATUS[k].label} · ${cnt(k)}</button>`).join("")}</div>
+      <div class="card tw"><table><tr><th>Customer</th><th>Number</th><th>Status</th><th>Last remark</th><th>Last called</th><th>Calls</th><th></th></tr>
+      ${L.map(l=>`<tr><td><b>${esc(l.name)}</b><div class="small mute">${esc(l.city)}</div></td><td class="num">${esc(l.phone)}</td><td>${pill(l.status)}</td>
+        <td class="small" style="max-width:260px">${esc(lastOf(l)?.remark||"")||'<span class="mute">—</span>'}</td><td class="small num">${l.lastAt||l.logs[0]?fmt(l.lastAt||l.logs[0].at):"—"}</td><td class="num">${l.logs.length}</td><td>${openBtn(l)}</td></tr>`).join("")
+      ||`<tr><td colspan="7"><div class="empty">Nothing here.</div></td></tr>`}</table></div>`;
+  }else{
+    h+=`<div class="card tw"><table><tr><th>Time</th><th>Customer</th><th>Number</th><th>Outcome</th><th>Remark</th><th>Follow-up</th><th></th></tr>
+      ${P.calls.map(g=>`<tr><td class="small num">${fmt(g.at)}</td><td><b>${esc(g.lead.name)}</b><div class="small mute">${esc(g.lead.city)}</div></td><td class="num">${esc(g.lead.phone)}</td><td>${pill(g.outcome)}</td>
+        <td class="small" style="max-width:260px">${esc(g.remark)||'<span class="mute">—</span>'}</td><td class="small num">${g.followUp?fmt(g.followUp):"—"}</td><td>${openBtn(g.lead)}</td></tr>`).join("")
+      ||`<tr><td colspan="7"><div class="empty">No calls in this period – try another date.</div></td></tr>`}</table></div>`;
+  }
+  return h+`</div></div>`;
+}
+function bindByEmp(){
+  document.querySelectorAll("[data-be]").forEach(b=>b.onclick=()=>{view.be=b.dataset.be;view.bef="all";render()});
+  document.querySelectorAll("[data-bet]").forEach(b=>b.onclick=()=>{view.bet=b.dataset.bet;render()});
+  document.querySelectorAll("[data-bef]").forEach(b=>b.onclick=()=>{view.bef=b.dataset.bef;render()});
+  document.querySelectorAll("[data-goemp]").forEach(b=>b.onclick=()=>{view.who=b.dataset.goemp;view.etab="leads";render()});
+  if(view.tab==="byemp")document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false));
 }
 /* ---------- LEADS = interested customers ---------- */
 if(!view.lf)view.lf={who:"all",st:"all",q:""};
@@ -838,11 +928,11 @@ function aAssign(){
   const list=S.leads.filter(l=>(f==="all"||(f==="none"?!l.assignedTo:l.assignedTo===f))&&(!q||(l.name+l.phone+l.city).toLowerCase().includes(q)));
   let h=`<div class="card pad" style="margin-bottom:12px"><div class="row">
    <input id="q" placeholder="Search name, number, city" value="${esc(view.q)}" style="flex:1;min-width:180px">
-   <select id="af"><option value="all">All contacts</option><option value="none">Unassigned</option>${empOpts()}</select>
+   <select id="af"><option value="all">All contacts</option>${isTL()?"":`<option value="none">Unassigned</option>`}${empOpts()}</select>
    <span class="mute small">${view.sel.size} selected</span>
    <select id="toEmp"><option value="">Assign selected to…</option>${asgOpts()}</select>
    <button class="btn pri" id="doAssign" ${view.sel.size?"":"disabled"}>Assign</button>
-   <button class="btn" id="auto">⚖ Auto-distribute unassigned</button></div></div>
+   ${isTL()?"":`<button class="btn" id="auto">⚖ Auto-distribute unassigned</button>`}</div></div>
   <div class="card tw"><table><tr><th style="width:36px"><input type="checkbox" id="all" ${list.length&&list.every(r=>view.sel.has(r.id))?"checked":""}></th><th>Name</th><th>Number</th><th>City</th><th>Assigned to</th><th>Status</th><th>Last remark</th><th></th></tr>`;
   h+=list.map(l=>`<tr><td><input type="checkbox" data-sel="${esc(l.id)}" ${view.sel.has(l.id)?"checked":""}></td><td><b>${esc(l.name)}</b><div class="small mute">${esc(l.id)}</div></td><td class="num">${esc(l.phone)}</td><td>${esc(l.city)}</td>
   <td>${l.assignedTo?esc(empName(l.assignedTo)):'<span class="mute">Unassigned</span>'}</td><td>${pill(l.status)}</td><td class="small mute" style="max-width:220px">${esc(lastOf(l)?.remark||"—")}</td><td><button class="btn sm" data-open="${esc(l.id)}">View</button></td></tr>`).join("")||`<tr><td colspan="8"><div class="empty">No contacts match</div></td></tr>`;
@@ -853,12 +943,12 @@ function aImport(){
    <label class="f">Name</label><input id="nName" style="width:100%" placeholder="Customer name">
    <label class="f">Mobile number</label><input id="nPhone" inputmode="tel" style="width:100%" placeholder="98XXX XXXXX">
    <label class="f">City / note</label><input id="nCity" style="width:100%" placeholder="Optional">
-   <label class="f">Assign to</label><select id="nEmp" style="width:100%"><option value="">Assign later</option>${asgOpts()}</select>
+   <label class="f">Assign to</label><select id="nEmp" style="width:100%">${isTL()?`<option value="">Choose…</option>`:`<option value="">Assign later</option>`}${asgOpts()}</select>
    <div style="margin-top:14px"><button class="btn pri" id="addOne">Add contact</button></div></div>
    <div class="card pad"><h3>Bulk import (paste from Excel)</h3>
    <p class="mute small" style="margin-top:-4px">One contact per line: <b>Name, Number, City</b>. Copy columns straight from Excel / Google Sheets – tabs work too.</p>
    <textarea id="bulk" style="min-height:170px" placeholder="Ramesh Kumar, 9876543210, Delhi&#10;Sunita Shah, 9123456780, Surat"></textarea>
-   <label class="f">Assign imported contacts to</label><select id="bEmp" style="width:100%"><option value="">Leave unassigned</option><option value="__auto">Auto-distribute equally</option>${asgOpts()}</select>
+   <label class="f">Assign imported contacts to</label><select id="bEmp" style="width:100%">${isTL()?"":`<option value="">Leave unassigned</option>`}<option value="__auto">Auto-distribute equally${isTL()?" in my team":""}</option>${asgOpts()}</select>
    <div style="margin-top:14px"><button class="btn pri" id="doBulk">Import contacts</button></div></div></div>`;
 }
 const roleOpts=sel=>ROLES.filter(r=>canManageRole(r)).map(r=>`<option ${r===sel?"selected":""}>${r}</option>`).join("");
@@ -867,12 +957,13 @@ function aTeam(){
    <input id="eName" placeholder="Name (used to log in)" style="flex:2;min-width:150px">
    <input id="ePhone" inputmode="tel" placeholder="Mobile (optional)" style="flex:2;min-width:150px">
    <select id="eRole">${roleOpts("Telecaller Executive")}</select>
+   <select id="eTl" title="Team Lead"><option value="">No Team Lead</option>${teamLeads().map(t=>`<option value="${esc(t.id)}">Team: ${esc(t.name)}</option>`).join("")}</select>
    <input id="ePin" inputmode="numeric" maxlength="4" placeholder="First PIN (4 digits)" style="flex:1;min-width:140px">
    <button class="btn pri" id="addEmp">Add</button></div>
-   <p class="small mute" style="margin:8px 0 0">They log in with this <b>name</b> and PIN (names must be unique), and can change the PIN later. Only Admin, Manager and Team Lead can see the Google Sheet and the full team.</p></div>
-  <div class="card tw"><table><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Role</th><th>Contacts</th><th>Login</th><th></th></tr>`;
+   <p class="small mute" style="margin:8px 0 0">They log in with this <b>name</b> and PIN (names must be unique), and can change the PIN later. Pick a <b>Team Lead</b> for telecallers – each Team Lead sees and assigns only their own team. Admin and Manager see everyone.</p></div>
+  <div class="card tw"><table><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Role</th><th>Team Lead</th><th>Contacts</th><th>Login</th><th></th></tr>`;
   h+=S.employees.map(e=>{const m=S.leads.filter(l=>l.assignedTo===e.id),can=canManageRole(e.role)||(ME&&e.id===ME.id),self=ME&&e.id===ME.id;
-    return `<tr><td class="mute">${esc(e.id)}</td><td><b>${esc(e.name)}</b>${self?' <span class="small mute">(you)</span>':""}</td><td class="num">${esc(e.phone)||'<span class="mute">—</span>'}</td><td>${esc(e.role)}</td><td class="num">${m.length}</td>
+    return `<tr><td class="mute">${esc(e.id)}</td><td><b>${esc(e.name)}</b>${self?' <span class="small mute">(you)</span>':""}</td><td class="num">${esc(e.phone)||'<span class="mute">—</span>'}</td><td>${esc(e.role)}</td><td>${e.role==="Team Lead"?'<span class="small mute">leads a team</span>':e.tl?esc(empName(e.tl)):'<span class="mute">—</span>'}</td><td class="num">${m.length}</td>
     <td class="small">${e.pinSet?"✓ PIN set":'<span style="color:var(--amber)">No PIN</span>'}</td>
     <td style="text-align:right;white-space:nowrap">${can?`<button class="btn sm" data-edit="${esc(e.id)}">Edit</button> <button class="btn sm" data-pin="${esc(e.id)}">Reset PIN</button>${self?"":` <button class="btn sm" data-del="${esc(e.id)}">Remove</button>`}`:'<span class="small mute">Admin only</span>'}
     <button class="btn sm" data-as="${esc(e.id)}">View list</button></td></tr>`}).join("");
@@ -903,20 +994,21 @@ function bindAdmin(){
   on("#all","onchange",e=>{document.querySelectorAll("[data-sel]").forEach(c=>e.target.checked?view.sel.add(c.dataset.sel):view.sel.delete(c.dataset.sel));render()});
   on("#doAssign","onclick",async()=>{const to=$("#toEmp").value;if(!to)return toast("Choose a person first");const ids=[...view.sel];
     if(await write(api=>api.assign(ids,to),`${ids.length} contact(s) assigned to ${empName(to)}`)){view.sel.clear();render()}});
-  on("#auto","onclick",async()=>{const un=S.leads.filter(l=>!l.assignedTo).map(l=>l.id);if(!un.length)return toast("No unassigned leads");
+  on("#auto","onclick",async()=>{const un=S.leads.filter(l=>!l.assignedTo).map(l=>l.id);if(!un.length)return toast("No unassigned contacts");
     const plan=distributePlan(un);await write(async api=>{for(const [eid,ids] of Object.entries(plan))await api.assign(ids,eid)},`${un.length} contacts distributed`)});
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false));
   on("#addOne","onclick",async()=>{const n=$("#nName").value.trim(),p=$("#nPhone").value.trim();if(!n||!p)return toast("Name and number are required");
-    await write(api=>api.addLeads([{name:n,phone:p,city:$("#nCity").value.trim(),assignedTo:$("#nEmp").value}]),"Lead added")});
+    if(isTL()&&!$("#nEmp").value)return toast("Choose who in your team should call this contact");
+    await write(api=>api.addLeads([{name:n,phone:p,city:$("#nCity").value.trim(),assignedTo:$("#nEmp").value}]),"Contact added")});
   on("#doBulk","onclick",async()=>{const lines=$("#bulk").value.split("\n").map(s=>s.trim()).filter(Boolean);const to=$("#bEmp").value;const list=[];
     lines.forEach(ln=>{const p=ln.split(/\t|,/).map(s=>s.trim());if(p.length<2||p[1].replace(/\D/g,"").length<6)return;list.push({name:p[0],phone:p[1],city:p[2]||""})});
     if(!list.length)return toast("No valid lines – use: Name, Number, City");
     if(to==="__auto"){const plan=distributePlan(list.map((_,i)=>i));Object.entries(plan).forEach(([eid,idx])=>idx.forEach(i=>list[i].assignedTo=eid))}else list.forEach(x=>x.assignedTo=to);
-    if(await write(api=>api.addLeads(list),`${list.length} lead(s) imported`+(lines.length-list.length?`, ${lines.length-list.length} skipped`:""))){view.tab="assign";render()}});
-  on("#addEmp","onclick",async()=>{const n=$("#eName").value.trim(),ph=$("#ePhone").value.trim(),pin=$("#ePin").value.trim(),role=$("#eRole").value;
+    if(await write(api=>api.addLeads(list),`${list.length} contact(s) imported`+(lines.length-list.length?`, ${lines.length-list.length} skipped`:""))){view.tab="assign";render()}});
+  on("#addEmp","onclick",async()=>{const n=$("#eName").value.trim(),ph=$("#ePhone").value.trim(),pin=$("#ePin").value.trim(),role=$("#eRole").value,tl=$("#eTl").value;
     if(n.length<2)return toast("Enter a name – it's used to log in");if(ph&&ph.replace(/\D/g,"").length<10)return toast("Mobile must be 10 digits (or leave it empty)");if(!validPin(pin))return toast("First PIN must be 4 digits");
     if(S.employees.some(e=>normName(e.name)===normName(n)))return toast("Someone is already called "+n+" – add a surname or initial");
-    await write(api=>api.addEmp({name:n,phone:ph,role,pin}),`${n} added as ${role}`)});
+    await write(api=>api.addEmp({name:n,phone:ph,role,pin,tl:role==="Team Lead"?"":tl}),`${n} added as ${role}`+(tl&&role!=="Team Lead"?` in ${empName(tl)}'s team`:""))});
   document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEditEmp(b.dataset.edit));
   document.querySelectorAll("[data-pin]").forEach(b=>b.onclick=()=>openResetPin(b.dataset.pin));
   document.querySelectorAll("[data-del]").forEach(b=>{let armed=false;b.onclick=async()=>{if(!armed){armed=true;b.textContent="Confirm remove?";b.style.color="var(--red)";setTimeout(()=>{armed=false;b.textContent="Remove";b.style.color=""},3000);return}
@@ -942,11 +1034,13 @@ function formModal(title,body,okLabel,onOk){
 function openEditEmp(id){const e=emp(id);if(!e)return;const self=ME&&e.id===ME.id;
   formModal("Edit "+esc(e.name),`<label class="f">Name (used to log in)</label><input id="fN" style="width:100%" value="${esc(e.name)}">
    <label class="f">Mobile (optional)</label><input id="fP" inputmode="tel" style="width:100%" value="${esc(e.phone)}">
-   <label class="f">Role</label><select id="fR" style="width:100%" ${self?"disabled":""}>${self?`<option>${esc(e.role)}</option>`:roleOpts(e.role)}</select>`,"Save",async()=>{
-    const name=$("#fN").value.trim(),phone=$("#fP").value.trim(),role=self?e.role:$("#fR").value;
+   <label class="f">Role</label><select id="fR" style="width:100%" ${self?"disabled":""}>${self?`<option>${esc(e.role)}</option>`:roleOpts(e.role)}</select>
+   <label class="f">Team Lead</label><select id="fT" style="width:100%"><option value="">No Team Lead</option>${teamLeads().filter(t=>t.id!==e.id).map(t=>`<option value="${esc(t.id)}" ${e.tl===t.id?"selected":""}>${esc(t.name)}</option>`).join("")}</select>
+   <div class="small mute" style="margin-top:4px">A Team Lead sees and assigns only their own team. Not used for Team Leads, Managers and Admins.</div>`,"Save",async()=>{
+    const name=$("#fN").value.trim(),phone=$("#fP").value.trim(),role=self?e.role:$("#fR").value,tl=["Telecaller Executive","Sales Manager"].includes(role)?$("#fT").value:"";
     if(name.length<2)return "Enter a name";if(phone&&phone.replace(/\D/g,"").length<10)return "Mobile must be 10 digits (or leave it empty)";
     if(S.employees.some(x=>x.id!==id&&normName(x.name)===normName(name)))return "Someone else already has this name";
-    return await write(api=>api.updateEmp({id,name,phone,role}),"Saved")?true:"Not saved – see the message at the bottom"})}
+    return await write(api=>api.updateEmp({id,name,phone,role,tl}),"Saved")?true:"Not saved – see the message at the bottom"})}
 function openResetPin(id){const e=emp(id);if(!e)return;
   formModal("Reset PIN – "+esc(e.name),`<p class="small mute" style="margin-top:0">Set a new 4-digit PIN and tell ${esc(e.name.split(" ")[0])}. Their old PIN stops working, they're logged out of other devices, and the new PIN shows in the sheet's PIN column until they log in.</p>
    <label class="f">New PIN (4 digits)</label><input id="fPin" inputmode="numeric" maxlength="4" style="width:100%">`,"Set PIN",async()=>{
