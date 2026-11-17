@@ -709,7 +709,7 @@ function aDash(){
   h+=`<div class="stats">
     ${stat("Calls made",m.logs.length,`${m.people.filter(p=>p.calls).length} telecaller${m.people.filter(p=>p.calls).length===1?"":"s"} active`)}
     ${stat("Connected",m.connected,`${pct(m.connected,m.logs.length)}% of calls`,"Calls that weren't 'No answer / Busy' or 'Wrong / Switched off'")}
-    ${stat("Leads",m.leads.length,`interested customers · ${m.byOutcome.int} interested call${m.byOutcome.int===1?"":"s"}`,"Customers marked Interested (or Converted) on a call – counted on the day they first said they're interested")}
+    ${stat("Leads",m.leads.length,`customer${m.leads.length===1?"":"s"} who said they're interested`,"Each customer is counted once – on the day they first said they're interested (marked Interested or Converted)")}
     ${stat("Converted",m.byOutcome.conv,`${pct(m.byOutcome.conv,m.connected)}% of connected`)}
     ${stat("New contacts",m.newLeads.length,`added to the calling list · ${m.website} from website`)}
     ${stat("Callbacks due",m.due,`${m.unassigned} contact${m.unassigned===1?"":"s"} unassigned`,"Callbacks scheduled for today or earlier (any period)")}
@@ -724,7 +724,7 @@ function aDash(){
   const maxC=Math.max(1,...m.people.map(p=>p.calls));
   h+=m.people.map(p=>`<tr><td><b>${esc(p.e.name)}</b><div class="small mute">${esc(p.e.role)}</div></td><td class="num"><b>${p.calls}</b></td>
     <td><div class="bar" data-tip="${esc(p.e.name)}: ${p.calls} calls"><i style="width:${p.calls/maxC*100}%"></i></div></td>
-    <td class="num">${p.connected}${p.calls?` <span class="small mute">${pct(p.connected,p.calls)}%</span>`:""}</td><td class="num" data-tip="${p.int} interested call${p.int===1?"":"s"}">${p.gen}</td><td class="num">${p.conv}</td>
+    <td class="num">${p.connected}${p.calls?` <span class="small mute">${pct(p.connected,p.calls)}%</span>`:""}</td><td class="num">${p.gen}</td><td class="num">${p.conv}</td>
     <td class="num">${p.connected?pct(p.conv,p.connected)+"%":"—"}</td><td class="num">${p.assigned}</td><td class="num">${p.untouched}</td><td class="num">${p.due?`<b style="color:var(--amber)">${p.due}</b>`:0}</td></tr>`).join("")||`<tr><td colspan="10"><div class="empty">No telecallers yet – add them under Employees</div></td></tr>`;
   h+=`</table></div></div>`;
   const stage=[["New – not yet called",L.filter(l=>l.status==="new").length],["Being followed up",L.filter(l=>["cb","na","wn"].includes(l.status)).length],["Lead – interested",L.filter(l=>l.status==="int").length],["Converted",L.filter(l=>l.status==="conv").length],["Not interested",L.filter(l=>l.status==="ni").length]];
