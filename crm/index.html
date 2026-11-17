@@ -76,6 +76,14 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 #tip{position:fixed;display:none;background:var(--ink);color:#fff;font-size:12.5px;padding:6px 9px;border-radius:7px;pointer-events:none;z-index:50;white-space:nowrap}
 .reports{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}.rep-h{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.rep h3{margin:0}
 .stat .small{margin-top:3px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}
+@media(max-width:560px){.g2,.g3{grid-template-columns:1fr}}
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}.seg button{flex:1;border:0;background:none;padding:8px 6px;font:inherit;font-size:13.5px;cursor:pointer;border-left:1px solid var(--line)}
+.seg button:first-child{border-left:0}.seg button.on{background:var(--brand);color:#fff;font-weight:600}
+.mform .f{margin-top:12px}.mtable td{vertical-align:middle}.mrow:hover{background:#fafbff}
+.modal:has(.mform){max-width:640px}
+.mcards{display:none}.mcard{padding:14px;margin-bottom:10px}.mc-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.mc-tags{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px}
+@media(max-width:600px){.mcards{display:block;padding-bottom:70px}.card.tw:has(.mtable){display:none}#mAdd{position:fixed;right:16px;bottom:18px;z-index:15;border-radius:999px;padding:14px 20px;box-shadow:0 10px 24px -8px rgba(36,83,214,.6)}.mtable{font-size:13px}}
 .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .empty{padding:36px;text-align:center;color:var(--mute)}
 .modal-bg{position:fixed;inset:0;background:rgba(17,24,39,.45);display:none;align-items:flex-end;justify-content:center;z-index:20}
@@ -135,7 +143,7 @@ const SHEET_URL_DEFAULT="https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/edi
 const SRV="Google Sheets";
 // Apps Script Web app URL for this team's sheet. Logins are checked by the Apps Script; no secrets live in this file.
 const BUILTIN_API="https://script.google.com/macros/s/AKfycbz9UyLJzPbROL9kSAAmw0R5uG1qQorrEOr24IMOioQVXcIuIBjir9L90cCasmMoGxGn/exec";
-const ROLES=["Admin","Manager","Team Lead","Telecaller Executive"];
+const ROLES=["Admin","Manager","Team Lead","Sales Manager","Telecaller Executive"];
 const OUTCOMES={
   int:{label:"Interested",cls:"s-int"},
   cb:{label:"Call back later",cls:"s-cb"},
@@ -206,7 +214,7 @@ const rows=p=>Array.isArray(p.values)?p.values:[];
 const Live={
   async load(){
     const [e,l,c]=await Promise.all([call("get_values",{range:"Employees!A2:G"}),call("get_values",{range:"Leads!A2:L"}),call("get_values",{range:"CallLogs!A2:J"})]);
-    S=build(rows(e),rows(l),rows(c));lastSync=Date.now();SHEET_URL=SHEET_URL_DEFAULT;
+    S=build(rows(e),rows(l),rows(c));S.meetings=[];S.meetErr="Field work is available on the website version of the CRM.";lastSync=Date.now();SHEET_URL=SHEET_URL_DEFAULT;
   },
   async logCall(leadId,out,remark,fu,by){
     await this.load();const l=S.leads.find(x=>x.id===leadId);if(!l)throw new Error("Lead not found in sheet – it may have been deleted");
@@ -234,7 +242,9 @@ const Live={
     await this.load();const e=S.allEmps.find(x=>x.id===id);if(!e)return;
     await call("update_values",{range:`Employees!D${e.row}`,values:[["No"]]});
     await this.assign(S.leads.filter(l=>l.assignedTo===id).map(l=>l.id),"");
-  }
+  },
+  async saveMeeting(){throw new Error("Open the website version of the CRM to add meetings")},
+  async deleteMeeting(){throw new Error("Open the website version of the CRM to delete meetings")}
 };
 
 /* ================= BACKEND 2: Apps Script (website) with personal logins ================= */
@@ -253,7 +263,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu){await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu)})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -262,7 +272,9 @@ const Script={
   async updateEmp(o){await this.req("updateEmp",{...o,phone:o.phone?normPhone(o.phone):""})},
   async resetPin(id,pin){await this.req("resetPin",{id,pin})},
   async changePin(oldPin,newPin){await this.req("changePin",{oldPin,newPin})},
-  async removeEmp(id){await this.req("removeEmp",{id})}
+  async removeEmp(id){await this.req("removeEmp",{id})},
+  async saveMeeting(m){await this.req("saveMeeting",{m})},
+  async deleteMeeting(id){await this.req("deleteMeeting",{id})}
 };
 let LIVE=Live;
 
@@ -279,7 +291,10 @@ function demoSeed(){
 }
 let D=demoSeed();
 const Demo={
-  async load(){S=build(D.E,D.L,D.C)},
+  async load(){S=build(D.E,D.L,D.C);S.meetings=buildMeetings(D.M||[])},
+  async saveMeeting(m){D.M=D.M||[];const row=[m.id||"M"+(1001+D.M.length),m.at,m.sm,m.smId,m.type,m.ent,m.person,m.entity,m.willing,m.existing,m.phone,m.purpose,m.outcome,m.remarks,m.tieup,m.tieupWith,m.passback,m.feedback,toSheetTime(Date.now()),ME?ME.name:"Demo"];
+    const i=D.M.findIndex(r=>r[0]===m.id);if(i>=0)D.M[i]=row;else D.M.push(row)},
+  async deleteMeeting(id){D.M=(D.M||[]).filter(r=>r[0]!==id)},
   async logCall(leadId,out,remark,fu,by){const r=D.L.find(x=>x[0]===leadId);const now=toSheetTime(Date.now()),lb=OUTCOMES[out].label,f=toSheetTime(fu);
     D.C.push(["C"+Date.now(),now,leadId,r[1],r[2],by,"",lb,remark,f]);r[5]=lb;r[6]=f;r[7]=remark;r[8]=now},
   async assign(ids,to){D.L.forEach(r=>{if(ids.includes(r[0]))r[4]=to||""})},
@@ -390,13 +405,13 @@ function render(){
 
 /* ---------- ADMIN / MANAGER / TEAM LEAD ---------- */
 function renderAdmin(){
-  const tabs=[["dash","Dashboard"],["assign","Leads & Assign"],["import","Add / Import Leads"],...(isMgr()?[["team","Employees"]]:[]),["logs","Call Logs"],...(isMgr()?[["reports","⬇ Reports"]]:[])];
+  const tabs=[["dash","Dashboard"],["assign","Leads & Assign"],["import","Add / Import Leads"],...(isMgr()?[["team","Employees"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(isMgr()?[["reports","⬇ Reports"]]:[])];
   if(!tabs.some(t=>t[0]===view.tab))view.tab="dash";
   let h=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${view.tab===k?"on":""}" data-tab="${k}">${l}</button>`).join("")}</div>`;
-  h+=({dash:aDash,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports})[view.tab]();
+  h+=({dash:aDash,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings})[view.tab]();
   $("#app").innerHTML=h;
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{view.tab=b.dataset.tab;render()});
-  bindAdmin();bindRange();bindReports();bindTips();
+  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();
 }
 function allLogs(){return S.leads.flatMap(l=>l.logs.map(g=>({...g,lead:l}))).sort((a,b)=>(b.at||0)-(a.at||0))}
 const callers=()=>S.employees.filter(e=>e.role==="Telecaller Executive"||e.role==="Team Lead"||S.leads.some(l=>l.assignedTo===e.id));
@@ -414,7 +429,7 @@ function rangeBounds(){
     case"7d":return[t0-6*DAY,t0+DAY-1];
     case"30d":return[t0-29*DAY,t0+DAY-1];
     case"month":{const d=new Date();return[new Date(d.getFullYear(),d.getMonth(),1).getTime(),t0+DAY-1]}
-    case"all":{const ts=S.leads.flatMap(l=>[l.created,...l.logs.map(g=>g.at)]).filter(Boolean);return[ts.length?sod(Math.min(...ts)):t0,t0+DAY-1]}
+    case"all":{const ts=[...S.leads.flatMap(l=>[l.created,...l.logs.map(g=>g.at)]),...(S.meetings||[]).map(m=>m.at)].filter(Boolean);return[ts.length?sod(Math.min(...ts)):t0,t0+DAY-1]}
     default:{const a=parseT(r.from+" 00:00")||t0,b=parseT(r.to+" 00:00")||t0;return[Math.min(a,b),Math.max(a,b)+DAY-1]}
   }
 }
@@ -568,11 +583,12 @@ function rSummary(){
     ["New leads",m.newLeads.length],["…from website",m.website],["Callbacks due (as of now)",m.due],["Unassigned leads (as of now)",m.unassigned],["Total leads (as of now)",S.leads.length]];
 }
 const REPORTS=[
-  {k:"full",title:"Full report",desc:"One Excel workbook with a summary sheet plus telecaller performance, call log, leads, website enquiries and callbacks.",xlsxOnly:true},
+  {k:"full",title:"Full report",desc:"One Excel workbook with a summary sheet plus telecaller performance, call log, leads, website enquiries, callbacks and field work.",xlsxOnly:true},
   {k:"calls",title:"Call log",desc:"Every call in the period with telecaller, outcome, remark and follow-up.",rows:rCallLog,filters:true},
   {k:"perf",title:"Telecaller performance",desc:"Calls, connect rate, interested, converted and pending work for each telecaller.",rows:rPerformance},
   {k:"leads",title:"Leads",desc:"Lead list with assigned telecaller, status, last remark and source.",rows:rLeads,leadsToggle:true},
   {k:"enq",title:"Website enquiries",desc:"Callback requests from the home page received in the period, and what happened to them.",rows:rEnquiries},
+  {k:"meet",title:"Field work",desc:"Meetings by SMs in the period with all form fields: entity, contact, willingness, outcome, tie-up, pass back and feedback.",rows:()=>rMeetings()},
   {k:"cb",title:"Pending callbacks",desc:"All scheduled callbacks (any date), overdue ones marked.",rows:rCallbacks},
 ];
 if(!view.repEmp){view.repEmp="all";view.repOut="all";view.repLeadsAll=false}
@@ -601,7 +617,7 @@ async function download(k,format){
     const wb=XLSX.utils.book_new();
     if(k==="full"){
       const sv=view.repLeadsAll;view.repLeadsAll=true;const se=view.repEmp,so=view.repOut;view.repEmp="all";view.repOut="all";
-      [["Summary",rSummary()],["Telecaller performance",rPerformance()],["Call log",rCallLog()],["Leads",rLeads()],["Website enquiries",rEnquiries()],["Pending callbacks",rCallbacks()]]
+      [["Summary",rSummary()],["Telecaller performance",rPerformance()],["Call log",rCallLog()],["Leads",rLeads()],["Website enquiries",rEnquiries()],["Pending callbacks",rCallbacks()],["Field work",rMeetings()]]
         .forEach(([n,rows])=>XLSX.utils.book_append_sheet(wb,sheetFrom(rows),n));
       view.repLeadsAll=sv;view.repEmp=se;view.repOut=so;
     }else XLSX.utils.book_append_sheet(wb,sheetFrom(r.rows()),r.title.slice(0,31));
@@ -614,6 +630,133 @@ function bindReports(){
   if(e)e.onchange=()=>{view.repEmp=e.value;render()};
   if(o)o.onchange=()=>{view.repOut=o.value;render()};
   if(l)l.onchange=()=>{view.repLeadsAll=l.checked;render()};
+}
+
+/* ================= FIELD WORK ("Field Work" tab of the CRM sheet) ================= */
+// Same fields as the team's Google Form: Timestamp · SM Name · Meeting Type · Meeting Entity ·
+// Name of the CP/Developer/Customer/Connector · Name of The Entity · Willing to work with SN ·
+// Existing % received in market if any · Contact no of the Entity · Purpose of Meeting · Meeting Outcome ·
+// Remarks · Any Tieup currently? · If Yes, Tie up with which company · Current pass back received · Feedback
+const M_TYPES=["Physical","Call"];
+const M_ENTITY=["Customer","Banker","Connector","Developer","CP","Other"];
+const M_YESNO=["Yes","No","Maybe"];
+const M_PURPOSE=["For lead","Tie-up","Login","Disbursement","Follow-up","Payout discussion","Other"];
+const FW_LABEL={at:"Timestamp",sm:"SM Name",type:"Meeting Type",ent:"Meeting Entity",person:"Name of the CP/Developer/Customer/Connector",entity:"Name of The Entity",
+  willing:"Willing to work with SN",existing:"Existing % received in market if any",phone:"Contact no of the Entity",purpose:"Purpose of Meeting",outcome:"Meeting Outcome",
+  remarks:"Remarks",tieup:"Any Tieup currently?",tieupWith:"If Yes, Tie up with which company",passback:"Current pass back received",feedback:"Feedback"};
+function buildMeetings(rows){
+  const g=(r,i)=>String(r[i]||"").trim();
+  return (rows||[]).map(r=>({id:g(r,0),at:parseT(r[1]),sm:g(r,2),smId:g(r,3),type:g(r,4),ent:g(r,5),person:g(r,6),entity:g(r,7),willing:g(r,8),existing:g(r,9),
+    phone:g(r,10),purpose:g(r,11),outcome:g(r,12),remarks:g(r,13),tieup:g(r,14),tieupWith:g(r,15),passback:g(r,16),feedback:g(r,17),updated:parseT(r[18]),updatedBy:g(r,19)}))
+    .filter(m=>m.id||m.person||m.entity).sort((a,b)=>(b.at||0)-(a.at||0));
+}
+const canEditMeeting=m=>!ME||isLead()||m.smId===ME.id||normName(m.sm)===normName(ME.name);
+if(!view.mq){view.mq="";view.mSm="all";view.mEnt="all";view.mType="all"}
+function meetingsInView(){
+  const q=view.mq.toLowerCase();
+  return (S.meetings||[]).filter(m=>inRange(m.at)&&(view.mSm==="all"||m.sm===view.mSm)&&(view.mEnt==="all"||m.ent===view.mEnt)&&(view.mType==="all"||m.type===view.mType)
+    &&(!q||[m.person,m.entity,m.phone,m.purpose,m.outcome,m.remarks,m.feedback,m.sm,m.tieupWith].join(" ").toLowerCase().includes(q)));
+}
+const entCls=w=>({Customer:"s-int",Banker:"s-conv",Connector:"s-cb",Developer:"s-na",CP:"s-wn"})[w]||"s-new";
+const yesCls=v=>v==="Yes"?"s-int":v==="No"?"s-ni":v?"s-cb":"";
+function aMeetings(){
+  const list=meetingsInView(),all=S.meetings||[];
+  const sms=[...new Set(all.map(m=>m.sm).filter(Boolean))].sort();
+  const c=f=>list.filter(f).length;
+  let h=rangeBar();
+  if(S.meetErr)h+=`<div class="banner" style="padding:0;margin:0 0 12px"><div>⚠ Couldn't load field work: ${esc(S.meetErr)}</div></div>`;
+  h+=`<div class="stats">
+    <div class="card stat"><span>Meetings</span><b>${list.length}</b><div class="small mute">${c(m=>m.type==="Physical")} physical · ${c(m=>m.type==="Call")} call</div></div>
+    <div class="card stat"><span>Willing to work with SN</span><b style="color:var(--green)">${c(m=>m.willing==="Yes")}</b><div class="small mute">${c(m=>m.willing==="No")} said no</div></div>
+    <div class="card stat"><span>Have a tie-up already</span><b>${c(m=>m.tieup==="Yes")}</b></div>
+    <div class="card stat"><span>Connectors & CPs</span><b>${c(m=>m.ent==="Connector"||m.ent==="CP")}</b></div>
+    <div class="card stat"><span>Developers</span><b>${c(m=>m.ent==="Developer")}</b></div>
+    <div class="card stat"><span>Bankers & customers</span><b>${c(m=>m.ent==="Banker"||m.ent==="Customer")}</b></div></div>`;
+  h+=`<div class="card pad" style="margin-bottom:12px"><div class="row">
+    <input id="mq" placeholder="Search name, entity, number, remarks" value="${esc(view.mq)}" style="flex:1;min-width:200px">
+    ${isLead()?`<select id="mSm"><option value="all">All SMs</option>${sms.map(s=>`<option ${view.mSm===s?"selected":""}>${esc(s)}</option>`).join("")}</select>`:""}
+    <select id="mEnt"><option value="all">Meeting entity: all</option>${M_ENTITY.map(s=>`<option ${view.mEnt===s?"selected":""}>${esc(s)}</option>`).join("")}</select>
+    <select id="mType"><option value="all">Physical & call</option>${M_TYPES.map(s=>`<option ${view.mType===s?"selected":""}>${esc(s)}</option>`).join("")}</select>
+    <button class="btn pri" id="mAdd">＋ Add field work</button></div></div>`;
+  h+=`<div class="card tw"><table class="mtable"><tr><th>Timestamp</th>${isLead()?"<th>SM Name</th>":""}<th>Meeting Entity</th><th>Name of CP / Developer / Customer / Connector</th><th>Contact no</th><th>Willing</th><th>Purpose</th><th>Meeting Outcome</th><th>Remarks / Feedback</th><th></th></tr>`;
+  h+=list.map(m=>`<tr class="mrow"><td class="num small" style="white-space:nowrap">${m.at?fmt(m.at):"—"}<div class="mute">${esc(m.type)}</div></td>
+    ${isLead()?`<td>${esc(m.sm)}</td>`:""}<td>${m.ent?`<span class="pill ${entCls(m.ent)}">${esc(m.ent)}</span>`:"—"}</td>
+    <td><b>${esc(m.person)||"—"}</b>${m.entity?`<div class="small mute">${esc(m.entity)}</div>`:""}${m.tieup==="Yes"?`<div class="small" style="color:var(--amber)">Tie-up${m.tieupWith?": "+esc(m.tieupWith):""}${m.passback?" · "+esc(m.passback):""}</div>`:""}</td>
+    <td class="num" style="white-space:nowrap">${m.phone?`<a href="${telHref(m.phone.split("/")[0])}" class="lnk">${esc(m.phone)}</a>`:"—"}</td>
+    <td>${m.willing?`<span class="pill ${yesCls(m.willing)}">${esc(m.willing)}</span>`:"—"}</td><td>${esc(m.purpose)||"—"}</td><td>${esc(m.outcome)||"—"}</td>
+    <td class="small" style="max-width:280px">${[m.remarks,m.feedback].filter(Boolean).map(esc).join("<br>")||'<span class="mute">—</span>'}</td>
+    <td style="white-space:nowrap">${canEditMeeting(m)?`<button class="btn sm" data-medit="${esc(m.id)}">✎ Edit</button>`:""}</td></tr>`).join("")||`<tr><td colspan="10"><div class="empty">No field work in this period${all.length?" – try All time or clear the filters":" yet – add your first meeting"}.</div></td></tr>`;
+  h+=`</table></div>`;
+  h+=`<div class="mcards">${list.map(m=>`<div class="card mcard"><div class="mc-top"><div><b>${esc(m.person)||esc(m.entity)||"—"}</b>${m.person&&m.entity?`<div class="small mute">${esc(m.entity)}</div>`:""}</div>
+      ${canEditMeeting(m)?`<button class="btn sm" data-medit="${esc(m.id)}">✎ Edit</button>`:""}</div>
+    <div class="mc-tags">${m.ent?`<span class="pill ${entCls(m.ent)}">${esc(m.ent)}</span>`:""}${m.type?`<span class="pill s-new">${esc(m.type)}</span>`:""}${m.willing?`<span class="pill ${yesCls(m.willing)}">Willing: ${esc(m.willing)}</span>`:""}</div>
+    <div class="small mute">${m.at?fmt(m.at):""}${isLead()&&m.sm?" · "+esc(m.sm):""}</div>
+    ${m.phone?`<a class="btn call sm" style="margin-top:8px" href="${telHref(m.phone.split("/")[0])}">📞 ${esc(m.phone)}</a>`:""}
+    ${m.purpose||m.outcome?`<div class="small" style="margin-top:8px">${m.purpose?`<b>Purpose:</b> ${esc(m.purpose)}`:""}${m.purpose&&m.outcome?" · ":""}${m.outcome?`<b>Outcome:</b> ${esc(m.outcome)}`:""}</div>`:""}
+    ${m.tieup==="Yes"?`<div class="small" style="color:var(--amber);margin-top:4px">Tie-up${m.tieupWith?": "+esc(m.tieupWith):""}${m.passback?" · "+esc(m.passback):""}</div>`:""}
+    ${m.remarks||m.feedback?`<div class="small" style="margin-top:6px">${[m.remarks,m.feedback].filter(Boolean).map(esc).join("<br>")}</div>`:""}</div>`).join("")||`<div class="card empty">No field work in this period${all.length?" – try All time or clear the filters":" yet – add your first meeting"}.</div>`}</div>`;
+  return h;
+}
+function bindMeetings(){
+  const q=$("#mq");if(q)q.oninput=e=>{view.mq=e.target.value;const p=e.target.selectionStart;render();const n=$("#mq");n.focus();n.setSelectionRange(p,p)};
+  [["#mSm","mSm"],["#mEnt","mEnt"],["#mType","mType"]].forEach(([s,k])=>{const el=$(s);if(el)el.onchange=()=>{view[k]=el.value;render()}});
+  const add=$("#mAdd");if(add)add.onclick=()=>openMeeting(null);
+  document.querySelectorAll("[data-medit]").forEach(b=>b.onclick=e=>{e.stopPropagation();openMeeting(b.dataset.medit)});
+}
+function openMeeting(id){
+  const m=id?(S.meetings||[]).find(x=>x.id===id):null;
+  const v=k=>esc(m?m[k]:"");
+  const dt=m&&m.at?new Date(m.at):new Date();
+  const dtv=`${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+  const sel=(id,opts,cur,blank)=>`<select id="${id}" style="width:100%">${blank?`<option value="">${blank}</option>`:""}${opts.map(o=>`<option ${o===cur?"selected":""}>${esc(o)}</option>`).join("")}${cur&&!opts.includes(cur)?`<option selected>${esc(cur)}</option>`:""}</select>`;
+  const seg=(k,opts,cur)=>`<div class="seg" data-seg="${k}">${opts.map(t=>`<button type="button" class="${cur===t?"on":""}">${t}</button>`).join("")}</div>`;
+  const canPickSm=isLead(),curSm=m?m.sm:(ME?ME.name:"");
+  const L=FW_LABEL;
+  $("#modal").innerHTML=`<div class="mh"><div><div style="font-weight:700">${m?"Edit field work":"Add field work"}</div>${m?`<div class="small mute">${esc(m.id)} · last updated ${m.updated?fmt(m.updated):"—"}${m.updatedBy?" by "+esc(m.updatedBy):""}</div>`:""}</div><button class="x" id="mx">×</button></div>
+  <form id="mfm"><div class="mb mform">
+    <div class="g2"><div><label class="f">${L.at}</label><input type="datetime-local" id="m_at" value="${dtv}" style="width:100%"></div>
+      <div><label class="f">${L.sm}</label>${canPickSm?sel("m_sm",S.employees.map(e=>e.name),curSm):`<input value="${esc(curSm)}" disabled style="width:100%">`}</div></div>
+    <div class="g2"><div><label class="f">${L.type}</label>${seg("m_type",M_TYPES,m?m.type:"Physical")}</div>
+      <div><label class="f">${L.ent}</label>${sel("m_ent",M_ENTITY,m?m.ent:"",m?"":"Choose…")}</div></div>
+    <label class="f">${L.person} *</label><input id="m_person" value="${v("person")}" placeholder="Person you met, e.g. Rohan" style="width:100%" maxlength="120">
+    <div class="g2"><div><label class="f">${L.entity}</label><input id="m_entity" value="${v("entity")}" placeholder="e.g. Vaishnavi Paradise" style="width:100%" maxlength="120"></div>
+      <div><label class="f">${L.phone}</label><input id="m_phone" inputmode="tel" value="${v("phone")}" placeholder="98XXX XXXXX" style="width:100%" maxlength="40"></div></div>
+    <div class="g2"><div><label class="f">${L.willing}</label>${seg("m_willing",M_YESNO,m?m.willing:"")}</div>
+      <div><label class="f">${L.existing}</label><input id="m_exist" value="${v("existing")}" placeholder="e.g. 60% or Not applicable" style="width:100%" maxlength="60"></div></div>
+    <div class="g2"><div><label class="f">${L.purpose}</label><input id="m_purpose" value="${v("purpose")}" list="dl_purpose" style="width:100%" maxlength="100"></div>
+      <div><label class="f">${L.outcome}</label><input id="m_outcome" value="${v("outcome")}" placeholder="e.g. 1-3 files expected" style="width:100%" maxlength="120"></div></div>
+    <label class="f">${L.remarks}</label><input id="m_remarks" value="${v("remarks")}" placeholder="e.g. 1 CR business" style="width:100%" maxlength="300">
+    <div class="g2"><div><label class="f">${L.tieup}</label>${seg("m_tieup",["Yes","No"],m?m.tieup:"")}</div>
+      <div id="tuw"><label class="f">${L.tieupWith}</label><input id="m_tuw" value="${v("tieupWith")}" style="width:100%" maxlength="100"></div></div>
+    <label class="f">${L.passback}</label><input id="m_pass" value="${v("passback")}" placeholder="e.g. 50% payout ratio" style="width:100%" maxlength="100">
+    <label class="f">${L.feedback}</label><textarea id="m_fb" maxlength="1000" placeholder="What happened, next steps…">${v("feedback")}</textarea>
+    <datalist id="dl_purpose">${M_PURPOSE.map(p=>`<option>${p}</option>`).join("")}</datalist>
+    <div id="mErr" class="small" style="color:var(--red);margin-top:8px"></div>
+  </div><div class="mf">${m&&isMgr()?`<button type="button" class="btn" id="mDel" style="margin-right:auto;color:var(--red)">Delete</button>`:""}<button type="button" class="btn" id="mc">Cancel</button><button class="btn pri" id="mok">${m?"Save changes":"Add field work"}</button></div></form>`;
+  $("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");
+  $("#mx").onclick=close;$("#mc").onclick=close;
+  const segVal=k=>{const b=document.querySelector(`[data-seg="${k}"] button.on`);return b?b.textContent:""};
+  const tuw=()=>{$("#tuw").style.visibility=segVal("m_tieup")==="Yes"?"visible":"hidden"};
+  document.querySelectorAll("[data-seg]").forEach(g=>g.querySelectorAll("button").forEach(b=>b.onclick=()=>{const was=b.classList.contains("on");g.querySelectorAll("button").forEach(x=>x.classList.remove("on"));if(!was||g.dataset.seg==="m_type")b.classList.add("on");tuw()}));
+  tuw();
+  if($("#mDel")){let armed=false;$("#mDel").onclick=async()=>{if(!armed){armed=true;$("#mDel").textContent="Confirm delete?";setTimeout(()=>{armed=false;if($("#mDel"))$("#mDel").textContent="Delete"},3000);return}
+    if(await write(api=>api.deleteMeeting(m.id),"Field work entry deleted"))close()}}
+  $("#m_person").focus();
+  $("#mfm").onsubmit=async e=>{e.preventDefault();
+    const person=$("#m_person").value.trim(),entity=$("#m_entity").value.trim();
+    if(person.length<2&&entity.length<2){$("#mErr").textContent="Enter the name of the person or the entity you met.";return}
+    const ph=$("#m_phone").value.trim();if(ph&&ph.replace(/\D/g,"").length<10){$("#mErr").textContent="Contact number looks too short – enter 10 digits or leave it empty.";return}
+    const smName=canPickSm?$("#m_sm").value:curSm;const smEmp=S.allEmps.find(x=>x.name===smName);
+    const rec={id:m?m.id:"",at:toSheetTime(parseT($("#m_at").value)||Date.now()),sm:smName,smId:smEmp?smEmp.id:(m?m.smId:""),type:segVal("m_type")||"Physical",ent:$("#m_ent").value,
+      person,entity,willing:segVal("m_willing"),existing:$("#m_exist").value.trim(),phone:ph,purpose:$("#m_purpose").value.trim(),outcome:$("#m_outcome").value.trim(),
+      remarks:$("#m_remarks").value.trim(),tieup:segVal("m_tieup"),tieupWith:segVal("m_tieup")==="Yes"?$("#m_tuw").value.trim():"",passback:$("#m_pass").value.trim(),feedback:$("#m_fb").value.trim()};
+    const b=$("#mok");b.disabled=true;b.textContent="Saving…";
+    if(await write(api=>api.saveMeeting(rec),m?"Field work updated":"Field work added"))close();else{b.disabled=false;b.textContent=m?"Save changes":"Add field work"}};
+}
+function rMeetings(){
+  const L=FW_LABEL;
+  return [["ID",L.at,L.sm,L.type,L.ent,L.person,L.entity,L.willing,L.existing,L.phone,L.purpose,L.outcome,L.remarks,L.tieup,L.tieupWith,L.passback,L.feedback,"Last updated","Updated by"],
+    ...(S.meetings||[]).filter(m=>inRange(m.at)).slice().reverse().map(m=>[m.id,T(m.at),m.sm,m.type,m.ent,m.person,m.entity,m.willing,m.existing,m.phone,m.purpose,m.outcome,m.remarks,m.tieup,m.tieupWith,m.passback,m.feedback,T(m.updated),m.updatedBy])];
 }
 
 const empOpts=()=>S.employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)} (${esc(e.role)})</option>`).join("");
@@ -744,15 +887,19 @@ function openChangePin(){
 
 /* ---------- EMPLOYEE VIEW ---------- */
 const lastOf=l=>l.logs[0]||(l.lastRemark||l.lastAt?{remark:l.lastRemark,at:l.lastAt}:null);
+const showEtabs=()=>ME&&view.who===ME.id;
+const etabs=()=>showEtabs()?`<div class="tabs">${[["leads","My leads"],["meet","My field work"]].map(([k,l])=>`<button class="tab ${(view.etab||"leads")===k?"on":""}" data-etab="${k}">${l}</button>`).join("")}</div>`:"";
+function bindEtabs(){document.querySelectorAll("[data-etab]").forEach(b=>b.onclick=()=>{view.etab=b.dataset.etab;render()})}
 function renderEmp(){
   const me=emp(view.who);if(!me){view.who="admin";return render()}
+  if(showEtabs()&&view.etab==="meet"){$("#app").innerHTML=etabs()+aMeetings();bindEtabs();bindRange();bindMeetings();bindTips();return}
   const mine=S.leads.filter(l=>l.assignedTo===me.id);
   const todayCalls=mine.flatMap(l=>l.logs).filter(g=>g.by===me.id&&today(g.at)).length;
   const due=mine.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<=Date.now()+30*60e3);
   const f=view.filter,q=view.q.toLowerCase();
   const list=mine.filter(l=>(f==="all"||l.status===f)&&(!q||(l.name+l.phone+l.city).toLowerCase().includes(q))).sort((a,b)=>(a.status==="new"?0:1)-(b.status==="new"?0:1));
   const own=ME&&me.id===ME.id;
-  let h=`<div style="margin-bottom:14px"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>
+  let h=etabs()+`<div style="margin-bottom:14px"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>
   <div class="stats"><div class="card stat"><span>${own?"My leads":"Leads"}</span><b>${mine.length}</b></div>
   <div class="card stat"><span>Not yet called</span><b>${mine.filter(l=>l.status==="new").length}</b></div>
   <div class="card stat"><span>Calls today</span><b>${todayCalls}</b></div>
@@ -763,6 +910,7 @@ function renderEmp(){
   <div class="chips">${["all","new",...Object.keys(OUTCOMES)].map(k=>`<button class="chip ${f===k?"on":""}" data-f="${k}">${k==="all"?"All":STATUS[k].label} · ${counts(k)}</button>`).join("")}</div>
   <div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No leads here${mine.length?"":" yet – your manager will assign a list"}.</div>`}</div>`;
   $("#app").innerHTML=h;
+  bindEtabs();
   document.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{view.filter=b.dataset.f;render()});
   $("#eq").oninput=e=>{view.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#eq");n.focus();n.setSelectionRange(p,p)};
   document.querySelectorAll("[data-call]").forEach(a=>a.onclick=()=>{setTimeout(()=>openLead(a.dataset.call,true),400)});

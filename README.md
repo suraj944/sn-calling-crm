@@ -12,6 +12,8 @@ Contact details shown on the home page are set in the `CONTACT` block at the bot
 
 **Dashboard** (Admin, Manager, Team Lead): date range (today, yesterday, 7/30 days, this month, all time, custom), KPIs (calls, connected, interested, converted, new leads, callbacks due), calls-per-day chart, outcome breakdown, telecaller performance table, lead pipeline and lead sources.
 
+**Field Work** (everyone): Sales Managers log their meetings with the same 16 fields as the old Google Form (Timestamp, SM Name, Meeting Type, Meeting Entity, Name of the CP/Developer/Customer/Connector, Name of The Entity, Willing to work with SN, Existing % received in market if any, Contact no of the Entity, Purpose of Meeting, Meeting Outcome, Remarks, Any Tieup currently?, If Yes Tie up with which company, Current pass back received, Feedback). Each SM sees and edits only their own entries; Admin / Manager / Team Lead see and edit everyone's; Admin / Manager can delete. Stored in the **Field Work** tab of the CRM sheet.
+
 **⬇ Reports** (Admin, Manager): Excel/CSV downloads for the selected period – Full report workbook (Summary, Telecaller performance, Call log, Leads, Website enquiries, Pending callbacks), Call log (filter by telecaller/outcome), Telecaller performance, Leads, Website enquiries, Pending callbacks.
 
 A lightweight calling CRM for a tele-calling team. A manager assigns lists of names and numbers to employees, employees tap **📞 Call** to open their phone's dialer, and after each call they log an outcome, a remark and an optional callback time. Everything is stored in a Google Sheet.
@@ -58,6 +60,7 @@ Everyone logs in with **their own name and PIN** (no mobile number needed). The 
 | **Admin** | Everything | Everything, incl. creating Admins/Managers | ✅ |
 | **Manager** | Everything | Assign/import leads, add/edit Team Leads & Employees, reset their PINs | ✅ |
 | **Team Lead** | All leads, team dashboard, call logs | Assign/import leads, log calls | ✅ |
+| **Sales Manager** | Own leads + own Field Work | Log meetings, call own leads | ❌ |
 | **Telecaller Executive** | Only leads assigned to them | Call, log outcome + remark | ❌ |
 
 ### Credentials database (Google Sheet)

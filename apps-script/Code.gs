@@ -14,15 +14,17 @@
  * Employees tab = the credentials database:
  *   ID | Name (login) | Phone | Active | Role | PIN (first-time) | PIN Hash (auto) | Last Login (auto) | Created
  *   - People log in with their NAME + PIN. Names must be unique (case doesn't matter).
- *   - Role: Admin, Manager, Team Lead or Telecaller Executive (see the Roles tab).
+ *   - Role: Admin, Manager, Team Lead, Sales Manager or Telecaller Executive (see the Roles tab).
  *     Old "Employee" values are treated as Telecaller Executive.
  *   - PIN: type a 4–8 digit first-time PIN; on first login it is replaced by a salted hash and cleared.
  * LoginLog tab: every login attempt (time, name entered, result).
  * Website enquiries (home page callback form) are added to Leads as new, unassigned leads.
+ * Field Work tab: SM meetings (same fields as the old Google Form) – see saveMeeting_.
  * Leads tab column K "Source" = Website / Import / Manual, column L "Customer request" = what a website visitor asked for.
  */
 
-const ROLES = ["Admin", "Manager", "Team Lead", "Telecaller Executive"];
+const ROLES = ["Admin", "Manager", "Team Lead", "Sales Manager", "Telecaller Executive"];
+const MEET_COLS = 20;
 const SESSION_DAYS = 30;
 const MAX_FAILS = 5, LOCK_MIN = 15;
 
@@ -56,6 +58,8 @@ function doPost(e) {
         case "resetPin":  need_(me, "Manager");   return resetPin_(me, b.id, b.pin);
         case "removeEmp": need_(me, "Manager");   return removeEmp_(me, b.id);
         case "changePin": return changePin_(me, b.oldPin, b.newPin);
+        case "saveMeeting":   return saveMeeting_(me, b.m || {});
+        case "deleteMeeting": need_(me, "Manager"); return deleteMeeting_(b.id);
         default: throw new Error("Unknown action: " + b.action);
       }
     } finally { lock.releaseLock(); }
@@ -130,6 +134,7 @@ function load_(me) {
     employees: (isLead ? emps : [me]).map(x => [x.id, x.name, x.phone, x.active ? "Yes" : "No", x.role, x.hash || x.pin ? "set" : ""]),
     leads, logs,
     sheetUrl: isLead ? SpreadsheetApp.getActiveSpreadsheet().getUrl() : "",
+    ...meetings_(me, isLead),
     serverTime: now_()
   };
 }
@@ -221,6 +226,58 @@ function removeEmp_(me, id) {
   const ids = rows_("Leads", 5).filter(x => String(x[4]).trim() === e.id).map(x => String(x[0]).trim());
   if (ids.length) assign_(ids, "");
   return { removed: true };
+}
+
+/* ---------------- field work ("Field Work" tab of this spreadsheet) ---------------- */
+// Columns (same fields as the team's Google Form, plus ID / SM ID / audit):
+//  A ID | B Timestamp | C SM Name | D SM ID | E Meeting Type | F Meeting Entity | G Name of the CP/Developer/Customer/Connector |
+//  H Name of The Entity | I Willing to work with SN | J Existing % received in market if any | K Contact no of the Entity |
+//  L Purpose of Meeting | M Meeting Outcome | N Remarks | O Any Tieup currently? | P If Yes, Tie up with which company |
+//  Q Current pass back received | R Feedback | S Last updated | T Updated by
+function mSheet_() { return sheet_("Field Work"); }
+function meetings_(me, isLead) {
+  try {
+    const sh = mSheet_(), n = sh.getLastRow() - 1;
+    let rows = n < 1 ? [] : sh.getRange(2, 1, n, MEET_COLS).getDisplayValues();
+    if (!isLead) rows = rows.filter(r => String(r[3]).trim() === me.id || norm_(r[2]) === norm_(me.name));
+    return { meetings: rows };
+  } catch (e) { return { meetings: [], meetingsError: String(e && e.message || e) }; }
+}
+function saveMeeting_(me, m) {
+  const isLead = rank_(me.role) <= rank_("Team Lead");
+  const c = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "'$&").trim();
+  const person = c(m.person).slice(0, 120), entity = c(m.entity).slice(0, 120);
+  if (person.length < 2 && entity.length < 2) throw new Error("Enter the name of the person or the entity you met");
+  const sh = mSheet_(), n = sh.getLastRow() - 1;
+  const rows = n < 1 ? [] : sh.getRange(2, 1, n, MEET_COLS).getDisplayValues();
+  let idx = -1;
+  if (m.id) {
+    idx = rows.findIndex(r => String(r[0]).trim() === String(m.id));
+    if (idx < 0) throw new Error("Entry " + m.id + " not found – it may have been deleted");
+    const r = rows[idx];
+    if (!isLead && String(r[3]).trim() !== me.id && norm_(r[2]) !== norm_(me.name)) throw new Error("You can only edit your own field work");
+  }
+  let smName = me.name, smId = me.id;                       // leads can file for any SM; others always for themselves
+  if (isLead && m.sm) { const e = emps_().find(x => norm_(x.name) === norm_(m.sm)); smName = e ? e.name : c(m.sm); smId = e ? e.id : c(m.smId); }
+  else if (idx >= 0) { smName = rows[idx][2]; smId = rows[idx][3]; }
+  let id = m.id;
+  if (!id) { let max = 1000; rows.forEach(r => { const v = parseInt(String(r[0]).replace(/\D/g, ""), 10); if (v > max) max = v; }); id = "M" + (max + 1); }
+  const at = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(String(m.at || "")) ? m.at : now_();
+  const row = [id, at, smName, smId, c(m.type).slice(0, 20), c(m.ent).slice(0, 40), person, entity, c(m.willing).slice(0, 10), c(m.existing).slice(0, 60),
+    text_(c(m.phone).slice(0, 40)), c(m.purpose).slice(0, 100), c(m.outcome).slice(0, 120), c(m.remarks).slice(0, 300), c(m.tieup).slice(0, 10),
+    c(m.tieupWith).slice(0, 100), c(m.passback).slice(0, 100), c(m.feedback).slice(0, 1000), now_(), me.name];
+  if (idx >= 0) sh.getRange(idx + 2, 1, 1, MEET_COLS).setValues([row]);
+  else sh.getRange(sh.getLastRow() + 1, 1, 1, MEET_COLS).setValues([row]);
+  return { saved: true, id };
+}
+function deleteMeeting_(id) {
+  const sh = mSheet_(), n = sh.getLastRow() - 1;
+  if (n < 1) throw new Error("Meeting not found");
+  const ids = sh.getRange(2, 1, n, 1).getDisplayValues();
+  const i = ids.findIndex(r => String(r[0]).trim() === String(id));
+  if (i < 0) throw new Error("Meeting not found");
+  sh.deleteRow(i + 2);
+  return { deleted: true };
 }
 
 /* ---------------- website enquiries ---------------- */
