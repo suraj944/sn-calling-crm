@@ -19,6 +19,7 @@
  *   - PIN: type a 4–8 digit first-time PIN; on first login it is replaced by a salted hash and cleared.
  * LoginLog tab: every login attempt (time, name entered, result).
  * Website enquiries (home page callback form) are added to Leads as new, unassigned leads.
+ * Leads tab column K "Source" = Website / Import / Manual, column L "Customer request" = what a website visitor asked for.
  */
 
 const ROLES = ["Admin", "Manager", "Team Lead", "Telecaller Executive"];
@@ -118,7 +119,7 @@ function canManage_(me, targetRole) { // Managers can't create/edit Admins or ot
 function load_(me) {
   const isLead = rank_(me.role) <= rank_("Team Lead");
   const emps = emps_();
-  let leads = rows_("Leads", 10), logs = rows_("CallLogs", 10);
+  let leads = rows_("Leads", 12), logs = rows_("CallLogs", 10);
   if (!isLead) {
     leads = leads.filter(r => String(r[4]).trim() === me.id);
     const ids = new Set(leads.map(r => String(r[0]).trim()));
@@ -160,8 +161,9 @@ function addLeads_(list) {
   const sh = sheet_("Leads"); let max = 1000;
   rows_("Leads", 1).forEach(r => { const v = parseInt(String(r[0]).replace(/\D/g, ""), 10); if (v > max) max = v; });
   const at = now_();
-  const out = list.filter(x => x && x.name && x.phone).map(x => ["L" + (++max), x.name, text_(x.phone), x.city || "", x.assignedTo || "", "New", "", "", "", at]);
-  if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, 10).setValues(out);
+  const src = list.length > 1 ? "Import" : "Manual";
+  const out = list.filter(x => x && x.name && x.phone).map(x => ["L" + (++max), x.name, text_(x.phone), x.city || "", x.assignedTo || "", "New", "", "", "", at, src]);
+  if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, 11).setValues(out);
   return { added: out.length };
 }
 
@@ -243,7 +245,7 @@ function enquiry_(b) {
   rows_("Leads", 1).forEach(r => { const v = parseInt(String(r[0]).replace(/\D/g, ""), 10); if (v > max) max = v; });
   const at = now_();
   sh.appendRow(["L" + (max + 1), clean(name), d.slice(0, 5) + " " + d.slice(5), clean(b.city).slice(0, 60), "", "New", "",
-    "Website enquiry – " + need + (msg ? ": " + msg : ""), "", at]);
+    "Website enquiry – " + need + (msg ? ": " + msg : ""), "", at, "Website", need + (msg ? ": " + msg : "")]);
   return { saved: true };
 }
 

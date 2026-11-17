@@ -66,6 +66,16 @@ tr:last-child td{border-bottom:0}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;cursor:pointer;font-size:13px}
 .userchip{display:flex;align-items:center;gap:8px;font-size:13px}.userchip .av{width:30px;height:30px;font-size:12px}
+.rangebar{margin-bottom:14px}.rangebar .chips .chip{padding:5px 11px}.rangebar input[type=date]{padding:5px 8px;margin-left:4px}
+.dash h3{margin-bottom:10px}
+svg.chart{width:100%;height:auto;display:block}svg.chart .grid{stroke:var(--line);stroke-width:1}svg.chart .ax{font-size:11px;fill:var(--mute)}svg.chart .val{font-size:12px;font-weight:600;fill:var(--ink)}svg.chart .bar-m{fill:var(--brand)}
+svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,214,.06)}
+.hbars{display:grid;gap:9px}.hb{display:grid;grid-template-columns:minmax(120px,38%) 1fr 44px;align-items:center;gap:10px;font-size:13.5px}
+.hb .hl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hb .ht{height:12px;background:var(--gray-soft);border-radius:0 4px 4px 0}.hb .ht i{display:block;height:100%;background:var(--brand);border-radius:0 4px 4px 0}
+.hb .hv{text-align:right;font-variant-numeric:tabular-nums}.hb:hover .ht i{filter:brightness(1.15)}
+#tip{position:fixed;display:none;background:var(--ink);color:#fff;font-size:12.5px;padding:6px 9px;border-radius:7px;pointer-events:none;z-index:50;white-space:nowrap}
+.reports{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}.rep-h{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.rep h3{margin:0}
+.stat .small{margin-top:3px}
 .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .empty{padding:36px;text-align:center;color:var(--mute)}
 .modal-bg{position:fixed;inset:0;background:rgba(17,24,39,.45);display:none;align-items:flex-end;justify-content:center;z-index:20}
@@ -174,7 +184,9 @@ function build(eRows,lRows,cRows){
     pinSet:!!(String(r[5]||"").trim()||String(r[6]||"").trim()),row:i+2})).filter(e=>e.id&&e.name);
   const findEmp=v=>{v=String(v||"").trim();if(!v)return null;const lv=v.toLowerCase();const e=allEmps.find(e=>e.id.toLowerCase()===lv||e.name.toLowerCase()===lv);return e?e.id:v};
   const leads=lRows.map((r,i)=>({id:String(r[0]||"").trim(),name:String(r[1]||""),phone:String(r[2]??""),city:String(r[3]||""),assignedTo:findEmp(r[4]),
-    status:statusCode(r[5]),followUp:parseT(r[6]),lastRemark:String(r[7]||""),lastAt:parseT(r[8]),row:i+2,logs:[]})).filter(l=>l.id||l.name);
+    status:statusCode(r[5]),followUp:parseT(r[6]),lastRemark:String(r[7]||""),lastAt:parseT(r[8]),created:parseT(r[9]),
+    source:["Website","Import","Manual"].find(x=>x.toLowerCase()===String(r[10]||"").trim().toLowerCase())||"Import",
+    firstRemark:String(r[11]||"")||(/^Website enquiry/.test(String(r[7]||""))?String(r[7]):""),row:i+2,logs:[]})).filter(l=>l.id||l.name);
   const byId=Object.fromEntries(leads.map(l=>[l.id,l]));
   cRows.forEach(r=>{const l=byId[String(r[2]||"").trim()];if(!l)return;
     l.logs.push({id:r[0],at:parseT(r[1]),by:findEmp(r[5])||"ADMIN_LOG",outcome:statusCode(r[7])==="new"?"na":statusCode(r[7]),remark:String(r[8]||""),followUp:parseT(r[9])})});
@@ -193,7 +205,7 @@ async function call(tool,input){
 const rows=p=>Array.isArray(p.values)?p.values:[];
 const Live={
   async load(){
-    const [e,l,c]=await Promise.all([call("get_values",{range:"Employees!A2:G"}),call("get_values",{range:"Leads!A2:J"}),call("get_values",{range:"CallLogs!A2:J"})]);
+    const [e,l,c]=await Promise.all([call("get_values",{range:"Employees!A2:G"}),call("get_values",{range:"Leads!A2:L"}),call("get_values",{range:"CallLogs!A2:J"})]);
     S=build(rows(e),rows(l),rows(c));lastSync=Date.now();SHEET_URL=SHEET_URL_DEFAULT;
   },
   async logCall(leadId,out,remark,fu,by){
@@ -208,7 +220,7 @@ const Live={
   },
   async addLeads(list){
     await this.load();let max=S.leads.reduce((m,l)=>Math.max(m,parseInt(String(l.id).replace(/\D/g,""))||0),1000);const now=toSheetTime(Date.now());
-    await call("append_values",{range:"Leads!A1",values:list.map(x=>["L"+(++max),x.name,normPhone(x.phone),x.city||"",x.assignedTo||"","New","","","",now])});
+    await call("append_values",{range:"Leads!A1",values:list.map(x=>["L"+(++max),x.name,normPhone(x.phone),x.city||"",x.assignedTo||"","New","","","",now,list.length>1?"Import":"Manual"])});
   },
   async addEmp(o){
     await this.load();const max=S.allEmps.reduce((m,e)=>Math.max(m,parseInt(e.id.replace(/\D/g,""))||0),0);
@@ -378,32 +390,232 @@ function render(){
 
 /* ---------- ADMIN / MANAGER / TEAM LEAD ---------- */
 function renderAdmin(){
-  const tabs=[["dash","Dashboard"],["assign","Leads & Assign"],["import","Add / Import Leads"],...(isMgr()?[["team","Employees"]]:[]),["logs","Call Logs"]];
+  const tabs=[["dash","Dashboard"],["assign","Leads & Assign"],["import","Add / Import Leads"],...(isMgr()?[["team","Employees"]]:[]),["logs","Call Logs"],...(isMgr()?[["reports","⬇ Reports"]]:[])];
   if(!tabs.some(t=>t[0]===view.tab))view.tab="dash";
   let h=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${view.tab===k?"on":""}" data-tab="${k}">${l}</button>`).join("")}</div>`;
-  h+=({dash:aDash,assign:aAssign,import:aImport,team:aTeam,logs:aLogs})[view.tab]();
+  h+=({dash:aDash,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports})[view.tab]();
   $("#app").innerHTML=h;
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{view.tab=b.dataset.tab;render()});
-  bindAdmin();
+  bindAdmin();bindRange();bindReports();bindTips();
 }
 function allLogs(){return S.leads.flatMap(l=>l.logs.map(g=>({...g,lead:l}))).sort((a,b)=>(b.at||0)-(a.at||0))}
 const callers=()=>S.employees.filter(e=>e.role==="Telecaller Executive"||e.role==="Team Lead"||S.leads.some(l=>l.assignedTo===e.id));
-function aDash(){
-  const L=S.leads,logs=allLogs(),tl=logs.filter(g=>today(g.at));const c=k=>L.filter(l=>l.status===k).length;
-  let h=`<div class="stats">
-  <div class="card stat"><span>Total leads</span><b>${L.length}</b></div>
-  <div class="card stat"><span>Unassigned</span><b>${L.filter(l=>!l.assignedTo).length}</b></div>
-  <div class="card stat"><span>Calls today</span><b>${tl.length}</b></div>
-  <div class="card stat"><span>Interested</span><b style="color:var(--green)">${c("int")}</b></div>
-  <div class="card stat"><span>Converted</span><b style="color:var(--brand)">${c("conv")}</b></div>
-  <div class="card stat"><span>Callbacks pending</span><b style="color:var(--amber)">${c("cb")}</b></div></div>`;
-  h+=`<div class="grid2"><div class="card"><div class="pad"><h3>Team performance</h3></div><div class="tw"><table><tr><th>Name</th><th>Assigned</th><th>Called</th><th>Today</th><th>Interested</th><th style="width:26%">Progress</th></tr>`;
-  callers().forEach(e=>{const mine=L.filter(l=>l.assignedTo===e.id),called=mine.filter(l=>l.status!=="new").length,pct=mine.length?Math.round(called/mine.length*100):0;
-    h+=`<tr><td><b>${esc(e.name)}</b><div class="small mute">${esc(e.role)}</div></td><td class="num">${mine.length}</td><td class="num">${called}</td><td class="num">${tl.filter(g=>g.by===e.id).length}</td><td class="num">${mine.filter(l=>l.status==="int"||l.status==="conv").length}</td><td><div class="bar"><i style="width:${pct}%"></i></div><span class="small mute">${pct}%</span></td></tr>`});
-  h+=`</table></div></div><div class="card"><div class="pad"><h3>Recent activity</h3>`;
-  h+=logs.slice(0,7).map(g=>`<div class="hi"><b>${esc(empName(g.by))}</b> called <b>${esc(g.lead.name)}</b> ${pill(g.outcome)}<div class="mute small" style="margin-top:3px">${esc(g.remark)||"<i>No remark</i>"} · ${fmt(g.at)}</div></div>`).join("")||`<div class="empty">No calls yet</div>`;
-  return h+`</div></div></div>`;
+/* ================= DATE RANGE (shared by Dashboard & Reports) ================= */
+const DAY=864e5;
+const sod=t=>{const d=new Date(t);d.setHours(0,0,0,0);return d.getTime()};
+const ymd=t=>{const d=new Date(t);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
+const RANGES=[["today","Today"],["yesterday","Yesterday"],["7d","Last 7 days"],["30d","Last 30 days"],["month","This month"],["all","All time"],["custom","Custom"]];
+if(!view.range)view.range={key:"7d",from:ymd(Date.now()-6*DAY),to:ymd(Date.now())};
+function rangeBounds(){
+  const r=view.range,t0=sod(Date.now());
+  switch(r.key){
+    case"today":return[t0,t0+DAY-1];
+    case"yesterday":return[t0-DAY,t0-1];
+    case"7d":return[t0-6*DAY,t0+DAY-1];
+    case"30d":return[t0-29*DAY,t0+DAY-1];
+    case"month":{const d=new Date();return[new Date(d.getFullYear(),d.getMonth(),1).getTime(),t0+DAY-1]}
+    case"all":{const ts=S.leads.flatMap(l=>[l.created,...l.logs.map(g=>g.at)]).filter(Boolean);return[ts.length?sod(Math.min(...ts)):t0,t0+DAY-1]}
+    default:{const a=parseT(r.from+" 00:00")||t0,b=parseT(r.to+" 00:00")||t0;return[Math.min(a,b),Math.max(a,b)+DAY-1]}
+  }
 }
+const rangeLabel=()=>{const[a,b]=rangeBounds();const f=t=>new Date(t).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});return sod(a)===sod(b)?f(a):f(a)+" – "+f(b)};
+const inRange=t=>{const[a,b]=rangeBounds();return t&&t>=a&&t<=b};
+function rangeBar(){
+  const r=view.range;
+  return `<div class="card pad rangebar"><div class="row">
+    <div class="chips" style="margin:0">${RANGES.map(([k,l])=>`<button class="chip ${r.key===k?"on":""}" data-range="${k}">${l}</button>`).join("")}</div>
+    ${r.key==="custom"?`<label class="small mute">From <input type="date" id="rFrom" value="${esc(r.from)}" max="${ymd(Date.now())}"></label><label class="small mute">To <input type="date" id="rTo" value="${esc(r.to)}" max="${ymd(Date.now())}"></label>`:""}
+    <span class="spacer"></span><span class="small mute" id="rLabel">${esc(rangeLabel())}</span></div></div>`;
+}
+function bindRange(){
+  document.querySelectorAll("[data-range]").forEach(b=>b.onclick=()=>{view.range.key=b.dataset.range;render()});
+  const f=$("#rFrom"),t=$("#rTo");
+  if(f)f.onchange=()=>{view.range.from=f.value;render()};
+  if(t)t.onchange=()=>{view.range.to=t.value;render()};
+}
+
+/* ================= METRICS ================= */
+const CONNECTED=o=>o!=="na"&&o!=="wn";
+const pct=(a,b)=>b?Math.round(a/b*100):0;
+function metrics(){
+  const logs=allLogs().filter(g=>inRange(g.at));
+  const newLeads=S.leads.filter(l=>inRange(l.created));
+  const endToday=sod(Date.now())+DAY-1;
+  const byOutcome=Object.fromEntries(Object.keys(OUTCOMES).map(k=>[k,logs.filter(g=>g.outcome===k).length]));
+  const people=callers().map(e=>{
+    const mine=logs.filter(g=>g.by===e.id),con=mine.filter(g=>CONNECTED(g.outcome)).length;
+    const assigned=S.leads.filter(l=>l.assignedTo===e.id);
+    return {e,calls:mine.length,connected:con,int:mine.filter(g=>g.outcome==="int").length,conv:mine.filter(g=>g.outcome==="conv").length,
+      ni:mine.filter(g=>g.outcome==="ni").length,na:mine.filter(g=>g.outcome==="na"||g.outcome==="wn").length,
+      leads:mine.length?new Set(mine.map(g=>g.lead.id)).size:0,assigned:assigned.length,
+      untouched:assigned.filter(l=>l.status==="new").length,due:assigned.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<=endToday).length};
+  }).sort((a,b)=>b.calls-a.calls||b.conv-a.conv);
+  const connected=logs.filter(g=>CONNECTED(g.outcome)).length;
+  return {logs,newLeads,byOutcome,people,connected,
+    website:newLeads.filter(l=>l.source==="Website").length,
+    due:S.leads.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<=endToday).length,
+    unassigned:S.leads.filter(l=>!l.assignedTo).length};
+}
+
+/* ================= CHART HELPERS (single brand hue, direct labels, hover tooltips) ================= */
+function dayBuckets(logs){
+  const[a,b]=rangeBounds();const days=Math.round((sod(b)-sod(a))/DAY)+1;
+  const byMonth=days>92;const keyOf=t=>byMonth?new Date(t).toISOString().slice(0,7):ymd(t);
+  const buckets=[];
+  if(byMonth){const d=new Date(a);d.setDate(1);while(d.getTime()<=b){buckets.push({k:keyOf(d.getTime()),label:d.toLocaleDateString("en-IN",{month:"short",year:"2-digit"}),n:0});d.setMonth(d.getMonth()+1)}}
+  else for(let t=sod(a);t<=b;t+=DAY){const d=new Date(t);buckets.push({k:ymd(t),label:d.toLocaleDateString("en-IN",{day:"numeric",month:"short"}),n:0})}
+  const idx=Object.fromEntries(buckets.map((x,i)=>[x.k,i]));
+  logs.forEach(g=>{const i=idx[keyOf(g.at)];if(i!=null)buckets[i].n++});
+  return {buckets,unit:byMonth?"month":"day"};
+}
+function columnChart(buckets,unit){
+  if(!buckets.length)return "";
+  const W=640,H=200,pl=34,pr=8,pt=14,pb=26,max=Math.max(1,...buckets.map(b=>b.n));
+  const nice=max<=5?5:max<=10?10:Math.ceil(max/5)*5;const iw=W-pl-pr,ih=H-pt-pb,bw=iw/buckets.length,gap=Math.min(6,bw*.25);
+  const y=v=>pt+ih-(v/nice)*ih;const every=Math.ceil(buckets.length/8);
+  let g=`<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="Calls per ${unit}">`;
+  [0,.5,1].forEach(f=>{const v=Math.round(nice*f);g+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" class="grid"/><text x="${pl-6}" y="${y(v)+4}" class="ax" text-anchor="end">${v}</text>`});
+  const peak=buckets.reduce((m,b,i)=>b.n>buckets[m].n?i:m,0);
+  buckets.forEach((b,i)=>{const x=pl+i*bw+gap/2,w=Math.max(2,bw-gap),h=ih-(y(b.n)-pt);
+    if(b.n)g+=`<path d="M${x},${pt+ih} v${-(h-Math.min(4,w/2,h))} q0,${-Math.min(4,w/2,h)} ${Math.min(4,w/2)},${-Math.min(4,w/2,h)} h${w-2*Math.min(4,w/2)} q${Math.min(4,w/2)},0 ${Math.min(4,w/2)},${Math.min(4,w/2,h)} v${h-Math.min(4,w/2,h)} z" class="bar-m"/>`;
+    g+=`<rect x="${pl+i*bw}" y="${pt}" width="${bw}" height="${ih}" fill="transparent" data-tip="${esc(b.label)}: ${b.n} call${b.n===1?"":"s"}"/>`;
+    if(i%every===0||i===buckets.length-1)g+=`<text x="${pl+i*bw+bw/2}" y="${H-8}" class="ax" text-anchor="middle">${esc(b.label)}</text>`;
+    if(i===peak&&b.n)g+=`<text x="${pl+i*bw+bw/2}" y="${y(b.n)-5}" class="val" text-anchor="middle">${b.n}</text>`});
+  return g+`</svg>`;
+}
+function hbars(rows,{fmtV=v=>v,emptyMsg="No data in this period"}={}){
+  const max=Math.max(1,...rows.map(r=>r.v));
+  if(!rows.some(r=>r.v))return `<div class="empty small">${emptyMsg}</div>`;
+  return `<div class="hbars">${rows.map(r=>`<div class="hb" data-tip="${esc(r.label)}: ${esc(fmtV(r.v))}${r.tip?" – "+esc(r.tip):""}"><span class="hl">${r.pill||esc(r.label)}</span><span class="ht"><i style="width:${Math.max(r.v?2:0,r.v/max*100)}%"></i></span><b class="hv">${esc(fmtV(r.v))}</b></div>`).join("")}</div>`;
+}
+function bindTips(){
+  let tip=$("#tip");if(!tip){tip=document.createElement("div");tip.id="tip";document.body.appendChild(tip)}
+  document.querySelectorAll("[data-tip]").forEach(el=>{
+    el.onmousemove=e=>{tip.textContent=el.dataset.tip;tip.style.display="block";const x=Math.min(e.clientX+14,innerWidth-tip.offsetWidth-8);tip.style.left=x+"px";tip.style.top=(e.clientY-36)+"px"};
+    el.onmouseleave=()=>tip.style.display="none";
+  });
+}
+
+/* ================= DASHBOARD ================= */
+function aDash(){
+  const m=metrics(),L=S.leads;
+  const stat=(label,val,sub,tip)=>`<div class="card stat" ${tip?`title="${esc(tip)}"`:""}><span>${label}</span><b>${val}</b>${sub?`<div class="small mute">${sub}</div>`:""}</div>`;
+  let h=rangeBar();
+  h+=`<div class="stats">
+    ${stat("Calls made",m.logs.length,`${m.people.filter(p=>p.calls).length} telecaller${m.people.filter(p=>p.calls).length===1?"":"s"} active`)}
+    ${stat("Connected",m.connected,`${pct(m.connected,m.logs.length)}% of calls`,"Calls that weren't 'No answer / Busy' or 'Wrong / Switched off'")}
+    ${stat("Interested",m.byOutcome.int,`${pct(m.byOutcome.int,m.connected)}% of connected`)}
+    ${stat("Converted",m.byOutcome.conv,`${pct(m.byOutcome.conv,m.connected)}% of connected`)}
+    ${stat("New leads",m.newLeads.length,`${m.website} from website`)}
+    ${stat("Callbacks due",m.due,`${m.unassigned} lead${m.unassigned===1?"":"s"} unassigned`,"Callbacks scheduled for today or earlier (any period)")}
+  </div>`;
+  const {buckets,unit}=dayBuckets(m.logs);
+  h+=`<div class="grid2 dash">
+    <div class="card pad"><h3>Calls per ${unit}</h3>${m.logs.length?columnChart(buckets,unit):`<div class="empty small">No calls in this period</div>`}</div>
+    <div class="card pad"><h3>Call outcomes</h3>${hbars(Object.entries(OUTCOMES).map(([k,o])=>({label:o.label,pill:pill(k),v:m.byOutcome[k],tip:pct(m.byOutcome[k],m.logs.length)+"% of calls"})),{emptyMsg:"No calls in this period"})}</div>
+  </div>`;
+  h+=`<div class="card" style="margin-top:16px"><div class="pad" style="padding-bottom:6px"><h3>Telecaller performance</h3><div class="small mute" style="margin-top:-8px">Calls and results in the selected period · Assigned, Not yet called and Callbacks due are as of now</div></div><div class="tw"><table>
+    <tr><th>Telecaller</th><th>Calls</th><th style="width:18%"></th><th>Connected</th><th>Interested</th><th>Converted</th><th>Conversion</th><th>Assigned</th><th>Not yet called</th><th>Callbacks due</th></tr>`;
+  const maxC=Math.max(1,...m.people.map(p=>p.calls));
+  h+=m.people.map(p=>`<tr><td><b>${esc(p.e.name)}</b><div class="small mute">${esc(p.e.role)}</div></td><td class="num"><b>${p.calls}</b></td>
+    <td><div class="bar" data-tip="${esc(p.e.name)}: ${p.calls} calls"><i style="width:${p.calls/maxC*100}%"></i></div></td>
+    <td class="num">${p.connected}${p.calls?` <span class="small mute">${pct(p.connected,p.calls)}%</span>`:""}</td><td class="num">${p.int}</td><td class="num">${p.conv}</td>
+    <td class="num">${p.connected?pct(p.conv,p.connected)+"%":"—"}</td><td class="num">${p.assigned}</td><td class="num">${p.untouched}</td><td class="num">${p.due?`<b style="color:var(--amber)">${p.due}</b>`:0}</td></tr>`).join("")||`<tr><td colspan="10"><div class="empty">No telecallers yet – add them under Employees</div></td></tr>`;
+  h+=`</table></div></div>`;
+  const stage=[["New – not yet called",L.filter(l=>l.status==="new").length],["Being followed up",L.filter(l=>["cb","na","wn"].includes(l.status)).length],["Interested",L.filter(l=>l.status==="int").length],["Converted",L.filter(l=>l.status==="conv").length],["Not interested",L.filter(l=>l.status==="ni").length]];
+  const srcs=["Website","Import","Manual"].map(s=>[s,m.newLeads.filter(l=>l.source===s).length]);
+  h+=`<div class="grid2 dash" style="margin-top:16px">
+    <div class="card pad"><h3>Lead pipeline <span class="small mute" style="font-weight:400">all ${L.length} leads, as of now</span></h3>${hbars(stage.map(([l,v])=>({label:l,v,tip:pct(v,L.length)+"% of all leads"})),{emptyMsg:"No leads yet"})}</div>
+    <div class="card pad"><h3>New leads by source <span class="small mute" style="font-weight:400">in this period</span></h3>${hbars(srcs.map(([l,v])=>({label:l==="Website"?"Website enquiries":l==="Import"?"Imported lists":"Added manually",v})),{emptyMsg:"No new leads in this period"})}
+      <h3 style="margin-top:18px">Recent activity</h3>${m.logs.slice(0,5).map(g=>`<div class="hi"><b>${esc(empName(g.by))}</b> called <b>${esc(g.lead.name)}</b> ${pill(g.outcome)}<div class="mute small" style="margin-top:3px">${esc(g.remark)||"<i>No remark</i>"} · ${fmt(g.at)}</div></div>`).join("")||`<div class="empty small">No calls in this period</div>`}</div>
+  </div>`;
+  return h;
+}
+
+/* ================= REPORTS ================= */
+const statusLabel=l=>STATUS[l.status].label;
+const T=t=>t?toSheetTime(t):"";
+function rCallLog(){
+  const logs=metrics().logs.filter(g=>(view.repEmp==="all"||g.by===view.repEmp)&&(view.repOut==="all"||g.outcome===view.repOut)).slice().reverse();
+  return [["Date","Time","Telecaller","Customer","Mobile","City","Outcome","Remark","Follow-up","Lead ID","Lead source"],
+    ...logs.map(g=>{const s=T(g.at);return [s.slice(0,10),s.slice(11),empName(g.by),g.lead.name,g.lead.phone,g.lead.city,OUTCOMES[g.outcome].label,g.remark,T(g.followUp),g.lead.id,g.lead.source]})];
+}
+function rPerformance(){
+  return [["Telecaller","Role","Calls","Connected","Connect rate %","Interested","Converted","Conversion % (of connected)","Not interested","No answer / Wrong no.","Unique leads called","Assigned now","Not yet called","Callbacks due"],
+    ...metrics().people.map(p=>[p.e.name,p.e.role,p.calls,p.connected,pct(p.connected,p.calls),p.int,p.conv,pct(p.conv,p.connected),p.ni,p.na,p.leads,p.assigned,p.untouched,p.due])];
+}
+function rLeads(){
+  const list=view.repLeadsAll?S.leads:S.leads.filter(l=>inRange(l.created));
+  return [["Lead ID","Name","Mobile","City","Assigned to","Status","Follow-up","Last remark","Last called","Total calls","Created","Source"],
+    ...list.map(l=>[l.id,l.name,l.phone,l.city,l.assignedTo?empName(l.assignedTo):"Unassigned",statusLabel(l),T(l.followUp),lastOf(l)?.remark||"",T(l.lastAt||(l.logs[0]&&l.logs[0].at)),l.logs.length,T(l.created),l.source])];
+}
+function rEnquiries(){
+  return [["Received","Name","Mobile","City","Request","Assigned to","Status","Calls so far"],
+    ...S.leads.filter(l=>l.source==="Website"&&inRange(l.created)).map(l=>{const first=l.logs.length?l.logs[l.logs.length-1]:null;
+      return [T(l.created),l.name,l.phone,l.city,(l.firstRemark||"").replace(/^Website enquiry – /,""),l.assignedTo?empName(l.assignedTo):"Unassigned",statusLabel(l),l.logs.length]})];
+}
+function rCallbacks(){
+  const now=Date.now();
+  return [["Callback time","Overdue","Customer","Mobile","City","Telecaller","Last remark","Lead ID"],
+    ...S.leads.filter(l=>l.status==="cb"&&l.followUp).sort((a,b)=>a.followUp-b.followUp).map(l=>[T(l.followUp),l.followUp<now?"Yes":"No",l.name,l.phone,l.city,l.assignedTo?empName(l.assignedTo):"Unassigned",lastOf(l)?.remark||"",l.id])];
+}
+function rSummary(){
+  const m=metrics();
+  return [["SN Financial Services – Calling CRM report"],["Period",rangeLabel()],["Generated",fmt(Date.now())+" by "+(ME?ME.name:"Admin")],[],
+    ["Metric","Value"],["Calls made",m.logs.length],["Connected calls",m.connected],["Connect rate %",pct(m.connected,m.logs.length)],
+    ["Interested",m.byOutcome.int],["Converted",m.byOutcome.conv],["Conversion % (of connected)",pct(m.byOutcome.conv,m.connected)],
+    ["Not interested",m.byOutcome.ni],["No answer / Busy",m.byOutcome.na],["Wrong / Switched off",m.byOutcome.wn],["Call back later",m.byOutcome.cb],
+    ["New leads",m.newLeads.length],["…from website",m.website],["Callbacks due (as of now)",m.due],["Unassigned leads (as of now)",m.unassigned],["Total leads (as of now)",S.leads.length]];
+}
+const REPORTS=[
+  {k:"full",title:"Full report",desc:"One Excel workbook with a summary sheet plus telecaller performance, call log, leads, website enquiries and callbacks.",xlsxOnly:true},
+  {k:"calls",title:"Call log",desc:"Every call in the period with telecaller, outcome, remark and follow-up.",rows:rCallLog,filters:true},
+  {k:"perf",title:"Telecaller performance",desc:"Calls, connect rate, interested, converted and pending work for each telecaller.",rows:rPerformance},
+  {k:"leads",title:"Leads",desc:"Lead list with assigned telecaller, status, last remark and source.",rows:rLeads,leadsToggle:true},
+  {k:"enq",title:"Website enquiries",desc:"Callback requests from the home page received in the period, and what happened to them.",rows:rEnquiries},
+  {k:"cb",title:"Pending callbacks",desc:"All scheduled callbacks (any date), overdue ones marked.",rows:rCallbacks},
+];
+if(!view.repEmp){view.repEmp="all";view.repOut="all";view.repLeadsAll=false}
+function aReports(){
+  let h=rangeBar();
+  h+=`<div class="card pad" style="margin-bottom:12px"><div class="small mute">Reports use the data shown in the CRM right now (last synced ${lastSync?new Date(lastSync).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}):"—"}). Press <b>⟳ Refresh</b> first if your team is calling at the moment. Excel files open in Excel or Google Sheets; CSV works anywhere.</div></div><div class="reports">`;
+  h+=REPORTS.map(r=>{const n=r.rows?r.rows().length-1:null;
+    return `<div class="card pad rep"><div class="rep-h"><div><h3>${r.title}</h3><p class="small mute" style="margin:4px 0 0">${r.desc}</p></div>${n!=null?`<span class="pill s-new">${n} row${n===1?"":"s"}</span>`:""}</div>
+      ${r.filters?`<div class="row" style="margin-top:12px"><select id="repEmp"><option value="all">All telecallers</option>${S.employees.map(e=>`<option value="${esc(e.id)}" ${view.repEmp===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select>
+        <select id="repOut"><option value="all">All outcomes</option>${Object.entries(OUTCOMES).map(([k,o])=>`<option value="${k}" ${view.repOut===k?"selected":""}>${o.label}</option>`).join("")}</select></div>`:""}
+      ${r.leadsToggle?`<label class="small" style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="repLeadsAll" ${view.repLeadsAll?"checked":""}> Include all leads (not only those added in this period)</label>`:""}
+      <div class="row" style="margin-top:14px"><button class="btn pri sm" data-dl="${r.k}" data-fmt="xlsx">⬇ Excel</button>${r.xlsxOnly?"":`<button class="btn sm" data-dl="${r.k}" data-fmt="csv">⬇ CSV</button>`}</div></div>`}).join("");
+  return h+`</div>`;
+}
+function fileStamp(){const[a,b]=rangeBounds();return sod(a)===sod(b)?ymd(a):ymd(a)+"_to_"+ymd(b)}
+function downloadBlob(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
+function toCSV(rows){return "﻿"+rows.map(r=>r.map(v=>{v=String(v??"");if(/^[=+\-@]/.test(v))v="'"+v;return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v}).join(",")).join("\r\n")}
+let xlsxLoading=null;
+function loadXLSX(){if(window.XLSX)return Promise.resolve();return xlsxLoading||(xlsxLoading=new Promise((ok,no)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=ok;s.onerror=()=>{xlsxLoading=null;no(new Error("Couldn't load the Excel library – check your internet or use CSV"))};document.head.appendChild(s)}))}
+function sheetFrom(rows){const ws=XLSX.utils.aoa_to_sheet(rows);ws["!cols"]=(rows[0]||[]).map((_,i)=>({wch:Math.min(50,Math.max(10,...rows.slice(0,200).map(r=>String(r[i]??"").length+2)))}));return ws}
+async function download(k,format){
+  const r=REPORTS.find(x=>x.k===k);const base=`SN-CRM_${r.title.replace(/[^A-Za-z]+/g,"-").replace(/-$/,"")}_${fileStamp()}`;
+  try{
+    if(format==="csv"){downloadBlob(new Blob([toCSV(r.rows())],{type:"text/csv;charset=utf-8"}),base+".csv");toast("Downloaded "+base+".csv");return}
+    toast("Preparing Excel file…");await loadXLSX();
+    const wb=XLSX.utils.book_new();
+    if(k==="full"){
+      const sv=view.repLeadsAll;view.repLeadsAll=true;const se=view.repEmp,so=view.repOut;view.repEmp="all";view.repOut="all";
+      [["Summary",rSummary()],["Telecaller performance",rPerformance()],["Call log",rCallLog()],["Leads",rLeads()],["Website enquiries",rEnquiries()],["Pending callbacks",rCallbacks()]]
+        .forEach(([n,rows])=>XLSX.utils.book_append_sheet(wb,sheetFrom(rows),n));
+      view.repLeadsAll=sv;view.repEmp=se;view.repOut=so;
+    }else XLSX.utils.book_append_sheet(wb,sheetFrom(r.rows()),r.title.slice(0,31));
+    XLSX.writeFile(wb,base+".xlsx");toast("Downloaded "+base+".xlsx");
+  }catch(e){toast("Download failed: "+e.message)}
+}
+function bindReports(){
+  document.querySelectorAll("[data-dl]").forEach(b=>b.onclick=()=>download(b.dataset.dl,b.dataset.fmt));
+  const e=$("#repEmp"),o=$("#repOut"),l=$("#repLeadsAll");
+  if(e)e.onchange=()=>{view.repEmp=e.value;render()};
+  if(o)o.onchange=()=>{view.repOut=o.value;render()};
+  if(l)l.onchange=()=>{view.repLeadsAll=l.checked;render()};
+}
+
 const empOpts=()=>S.employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)} (${esc(e.role)})</option>`).join("");
 function aAssign(){
   const f=view.assignFilter,q=view.q.toLowerCase();

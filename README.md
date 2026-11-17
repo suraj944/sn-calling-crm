@@ -10,6 +10,10 @@ Contact details shown on the home page are set in the `CONTACT` block at the bot
 
 # SN Calling CRM
 
+**Dashboard** (Admin, Manager, Team Lead): date range (today, yesterday, 7/30 days, this month, all time, custom), KPIs (calls, connected, interested, converted, new leads, callbacks due), calls-per-day chart, outcome breakdown, telecaller performance table, lead pipeline and lead sources.
+
+**⬇ Reports** (Admin, Manager): Excel/CSV downloads for the selected period – Full report workbook (Summary, Telecaller performance, Call log, Leads, Website enquiries, Pending callbacks), Call log (filter by telecaller/outcome), Telecaller performance, Leads, Website enquiries, Pending callbacks.
+
 A lightweight calling CRM for a tele-calling team. A manager assigns lists of names and numbers to employees, employees tap **📞 Call** to open their phone's dialer, and after each call they log an outcome, a remark and an optional callback time. Everything is stored in a Google Sheet.
 
 ## Features
@@ -71,6 +75,8 @@ Everyone logs in with **their own name and PIN** (no mobile number needed). The 
 | PIN Hash (auto) | Salted SHA-256 of the PIN – the real PIN is never stored (protected column) |
 | Last Login (auto) | Updated on each successful login (protected column) |
 | Created | When the account was added |
+
+**Leads** tab columns: ID · Name · Phone · City · Assigned To · Status · Follow-up · Last Remark · Last Called · Created · **Source** (Website / Import / Manual) · **Customer request** (what a website visitor asked for).
 
 **LoginLog** tab: every login attempt (time, name entered, ID, result: Success / Wrong PIN / Unknown name / Inactive / Locked).
 **Roles** tab: what each role can see and do.
