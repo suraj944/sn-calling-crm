@@ -423,7 +423,7 @@ const ymd=t=>{const d=new Date(t);return `${d.getFullYear()}-${pad(d.getMonth()+
 const RANGES=[["today","Today"],["yesterday","Yesterday"],["7d","Last 7 days"],["30d","Last 30 days"],["month","This month"],["all","All time"],["custom","Custom"]];
 if(!view.range)view.range={key:"7d",from:ymd(Date.now()-6*DAY),to:ymd(Date.now())};
 if(!view.fwRange)view.fwRange={key:"all",from:ymd(Date.now()-29*DAY),to:ymd(Date.now())};
-const onFieldWork=()=>(view.who==="admin"&&view.tab==="meet")||(view.who!=="admin"&&view.etab==="meet");
+const onFieldWork=()=>(view.who==="admin"&&view.tab==="meet")||(view.who!=="admin"&&(view.etab==="meet"||(typeof pageKind==="function"&&pageKind(emp(view.who))==="field")));
 const curRange=()=>onFieldWork()?view.fwRange:view.range;
 function rangeBounds(){
   const r=curRange(),t0=sod(Date.now());
@@ -906,11 +906,17 @@ function openChangePin(){
 
 /* ---------- EMPLOYEE VIEW ---------- */
 const lastOf=l=>l.logs[0]||(l.lastRemark||l.lastAt?{remark:l.lastRemark,at:l.lastAt}:null);
-const showEtabs=()=>!!ME&&view.who!=="admin"&&(view.who===ME.id||isLead());
+// Which sections a person's page has: Sales Managers = field work only, Telecaller Executives = leads only, others = both
+const pageKind=e=>!e?"both":e.role==="Sales Manager"?"field":e.role==="Telecaller Executive"?"leads":"both";
+const showEtabs=()=>!!ME&&view.who!=="admin"&&(view.who===ME.id||isLead())&&pageKind(emp(view.who))==="both";
 const etabs=()=>showEtabs()?`<div class="tabs">${(ME&&view.who===ME.id?[["leads","My leads"],["meet","My field work"]]:[["leads","Leads"],["meet","Field work"]]).map(([k,l])=>`<button class="tab ${(view.etab||"leads")===k?"on":""}" data-etab="${k}">${l}</button>`).join("")}</div>`:"";
 function bindEtabs(){document.querySelectorAll("[data-etab]").forEach(b=>b.onclick=()=>{view.etab=b.dataset.etab;render()})}
 function renderEmp(){
   const me=emp(view.who);if(!me){view.who="admin";return render()}
+  if(ME&&pageKind(me)==="field"){view.etab="meet";
+    $("#app").innerHTML=(view.who!==ME.id?`<div style="margin-bottom:14px"><div class="mute small">Field work of</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>`:`<div style="margin-bottom:14px"><div class="mute small">Good day,</div><div style="font-size:20px;font-weight:700">${esc(me.name)} – my field work</div></div>`)+aMeetings();
+    bindRange();bindMeetings();bindTips();return}
+  if(ME&&pageKind(me)==="leads")view.etab="leads";
   if(showEtabs()&&view.etab==="meet"){$("#app").innerHTML=etabs()+(ME&&view.who!==ME.id?`<div style="margin-bottom:14px"><div class="mute small">Field work of</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>`:"")+aMeetings();bindEtabs();bindRange();bindMeetings();bindTips();return}
   const mine=S.leads.filter(l=>l.assignedTo===me.id);
   const todayCalls=mine.flatMap(l=>l.logs).filter(g=>g.by===me.id&&today(g.at)).length;
