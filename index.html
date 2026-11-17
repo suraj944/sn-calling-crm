@@ -125,7 +125,7 @@ const SHEET_URL_DEFAULT="https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/edi
 const SRV="Google Sheets";
 // Apps Script Web app URL for this team's sheet. Logins are checked by the Apps Script; no secrets live in this file.
 const BUILTIN_API="https://script.google.com/macros/s/AKfycbz9UyLJzPbROL9kSAAmw0R5uG1qQorrEOr24IMOioQVXcIuIBjir9L90cCasmMoGxGn/exec";
-const ROLES=["Admin","Manager","Team Lead","Employee"];
+const ROLES=["Admin","Manager","Team Lead","Telecaller Executive"];
 const OUTCOMES={
   int:{label:"Interested",cls:"s-int"},
   cb:{label:"Call back later",cls:"s-cb"},
@@ -170,7 +170,7 @@ const canManageRole=r=>!ME||ME.role==="Admin"||rank(r)>rank(ME.role);
 /* ================= BUILD FROM SHEET ROWS ================= */
 function build(eRows,lRows,cRows){
   const allEmps=eRows.map((r,i)=>({id:String(r[0]||"").trim(),name:String(r[1]||"").trim(),phone:String(r[2]??""),
-    active:String(r[3]||"Yes").trim().toLowerCase()!=="no",role:ROLES.find(x=>x.toLowerCase()===String(r[4]||"").trim().toLowerCase())||"Employee",
+    active:String(r[3]||"Yes").trim().toLowerCase()!=="no",role:ROLES.find(x=>x.toLowerCase()===String(r[4]||"").trim().toLowerCase())||"Telecaller Executive",
     pinSet:!!(String(r[5]||"").trim()||String(r[6]||"").trim()),row:i+2})).filter(e=>e.id&&e.name);
   const findEmp=v=>{v=String(v||"").trim();if(!v)return null;const lv=v.toLowerCase();const e=allEmps.find(e=>e.id.toLowerCase()===lv||e.name.toLowerCase()===lv);return e?e.id:v};
   const leads=lRows.map((r,i)=>({id:String(r[0]||"").trim(),name:String(r[1]||""),phone:String(r[2]??""),city:String(r[3]||""),assignedTo:findEmp(r[4]),
@@ -214,9 +214,9 @@ const Live={
     await this.load();const max=S.allEmps.reduce((m,e)=>Math.max(m,parseInt(e.id.replace(/\D/g,""))||0),0);
     await call("append_values",{range:"Employees!A1",values:[["E"+(max+1),o.name,o.phone?normPhone(o.phone):"","Yes",o.role,o.pin,"","",toSheetTime(Date.now())]]});
   },
-  async updateEmp(o){await this.load();const e=emp(o.id);if(!e)throw new Error("Employee not found");
+  async updateEmp(o){await this.load();const e=emp(o.id);if(!e)throw new Error("Team member not found");
     await call("update_values",{range:`Employees!B${e.row}:E${e.row}`,values:[[o.name,o.phone?normPhone(o.phone):"","Yes",o.role]]})},
-  async resetPin(id,pin){await this.load();const e=emp(id);if(!e)throw new Error("Employee not found");
+  async resetPin(id,pin){await this.load();const e=emp(id);if(!e)throw new Error("Team member not found");
     await call("update_values",{range:`Employees!F${e.row}:G${e.row}`,values:[[pin,""]]})},   // first-time PIN; hashed on next login
   async removeEmp(id){
     await this.load();const e=S.allEmps.find(x=>x.id===id);if(!e)return;
@@ -257,7 +257,7 @@ let LIVE=Live;
 /* ================= BACKEND 3: demo data ================= */
 function demoSeed(){
   const H=3600e3,now=Date.now(),T=t=>toSheetTime(t);
-  const E=[["E1","Rahul Sharma","98100 11223","Yes","Employee"],["E2","Priya Nair","98200 33445","Yes","Employee"],["E3","Amit Verma","98300 55667","Yes","Team Lead"]];
+  const E=[["E1","Rahul Sharma","98100 11223","Yes","Telecaller Executive"],["E2","Priya Nair","98200 33445","Yes","Telecaller Executive"],["E3","Amit Verma","98300 55667","Yes","Team Lead"]];
   const names=["Ankit Gupta","Sneha Patel","Vikram Singh","Neha Joshi","Rohit Mehta","Pooja Reddy","Arjun Kapoor","Kavya Iyer","Sandeep Yadav","Ritu Malhotra","Manish Jain","Divya Menon","Karan Bhatia","Swati Kulkarni","Rajesh Kumar"];
   const cities=["Delhi","Mumbai","Pune","Bengaluru","Jaipur","Hyderabad","Chennai","Ahmedabad","Lucknow","Kolkata"];
   const L=names.map((n,i)=>["L"+(1001+i),n,"98"+(123+i)+" "+(10000+i*3217),cities[i%10],i<12?"E"+(i%3+1):"","New","","","",""]);
@@ -387,7 +387,7 @@ function renderAdmin(){
   bindAdmin();
 }
 function allLogs(){return S.leads.flatMap(l=>l.logs.map(g=>({...g,lead:l}))).sort((a,b)=>(b.at||0)-(a.at||0))}
-const callers=()=>S.employees.filter(e=>e.role==="Employee"||e.role==="Team Lead"||S.leads.some(l=>l.assignedTo===e.id));
+const callers=()=>S.employees.filter(e=>e.role==="Telecaller Executive"||e.role==="Team Lead"||S.leads.some(l=>l.assignedTo===e.id));
 function aDash(){
   const L=S.leads,logs=allLogs(),tl=logs.filter(g=>today(g.at));const c=k=>L.filter(l=>l.status===k).length;
   let h=`<div class="stats">
@@ -438,7 +438,7 @@ function aTeam(){
   let h=`<div class="card pad" style="margin-bottom:12px"><h3>Add a team member</h3><div class="row">
    <input id="eName" placeholder="Name (used to log in)" style="flex:2;min-width:150px">
    <input id="ePhone" inputmode="tel" placeholder="Mobile (optional)" style="flex:2;min-width:150px">
-   <select id="eRole">${roleOpts("Employee")}</select>
+   <select id="eRole">${roleOpts("Telecaller Executive")}</select>
    <input id="ePin" inputmode="numeric" placeholder="First PIN (4–8 digits)" style="flex:1;min-width:140px">
    <button class="btn pri" id="addEmp">Add</button></div>
    <p class="small mute" style="margin:8px 0 0">They log in with this <b>name</b> and PIN (names must be unique), and can change the PIN later. Only Admin, Manager and Team Lead can see the Google Sheet and the full team.</p></div>

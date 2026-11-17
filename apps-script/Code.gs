@@ -14,12 +14,13 @@
  * Employees tab = the credentials database:
  *   ID | Name (login) | Phone | Active | Role | PIN (first-time) | PIN Hash (auto) | Last Login (auto) | Created
  *   - People log in with their NAME + PIN. Names must be unique (case doesn't matter).
- *   - Role: Admin, Manager, Team Lead or Employee (see the Roles tab).
+ *   - Role: Admin, Manager, Team Lead or Telecaller Executive (see the Roles tab).
+ *     Old "Employee" values are treated as Telecaller Executive.
  *   - PIN: type a 4–8 digit first-time PIN; on first login it is replaced by a salted hash and cleared.
  * LoginLog tab: every login attempt (time, name entered, result).
  */
 
-const ROLES = ["Admin", "Manager", "Team Lead", "Employee"];
+const ROLES = ["Admin", "Manager", "Team Lead", "Telecaller Executive"];
 const SESSION_DAYS = 30;
 const MAX_FAILS = 5, LOCK_MIN = 15;
 
@@ -160,7 +161,7 @@ function addLeads_(list) {
 }
 
 function addEmp_(me, b) {
-  const role = ROLES.includes(b.role) ? b.role : "Employee";
+  const role = ROLES.includes(b.role) ? b.role : "Telecaller Executive";
   canManage_(me, role);
   checkName_(b.name);
   checkPhone_(b.phone);
@@ -174,7 +175,7 @@ function addEmp_(me, b) {
 
 function updateEmp_(me, b) {
   const e = emps_().find(x => x.id === b.id);
-  if (!e) throw new Error("Employee not found");
+  if (!e) throw new Error("Team member not found");
   canManage_(me, e.role);
   const role = ROLES.includes(b.role) ? b.role : e.role;
   canManage_(me, role);
@@ -187,7 +188,7 @@ function updateEmp_(me, b) {
 
 function resetPin_(me, id, pin) {
   const e = emps_().find(x => x.id === id);
-  if (!e) throw new Error("Employee not found");
+  if (!e) throw new Error("Team member not found");
   if (e.id !== me.id) canManage_(me, e.role);
   checkPin_(pin);
   sheet_("Employees").getRange(e.row, 6, 1, 2).setValues([["", hash_(e.id, pin)]]);
@@ -205,7 +206,7 @@ function changePin_(me, oldPin, newPin) {
 
 function removeEmp_(me, id) {
   const e = emps_().find(x => x.id === id);
-  if (!e) throw new Error("Employee not found");
+  if (!e) throw new Error("Team member not found");
   if (e.id === me.id) throw new Error("You can't remove yourself");
   canManage_(me, e.role);
   sheet_("Employees").getRange(e.row, 4).setValue("No");
@@ -222,7 +223,7 @@ function emps_() {
   return sh.getRange(2, 1, n, 7).getDisplayValues().map((r, i) => ({
     id: String(r[0]).trim(), name: String(r[1]).trim(), phone: String(r[2]).trim(),
     active: String(r[3] || "Yes").trim().toLowerCase() !== "no",
-    role: ROLES.find(x => x.toLowerCase() === String(r[4] || "").trim().toLowerCase()) || "Employee",
+    role: ROLES.find(x => x.toLowerCase() === String(r[4] || "").trim().toLowerCase()) || "Telecaller Executive",
     pin: String(r[5] || "").trim(), hash: String(r[6] || "").trim(), row: i + 2
   })).filter(x => x.id && x.name);
 }

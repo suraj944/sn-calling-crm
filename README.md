@@ -44,7 +44,7 @@ Everyone logs in with **their own name and PIN** (no mobile number needed). The 
 | **Admin** | Everything | Everything, incl. creating Admins/Managers | ✅ |
 | **Manager** | Everything | Assign/import leads, add/edit Team Leads & Employees, reset their PINs | ✅ |
 | **Team Lead** | All leads, team dashboard, call logs | Assign/import leads, log calls | ✅ |
-| **Employee** | Only leads assigned to them | Call, log outcome + remark | ❌ |
+| **Telecaller Executive** | Only leads assigned to them | Call, log outcome + remark | ❌ |
 
 ### Credentials database (Google Sheet)
 
@@ -56,7 +56,7 @@ Everyone logs in with **their own name and PIN** (no mobile number needed). The 
 | Name (login) | The name they log in with. Unique, case-insensitive |
 | Phone (optional) | Contact number only |
 | Active | `Yes` / `No` (dropdown). `No` blocks login and unassigns their leads |
-| Role | `Admin` / `Manager` / `Team Lead` / `Employee` (dropdown) |
+| Role | `Admin` / `Manager` / `Team Lead` / `Telecaller Executive` (dropdown) |
 | PIN (first-time) | 4–8 digits, kept as text. Cleared after first login |
 | PIN Hash (auto) | Salted SHA-256 of the PIN – the real PIN is never stored (protected column) |
 | Last Login (auto) | Updated on each successful login (protected column) |
