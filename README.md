@@ -34,14 +34,26 @@ The sheet ID is set at the top of the script in `index.html` (`SHEET_ID`). The s
 
 ## How it runs
 
-`index.html` is a single self-contained page published as a Claude artifact. It reads and writes the sheet through the viewer's own **Google Sheets connector** on claude.ai (`get_values`, `update_values`, `append_values`), so no API keys are stored in the code.
+`index.html` is a single self-contained page that works in two places:
 
-Each user needs:
-1. The artifact shared with them on claude.ai
-2. The Google Sheets connector added in claude.ai → Settings → Connectors
-3. Edit access to the Google Sheet
+### 1. As a website (GitHub Pages): uses a Google Apps Script
+**Live site:** https://suraj944.github.io/sn-calling-crm/
 
-If the page can't reach the sheet, for example when opened as a plain file, it shows a banner and runs on sample data that is **not saved**.
+One-time setup by the admin:
+1. Open the Google Sheet → **Extensions → Apps Script**.
+2. Replace the contents of `Code.gs` with [`apps-script/Code.gs`](apps-script/Code.gs) and set `API_KEY` to your own long secret.
+3. **Deploy → New deployment → Web app**. Set *Execute as*: **Me** and *Who has access*: **Anyone**. Authorize it and copy the **Web app URL**.
+4. Open the website → **⚙ Connect sheet** → paste the URL and the key → **Save & connect**.
+5. In the same dialog, click **Copy setup link** and send that link to employees. Opening it connects their phone automatically.
+
+The key is never stored in this repo; each device keeps it in its own browser storage. Anyone who has the setup link can read and edit the CRM data, so share it only with your team. To revoke access, change `API_KEY` in Apps Script and redeploy (**Manage deployments → Edit → New version**).
+
+> After you change `Code.gs`, always redeploy as a **new version**, or the website keeps using the old code.
+
+### 2. As a Claude artifact: uses the claude.ai Google Sheets connector
+Opened inside claude.ai, the page reads and writes through the viewer's own Google Sheets connector (`get_values`, `update_values`, `append_values`). Each user needs the artifact shared with them, the Google Sheets connector added, and edit access to the sheet.
+
+If the page isn't connected to the sheet, it shows a banner and runs on sample data that is **not saved**.
 
 ## Notes
 - "Viewing as" is a role picker, not a login. A next step would be an Email column in *Employees* so each person only sees their own leads.

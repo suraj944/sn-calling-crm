@@ -105,6 +105,7 @@ a.lnk{color:var(--brand);text-decoration:none;font-weight:500}
   <div class="logo"><i>☎</i>SN Calling CRM</div>
   <div class="spacer"></div>
   <div class="sync"><span class="dot" id="dot"></span><span id="syncTxt">Connecting…</span></div>
+  <button class="btn sm" id="cfgBtn" style="display:none">⚙ Connect sheet</button>
   <button class="btn sm" id="refresh" title="Reload from Google Sheet">⟳ Refresh</button>
   <a class="btn sm" href="https://docs.google.com/spreadsheets/d/1Aw73vwzpFFdyT08j8BZ4klGE7uamFJwpew7kBCSHLrU/edit" target="_blank" rel="noopener">Open sheet ↗</a>
   <div class="role">Viewing as <select id="who"></select></div>
@@ -207,6 +208,26 @@ const Live={
   }
 };
 
+/* ================= APPS SCRIPT BACKEND (GitHub Pages / any website) ================= */
+const CFG_KEY="sn-crm-sheet";
+function getCfg(){try{return JSON.parse(localStorage.getItem(CFG_KEY))||{}}catch(e){return{}}}
+function setCfg(c){try{c?localStorage.setItem(CFG_KEY,JSON.stringify(c)):localStorage.removeItem(CFG_KEY)}catch(e){}}
+(function takeSetupLink(){try{const q=new URLSearchParams(location.search);if(q.get("api")&&q.get("key")){setCfg({url:q.get("api"),key:q.get("key")});history.replaceState(null,"",location.pathname+location.hash)}}catch(e){}})();
+const Script={
+  async req(action,data){const c=getCfg();let r;
+    if(action==="load")r=await fetch(c.url+(c.url.includes("?")?"&":"?")+"action=load&key="+encodeURIComponent(c.key));
+    else r=await fetch(c.url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({key:c.key,action,...data})});
+    let j;try{j=await r.json()}catch(e){throw new Error("The Apps Script URL didn't return data – check it's the Web app URL and that access is set to 'Anyone'.")}
+    if(!j.ok)throw new Error(j.error||"Request failed");return j},
+  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);lastSync=Date.now()},
+  async logCall(leadId,out,remark,fu,by){await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),by,byName:empName(by)})},
+  async assign(ids,to){await this.req("assign",{ids,to:to||""})},
+  async addLeads(list){await this.req("addLeads",{leads:list.map(x=>({...x,phone:normPhone(x.phone)}))})},
+  async addEmp(name,phone){await this.req("addEmp",{name,phone:normPhone(phone||"")})},
+  async removeEmp(id){await this.req("removeEmp",{id})}
+};
+let LIVE=Live;
+
 /* ================= DEMO BACKEND (used when the sheet can't be reached) ================= */
 function demoSeed(){
   const H=3600e3,now=Date.now(),T=t=>toSheetTime(t);
@@ -228,7 +249,7 @@ const Demo={
   async addEmp(n,p){D.E.push(["E"+(D.E.length+1),n,p,"Yes"])},
   async removeEmp(id){const e=D.E.find(x=>x[0]===id);if(e)e[3]="No";D.L.forEach(r=>{if(r[4]===id)r[4]=""})}
 };
-const API=()=>MODE==="live"?Live:Demo;
+const API=()=>MODE==="live"?LIVE:Demo;
 
 /* ================= ERROR HANDLING ================= */
 function explain(err){
@@ -243,15 +264,21 @@ function explain(err){
 }
 async function connect(){
   setSync();
-  try{mcp=window.claude?await window.claude.use("mcp"):null}catch(e){mcp=null}
+  const inClaude=!!window.claude;
+  $("#cfgBtn").style.display=inClaude?"none":"";
+  if(!inClaude){
+    const c=getCfg();
+    if(c.url&&c.key){LIVE=Script;mcp=true;await reload(true);return}
+    MODE="demo";demoReason="Not connected to the Google Sheet yet, so you're seeing sample data (changes are not saved). Click ⚙ Connect sheet and paste the Apps Script link + key from your manager.";await Demo.load();render();return}
+  try{mcp=await window.claude.use("mcp")}catch(e){mcp=null}
   if(!mcp){MODE="demo";demoReason="Google Sheets isn't available in this view, so you're seeing sample data. Open this page on claude.ai (signed in, with the Google Sheets connector added) to work on the live sheet.";await Demo.load();render();return}
-  await reload(true);
+  LIVE=Live;await reload(true);
 }
 async function reload(first){
   if(!mcp){render();return}
   BUSY=true;setSync();
   try{
-    try{await Live.load()}catch(e){if(e&&e.retryable){await new Promise(r=>setTimeout(r,(e.retryAfterMs||800)+Math.random()*600));await Live.load()}else throw e}
+    try{await LIVE.load()}catch(e){if(e&&e.retryable){await new Promise(r=>setTimeout(r,(e.retryAfterMs||800)+Math.random()*600));await LIVE.load()}else throw e}
     MODE="live";demoReason="";
   }catch(e){
     if(MODE!=="live"){MODE="demo";await Demo.load()}
@@ -262,7 +289,7 @@ async function reload(first){
 async function write(fn,okMsg){
   if(BUSY)return toast("Please wait – still saving…");
   BUSY=true;setSync();
-  try{await fn(API());if(MODE==="live"){await Live.load();toast(okMsg+" · saved to Google Sheet ✓")}else{await Demo.load();toast(okMsg+" (demo – not saved)")}BUSY=false;render();return true}
+  try{await fn(API());if(MODE==="live"){await LIVE.load();toast(okMsg+" · saved to Google Sheet ✓")}else{await Demo.load();toast(okMsg+" (demo – not saved)")}BUSY=false;render();return true}
   catch(e){BUSY=false;setSync();toast("Not saved: "+explain(e).slice(0,120));
     // write outcome may be uncertain – re-read to show the truth
     if(MODE==="live")reload();return false}
@@ -461,6 +488,25 @@ function openLead(id,fromCall){
     const ok=await write(api=>api.logCall(l.id,M.out,$("#rem").value.trim(),fu,by),"Call logged");
     if(ok)close();else{btn.disabled=false;btn.textContent="Save call log"}};
 }
+function openCfg(){
+  const c=getCfg();
+  $("#modal").innerHTML=`<div class="mh"><div style="font-weight:700">Connect to Google Sheet</div><button class="x" id="mx">×</button></div>
+  <div class="mb"><p class="small mute" style="margin-top:0">Paste the <b>Apps Script Web app URL</b> and <b>access key</b> from your manager. This is saved on this device only.</p>
+   <label class="f">Apps Script Web app URL</label><input id="cUrl" style="width:100%" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(c.url||"")}">
+   <label class="f">Access key</label><input id="cKey" style="width:100%" placeholder="Secret key" value="${esc(c.key||"")}">
+   ${c.url&&c.key?`<div class="card pad" style="margin-top:14px"><b class="small">Setup link for employees</b><div class="small mute" style="margin:4px 0 8px">Send this link to employees – opening it connects their phone automatically. Share it only with your team.</div><button class="btn sm" id="cLink">⧉ Copy setup link</button></div>`:""}
+  </div>
+  <div class="mf">${c.url?`<button class="btn" id="cOff" style="margin-right:auto">Disconnect</button>`:""}<button class="btn" id="mc">Cancel</button><button class="btn pri" id="cSave">Save & connect</button></div>`;
+  $("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");
+  $("#mx").onclick=close;$("#mc").onclick=close;
+  $("#cSave").onclick=async()=>{const url=$("#cUrl").value.trim(),key=$("#cKey").value.trim();
+    if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(url))return toast("That doesn't look like an Apps Script Web app URL");if(!key)return toast("Enter the access key");
+    setCfg({url,key});close();MODE="loading";demoReason="";render();await connect();if(MODE==="live")toast("Connected to Google Sheet ✓")};
+  if($("#cOff"))$("#cOff").onclick=async()=>{setCfg(null);close();await connect();toast("Disconnected")};
+  if($("#cLink"))$("#cLink").onclick=async()=>{const u=location.origin+location.pathname+"?api="+encodeURIComponent(c.url)+"&key="+encodeURIComponent(c.key);
+    try{await navigator.clipboard.writeText(u);toast("Setup link copied")}catch(e){toast("Copy blocked – link: "+u)}};
+}
+$("#cfgBtn").onclick=openCfg;
 $("#mbg").onclick=e=>{if(e.target.id==="mbg")$("#mbg").classList.remove("show")};
 
 render();connect();
