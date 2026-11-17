@@ -390,7 +390,7 @@ function setSync(){
   $("#banner").innerHTML=demoReason?`<div>⚠ ${esc(demoReason)}</div>`:"";
   // header controls by role
   const live=MODE==="live";
-  const os=$("#openSheet");const showSheet=live&&isLead()&&!!SHEET_URL;os.style.display=showSheet?"":"none";if(showSheet)os.href=SHEET_URL;
+  const os=$("#openSheet");const showSheet=live&&canViewAs()&&!!SHEET_URL;/* Open sheet: Admin only */os.style.display=showSheet?"":"none";if(showSheet)os.href=SHEET_URL;
   $("#refresh").style.display=MODE==="login"?"none":"";
   $("#whoBox").style.display=(MODE==="login"||!isLead()||!canViewAs())?"none":"";
   $("#userBox").innerHTML=ME&&MODE!=="login"?`<div class="userchip"><div class="av">${initials(ME.name)}</div><div><b>${esc(ME.name)}</b><div class="small mute">${esc(ME.role)}</div></div></div>
@@ -458,7 +458,7 @@ function renderAdmin(){
 function aMyTeam(){
   const today=sod(Date.now()),ppl=S.employees.slice().sort((a,b)=>(a.id===ME.id?-1:b.id===ME.id?1:a.name.localeCompare(b.name)));
   let h=`<div class="card pad" style="margin-bottom:12px"><h3>My team · ${ppl.length} people</h3>
-    <div class="small mute" style="margin-top:-6px">Your team members and how they're doing today. You can reset a forgotten PIN; to add, move or remove people ask your Manager or Admin.${SHEET_URL?` Your team's Google Sheet opens with <b>Open sheet ↗</b> at the top.`:""}</div></div>`;
+    <div class="small mute" style="margin-top:-6px">Your team members and how they're doing today. You can reset a forgotten PIN; to add, move or remove people ask your Manager or Admin.</div></div>`;
   h+=`<div class="card tw"><table><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Last login</th><th>Calling list</th><th>Not yet called</th><th>Leads</th><th>Calls today</th><th>Callbacks due</th><th>Login</th><th></th></tr>`;
   h+=ppl.map(e=>{const list=S.leads.filter(l=>l.assignedTo===e.id),self=e.id===ME.id;
     const callsToday=allLogs().filter(g=>g.by===e.id&&g.at>=today).length,due=list.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<=today+DAY-1).length;

@@ -156,7 +156,7 @@ function load_(me) {
     me: pub_(me),
     employees: people.map(x => [x.id, x.name, x.phone, x.active ? "Yes" : "No", x.role, x.hash || x.pin ? "set" : "", x.tl || "", isLead ? x.last : ""]),
     leads, logs,
-    sheetUrl: !isLead ? "" : sheetUrlFor_(me),   // Team Leads land on their own "Team – <name>" tab
+    sheetUrl: me.role === "Admin" ? sheetUrlFor_(me) : "",   // only Admin gets the Google Sheet link
     ...meetings_(me, isLead),
     cases: cases_(me, emps),
     serverTime: now_()
