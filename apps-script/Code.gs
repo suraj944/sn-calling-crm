@@ -20,7 +20,7 @@
  *   - Role: Admin, Manager, Team Lead, Sales Manager or Telecaller Executive (see the Roles tab).
  *     Old "Employee" values are treated as Telecaller Executive.
  *   - PIN: exactly 4 digits. Type it in the PIN column for a new person OR to reset someone's PIN –
- *     a PIN typed here always wins over the old one. On the next login it is replaced by a salted hash and cleared.
+ *     a PIN typed here always wins over the old one. The PIN stays visible here (only Admin opens the sheet from the CRM).
  * LoginLog tab: every login attempt (time, name entered, result).
  * Website enquiries (home page callback form) are added to the Calling List as new, unassigned contacts.
  * "Leads" tab = read-only view of customers marked Interested / Converted (a FILTER formula on the Calling List).
@@ -99,8 +99,8 @@ function login_(login, pin) {
     if (e.pin) {                       // PIN typed in the sheet (new person or a reset) wins over the old hash
       ok = String(e.pin).trim() === pin;
       if (ok) {
-        sheet_("Employees").getRange(e.row, 6, 1, 2).setValues([["", hash_(e.id, pin)]]); // move it to the hash
-        if (e.hash) logoutAll_(e.id);  // it was a reset: sign out old devices
+        sheet_("Employees").getRange(e.row, 6, 1, 2).setNumberFormat("@").setValues([[pin, hash_(e.id, pin)]]); // PIN stays visible in the sheet
+        if (e.hash && e.hash !== hash_(e.id, pin)) logoutAll_(e.id);  // the PIN was changed in the sheet: sign out old devices
       }
     } else if (e.hash) ok = hash_(e.id, pin) === e.hash;
   }
@@ -266,7 +266,7 @@ function changePin_(me, oldPin, newPin) {
   const ok = me.pin ? String(me.pin) === old : hash_(me.id, old) === me.hash;
   if (!ok) throw new Error("Current PIN is wrong");
   checkPin_(newPin);
-  sheet_("Employees").getRange(me.row, 6, 1, 2).setValues([["", hash_(me.id, newPin)]]);
+  sheet_("Employees").getRange(me.row, 6, 1, 2).setNumberFormat("@").setValues([[String(newPin).trim(), hash_(me.id, newPin)]]);
   return { changed: true };
 }
 

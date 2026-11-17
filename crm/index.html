@@ -1068,7 +1068,7 @@ function openEditEmp(id){const e=emp(id);if(!e)return;const self=ME&&e.id===ME.i
     if(S.employees.some(x=>x.id!==id&&normName(x.name)===normName(name)))return "Someone else already has this name";
     return await write(api=>api.updateEmp({id,name,phone,role,tl}),"Saved")?true:"Not saved – see the message at the bottom"})}
 function openResetPin(id){const e=emp(id);if(!e)return;
-  formModal("Reset PIN – "+esc(e.name),`<p class="small mute" style="margin-top:0">Set a new 4-digit PIN and tell ${esc(e.name.split(" ")[0])}. Their old PIN stops working, they're logged out of other devices, and the new PIN shows in the sheet's PIN column until they log in.</p>
+  formModal("Reset PIN – "+esc(e.name),`<p class="small mute" style="margin-top:0">Set a new 4-digit PIN and tell ${esc(e.name.split(" ")[0])}. Their old PIN stops working, they're logged out of other devices, and the new PIN shows in the sheet's PIN column.</p>
    <label class="f">New PIN (4 digits)</label><input id="fPin" inputmode="numeric" maxlength="4" style="width:100%">`,"Set PIN",async()=>{
     const pin=$("#fPin").value.trim();if(!validPin(pin))return "PIN must be 4 digits";
     return await write(api=>api.resetPin(id,pin),"PIN updated for "+e.name)?true:"Not saved"})}
