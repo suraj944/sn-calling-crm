@@ -1076,7 +1076,8 @@ function renderEmp(){
   const oc=k=>calls.filter(g=>g.outcome===k).length;
   const ctab=view.ctab||"leads";
   const myLeadsP=leadsIn(mine),myLeads=mine.filter(isLeadC);
-  let h=etabs()+`<div style="margin-bottom:14px"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>`;
+  const tlBtn=me.role==="Team Lead"&&isMgr()&&!isTL()&&!own?`<button class="btn sm" id="seeTeam">👥 See ${esc(me.name.split(" ")[0])}'s team view</button>`:"";
+  let h=etabs()+`<div style="margin-bottom:14px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap"><div style="flex:1"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>${tlBtn}</div>`;
   h+=rangeBar();
   h+=`<div class="stats">
   <div class="card stat"><span>Calls made</span><b>${calls.length}</b><div class="small mute">${calls.length?new Set(calls.map(g=>g.lead.id)).size+" different customers":"in this period"}</div></div>
@@ -1113,6 +1114,7 @@ function renderEmp(){
   $("#app").innerHTML=h;
   bindEtabs();bindRange();bindTips();
   document.querySelectorAll("[data-ctab]").forEach(b=>b.onclick=()=>{view.ctab=b.dataset.ctab;render()});
+  const st=$("#seeTeam");if(st)st.onclick=()=>{view.team=me.id;view.who="admin";view.tab="byemp";render()};
   const cs=$("#cOut");if(cs)cs.onchange=()=>{view.cOut=cs.value;render()};
   document.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{view.filter=b.dataset.f;render()});
   const eq=$("#eq");if(eq)eq.oninput=e=>{view.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#eq");n.focus();n.setSelectionRange(p,p)};
