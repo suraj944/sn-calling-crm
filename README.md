@@ -1,3 +1,13 @@
+# SN Financial Services – website + Calling CRM
+
+| Page | Link | What it is |
+|---|---|---|
+| **Home page** | https://suraj944.github.io/sn-calling-crm/ | Public site: every loan type, EMI calculator, *Request a callback* form |
+| **Calling CRM** | https://suraj944.github.io/sn-calling-crm/crm/ | Staff login (name + PIN), lead assignment, click-to-call, call remarks |
+
+Callback requests from the home page go straight into the **Leads** tab of the Google Sheet as new, unassigned leads (remark starts with "Website enquiry – …"), ready to assign to a Telecaller Executive in the CRM.
+Contact details shown on the home page are set in the `CONTACT` block at the bottom of `index.html`.
+
 # SN Calling CRM
 
 A lightweight calling CRM for a tele-calling team. A manager assigns lists of names and numbers to employees, employees tap **📞 Call** to open their phone's dialer, and after each call they log an outcome, a remark and an optional callback time. Everything is stored in a Google Sheet.
@@ -35,7 +45,7 @@ The sheet ID is set at the top of the script in `index.html` (`SHEET_ID`). The s
 ## How it runs
 
 ### Website (GitHub Pages) with personal logins
-**Live site:** https://suraj944.github.io/sn-calling-crm/
+**CRM:** https://suraj944.github.io/sn-calling-crm/crm/
 
 Everyone logs in with **their own name and PIN** (no mobile number needed). The Google Apps Script in [`apps-script/Code.gs`](apps-script/Code.gs) checks every login and request, so the rules below are enforced by the server, not just hidden in the page.
 
@@ -70,7 +80,7 @@ Everyone logs in with **their own name and PIN** (no mobile number needed). The 
 - Anyone can change their own PIN with **🔑 PIN**.
 - **Open sheet** only works for people whose Google account also has access to the sheet, so share the sheet with your managers and team leads.
 
-**One-time deployment:** open the sheet → Extensions → Apps Script → paste `Code.gs` → Deploy → New deployment → Web app (Execute as: **Me**, Who has access: **Anyone**) → copy the `/exec` URL into `BUILTIN_API` at the top of the script in `index.html`. After editing `Code.gs`, redeploy via **Manage deployments → Edit → New version**.
+**One-time deployment:** open the sheet → Extensions → Apps Script → paste `Code.gs` → Deploy → New deployment → Web app (Execute as: **Me**, Who has access: **Anyone**) → copy the `/exec` URL into `BUILTIN_API` at the top of the script in `crm/index.html` (and `API` in the home page `index.html`). After editing `Code.gs`, redeploy via **Manage deployments → Edit → New version**.
 
 ### Claude artifact (claude.ai)
 Inside claude.ai the page uses the viewer's own Google Sheets connector and gives full (admin) access. Use it only for people who already have edit access to the sheet.

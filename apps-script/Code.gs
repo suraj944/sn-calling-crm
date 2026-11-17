@@ -18,6 +18,7 @@
  *     Old "Employee" values are treated as Telecaller Executive.
  *   - PIN: type a 4–8 digit first-time PIN; on first login it is replaced by a salted hash and cleared.
  * LoginLog tab: every login attempt (time, name entered, result).
+ * Website enquiries (home page callback form) are added to Leads as new, unassigned leads.
  */
 
 const ROLES = ["Admin", "Manager", "Team Lead", "Telecaller Executive"];
@@ -36,6 +37,10 @@ function doPost(e) {
   return respond_(() => {
     const b = JSON.parse((e.postData && e.postData.contents) || "{}");
     if (b.action === "login") return login_(b.login, b.pin);
+    if (b.action === "enquiry") {                      // public "Request a callback" form on the home page
+      const lk = LockService.getScriptLock(); lk.waitLock(20000);
+      try { return enquiry_(b); } finally { lk.releaseLock(); }
+    }
     const me = auth_(b.token);
     if (b.action === "logout") { PropertiesService.getScriptProperties().deleteProperty("s:" + b.token); return {}; }
     const lock = LockService.getScriptLock();
@@ -214,6 +219,32 @@ function removeEmp_(me, id) {
   const ids = rows_("Leads", 5).filter(x => String(x[4]).trim() === e.id).map(x => String(x[0]).trim());
   if (ids.length) assign_(ids, "");
   return { removed: true };
+}
+
+/* ---------------- website enquiries ---------------- */
+// Adds a new, unassigned lead to the Leads tab. Light spam protection: honeypot field,
+// Indian mobile validation, one request per number per 6 hours, max 200 requests per hour.
+function enquiry_(b) {
+  if (b.website) return { saved: true };                            // bots fill the hidden field
+  const name = String(b.name || "").replace(/[<>]/g, "").trim().slice(0, 80);
+  const d = digits_(b.phone).replace(/^(91|0)(?=\d{10}$)/, "");
+  if (name.length < 2) throw new Error("Please enter your name");
+  if (!/^[6-9]\d{9}$/.test(d)) throw new Error("Please enter a valid 10-digit mobile number");
+  const cache = CacheService.getScriptCache();
+  if (cache.get("enq:" + d)) return { saved: true, duplicate: true };
+  const count = Number(cache.get("enq:count") || 0);
+  if (count >= 200) throw new Error("We're receiving a lot of requests right now");
+  cache.put("enq:count", String(count + 1), 3600);
+  cache.put("enq:" + d, "1", 6 * 3600);
+  const clean = v => String(v || "").replace(/[<>]/g, "").replace(/^[=+\-@]/, "'$&").trim();
+  const need = clean(b.need).slice(0, 60) || "Not specified";
+  const msg = clean(b.msg).slice(0, 400);
+  const sh = sheet_("Leads"); let max = 1000;
+  rows_("Leads", 1).forEach(r => { const v = parseInt(String(r[0]).replace(/\D/g, ""), 10); if (v > max) max = v; });
+  const at = now_();
+  sh.appendRow(["L" + (max + 1), clean(name), d.slice(0, 5) + " " + d.slice(5), clean(b.city).slice(0, 60), "", "New", "",
+    "Website enquiry – " + need + (msg ? ": " + msg : ""), "", at]);
+  return { saved: true };
 }
 
 /* ---------------- helpers ---------------- */
