@@ -11,9 +11,12 @@
  *  4. Copy the Web app URL (ends in /exec) – the website uses it.
  *  After changing this code later: Deploy → Manage deployments → ✏ → Version: New version → Deploy.
  *
- * Employees tab columns:  ID | Name | Phone | Active | Role | PIN | PIN Hash
- *   Role: Admin, Manager, Team Lead or Employee
- *   PIN:  type a first-time PIN here; on first login it is replaced by a hash (PIN Hash) and cleared.
+ * Employees tab = the credentials database:
+ *   ID | Name (login) | Phone | Active | Role | PIN (first-time) | PIN Hash (auto) | Last Login (auto) | Created
+ *   - People log in with their NAME + PIN. Names must be unique (case doesn't matter).
+ *   - Role: Admin, Manager, Team Lead or Employee (see the Roles tab).
+ *   - PIN: type a 4–8 digit first-time PIN; on first login it is replaced by a salted hash and cleared.
+ * LoginLog tab: every login attempt (time, name entered, result).
  */
 
 const ROLES = ["Admin", "Manager", "Team Lead", "Employee"];
@@ -55,13 +58,12 @@ function doPost(e) {
 /* ---------------- auth ---------------- */
 function login_(login, pin) {
   login = String(login || "").trim(); pin = String(pin || "").trim();
-  if (!login || !pin) throw new Error("Enter your mobile number and PIN");
-  const cache = CacheService.getScriptCache(), fk = "fail:" + digits_(login || "x");
+  if (!login || !pin) throw new Error("Enter your name and PIN");
+  const cache = CacheService.getScriptCache(), fk = "fail:" + norm_(login);
   const fails = Number(cache.get(fk) || 0);
-  if (fails >= MAX_FAILS) throw new Error("Too many wrong attempts. Try again in " + LOCK_MIN + " minutes.");
+  if (fails >= MAX_FAILS) { audit_(login, null, "Locked (too many attempts)"); throw new Error("Too many wrong attempts. Try again in " + LOCK_MIN + " minutes."); }
   const emps = emps_();
-  const d = digits_(login).slice(-10);
-  const e = emps.find(x => (d.length >= 10 && digits_(x.phone).slice(-10) === d) || x.id.toLowerCase() === login.toLowerCase());
+  const e = emps.find(x => norm_(x.name) === norm_(login)) || emps.find(x => x.id.toLowerCase() === login.toLowerCase());
   let ok = false;
   if (e && e.active) {
     if (e.hash) ok = hash_(e.id, pin) === e.hash;
@@ -70,8 +72,14 @@ function login_(login, pin) {
       if (ok) sheet_("Employees").getRange(e.row, 6, 1, 2).setValues([["", hash_(e.id, pin)]]); // move first-time PIN to hash
     }
   }
-  if (!ok) { cache.put(fk, String(fails + 1), LOCK_MIN * 60); throw new Error("Wrong mobile number or PIN"); }
+  if (!ok) {
+    cache.put(fk, String(fails + 1), LOCK_MIN * 60);
+    audit_(login, e, !e ? "Unknown name" : !e.active ? "Inactive account" : "Wrong PIN");
+    throw new Error("Wrong name or PIN");
+  }
   cache.remove(fk);
+  sheet_("Employees").getRange(e.row, 8).setValue(now_());
+  audit_(login, e, "Success");
   const props = PropertiesService.getScriptProperties();
   const now = Date.now();
   Object.entries(props.getProperties()).forEach(([k, v]) => { // tidy expired sessions
@@ -154,13 +162,13 @@ function addLeads_(list) {
 function addEmp_(me, b) {
   const role = ROLES.includes(b.role) ? b.role : "Employee";
   canManage_(me, role);
-  if (!b.name) throw new Error("Name is required");
+  checkName_(b.name);
   checkPhone_(b.phone);
   checkPin_(b.pin);
   let max = 0;
   emps_().forEach(x => { const v = parseInt(x.id.replace(/\D/g, ""), 10); if (v > max) max = v; });
   const id = "E" + (max + 1);
-  sheet_("Employees").appendRow([id, b.name, text_(b.phone), "Yes", role, "", hash_(id, b.pin)]);
+  sheet_("Employees").appendRow([id, String(b.name).trim(), text_(b.phone || ""), "Yes", role, "", hash_(id, b.pin), "", now_()]);
   return { id };
 }
 
@@ -171,8 +179,9 @@ function updateEmp_(me, b) {
   const role = ROLES.includes(b.role) ? b.role : e.role;
   canManage_(me, role);
   if (e.id === me.id && role !== me.role) throw new Error("You can't change your own role");
+  if (b.name) checkName_(b.name, e.id);
   if (b.phone !== undefined) checkPhone_(b.phone, e.id);
-  sheet_("Employees").getRange(e.row, 2, 1, 4).setValues([[b.name || e.name, text_(b.phone !== undefined ? b.phone : e.phone), "Yes", role]]);
+  sheet_("Employees").getRange(e.row, 2, 1, 4).setValues([[String(b.name || e.name).trim(), text_(b.phone !== undefined ? b.phone : e.phone), "Yes", role]]);
   return { updated: true };
 }
 
@@ -219,9 +228,15 @@ function emps_() {
 }
 const pub_ = e => ({ id: e.id, name: e.name, role: e.role, phone: e.phone });
 function checkPin_(p) { if (!/^\d{4,8}$/.test(String(p || "").trim())) throw new Error("PIN must be 4–8 digits"); }
-function checkPhone_(p, selfId) {
+function checkName_(n, selfId) {
+  n = String(n || "").trim();
+  if (n.length < 2) throw new Error("Enter a name (it's used to log in)");
+  if (emps_().some(x => x.id !== selfId && x.active && norm_(x.name) === norm_(n))) throw new Error("Someone already has the name \"" + n + "\" – add a surname or initial so logins stay unique");
+}
+function checkPhone_(p, selfId) {            // mobile is optional contact info
   const d = digits_(p).slice(-10);
-  if (d.length < 10) throw new Error("Enter a valid 10-digit mobile number");
+  if (!d) return;
+  if (d.length < 10) throw new Error("Enter a valid 10-digit mobile number (or leave it empty)");
   if (emps_().some(x => x.id !== selfId && x.active && digits_(x.phone).slice(-10) === d)) throw new Error("Another employee already uses this mobile number");
 }
 function hash_(id, pin) {
@@ -254,5 +269,10 @@ function findRow_(sh, id) {
   return 0;
 }
 const digits_ = s => String(s || "").replace(/\D/g, "");
+const norm_ = s => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+function audit_(login, e, result) {
+  try { const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("LoginLog");
+    if (sh) sh.appendRow([now_(), String(login).slice(0, 60), e ? e.id : "", e ? e.name : "", result]); } catch (x) {}
+}
 function now_() { return Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd HH:mm"); }
 function text_(p) { p = String(p || ""); return p && !p.startsWith("'") && /^[+\d]/.test(p) && !/\s/.test(p) ? "'" + p : p; }
