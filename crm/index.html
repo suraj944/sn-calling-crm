@@ -416,6 +416,7 @@ function renderAdmin(){
 }
 /* ---------- LEADS = interested customers ---------- */
 if(!view.lf)view.lf={who:"all",st:"all",q:""};
+if(!view.lsel)view.lsel=new Set();
 function aLeadsTab(){
   const f=view.lf,q=f.q.toLowerCase();
   const all=leadsIn();
@@ -427,13 +428,17 @@ function aLeadsTab(){
     <select id="lwho"><option value="all">All telecallers</option>${S.employees.map(e=>`<option value="${esc(e.id)}" ${f.who===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}<option value="none" ${f.who==="none"?"selected":""}>Unassigned</option></select>
     <select id="lst"><option value="all">Interested + Converted</option><option value="int" ${f.st==="int"?"selected":""}>Interested (not yet converted)</option><option value="conv" ${f.st==="conv"?"selected":""}>Converted</option></select>
     <span class="mute small">${list.length} lead${list.length===1?"":"s"} · ${esc(rangeLabel())}</span></div>
-    <div class="small mute" style="margin-top:8px">A lead is a customer marked <b>Interested</b> on a call. The date is when they first said they were interested.</div></div>`;
-  h+=`<div class="card tw"><table><tr><th>Lead since</th><th>Customer</th><th>Number</th><th>Telecaller</th><th>Status</th><th>Last remark</th><th>Follow-up</th><th>Source</th><th></th></tr>`;
-  h+=list.map(l=>`<tr><td class="small num">${fmt(leadAt(l))}</td><td><b>${esc(l.name)}</b><div class="small mute">${esc(l.city)}</div></td>
+    <div class="small mute" style="margin-top:8px">A lead is a customer marked <b>Interested</b> on a call. The date is when they first said they were interested.</div>
+    ${isLead()?`<div class="row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"><b class="small">Assign cases</b><span class="mute small">${view.lsel.size} selected</span>
+      <select id="lto"><option value="">Assign selected to…</option>${asgOpts()}<option value="__un">— Unassign —</option></select>
+      <button class="btn pri" id="ldo" ${view.lsel.size?"":"disabled"}>Assign</button></div>`:""}</div>`;
+  const ck=isLead();
+  h+=`<div class="card tw"><table><tr>${ck?`<th style="width:36px"><input type="checkbox" id="lall" ${list.length&&list.every(l=>view.lsel.has(l.id))?"checked":""}></th>`:""}<th>Lead since</th><th>Customer</th><th>Number</th><th>Telecaller</th><th>Status</th><th>Last remark</th><th>Follow-up</th><th>Source</th><th></th></tr>`;
+  h+=list.map(l=>`<tr>${ck?`<td><input type="checkbox" data-lsel="${esc(l.id)}" ${view.lsel.has(l.id)?"checked":""}></td>`:""}<td class="small num">${fmt(leadAt(l))}</td><td><b>${esc(l.name)}</b><div class="small mute">${esc(l.city)}</div></td>
     <td class="num"><a class="lnk" href="${telHref(l.phone)}">${esc(l.phone)}</a></td><td>${l.assignedTo?esc(empName(l.assignedTo)):'<span class="mute">Unassigned</span>'}</td>
     <td>${pill(l.status)}</td><td class="small" style="max-width:260px">${esc(lastOf(l)?.remark||"")||'<span class="mute">—</span>'}</td><td class="small num">${l.followUp?fmt(l.followUp):"—"}</td>
     <td class="small">${esc(l.source||"")}</td><td><button class="btn sm" data-open="${esc(l.id)}">Open</button></td></tr>`).join("")
-    ||`<tr><td colspan="9"><div class="empty">No leads in this period${all.length?" match these filters":" – customers marked Interested on a call show up here"}.</div></td></tr>`;
+    ||`<tr><td colspan="10"><div class="empty">No leads in this period${all.length?" match these filters":" – customers marked Interested on a call show up here"}.</div></td></tr>`;
   return h+`</table></div>`;
 }
 function bindLeadsTab(){
@@ -441,6 +446,10 @@ function bindLeadsTab(){
   w.onchange=()=>{view.lf.who=w.value;render()};st.onchange=()=>{view.lf.st=st.value;render()};
   q.oninput=e=>{view.lf.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#lq");n.focus();n.setSelectionRange(p,p)};
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false));
+  document.querySelectorAll("[data-lsel]").forEach(c=>c.onchange=()=>{c.checked?view.lsel.add(c.dataset.lsel):view.lsel.delete(c.dataset.lsel);render()});
+  const la=$("#lall");if(la)la.onchange=e=>{document.querySelectorAll("[data-lsel]").forEach(c=>e.target.checked?view.lsel.add(c.dataset.lsel):view.lsel.delete(c.dataset.lsel));render()};
+  const ld=$("#ldo");if(ld)ld.onclick=async()=>{const to=$("#lto").value;if(!to)return toast("Choose a person first");const ids=[...view.lsel];
+    if(await write(api=>api.assign(ids,to==="__un"?"":to),`${ids.length} case${ids.length===1?"":"s"} ${to==="__un"?"unassigned":"assigned to "+empName(to)}`)){view.lsel.clear();render()}};
 }
 // A "lead" = a contact who said they're interested on a call (status Interested, or later Converted)
 const isLeadC=l=>l.status==="int"||l.status==="conv";
@@ -822,6 +831,8 @@ function rMeetings(){
 }
 
 const empOpts=()=>S.employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)} (${esc(e.role)})</option>`).join("");
+// who contacts can be assigned to: everyone except Sales Managers (they only see Field Work)
+const asgOpts=(sel)=>S.employees.filter(e=>e.role!=="Sales Manager").map(e=>`<option value="${esc(e.id)}" ${sel===e.id?"selected":""}>${esc(e.name)} (${esc(e.role)})</option>`).join("");
 function aAssign(){
   const f=view.assignFilter,q=view.q.toLowerCase();
   const list=S.leads.filter(l=>(f==="all"||(f==="none"?!l.assignedTo:l.assignedTo===f))&&(!q||(l.name+l.phone+l.city).toLowerCase().includes(q)));
@@ -829,7 +840,7 @@ function aAssign(){
    <input id="q" placeholder="Search name, number, city" value="${esc(view.q)}" style="flex:1;min-width:180px">
    <select id="af"><option value="all">All contacts</option><option value="none">Unassigned</option>${empOpts()}</select>
    <span class="mute small">${view.sel.size} selected</span>
-   <select id="toEmp"><option value="">Assign selected to…</option>${empOpts()}<option value="__un">— Unassign —</option></select>
+   <select id="toEmp"><option value="">Assign selected to…</option>${asgOpts()}<option value="__un">— Unassign —</option></select>
    <button class="btn pri" id="doAssign" ${view.sel.size?"":"disabled"}>Assign</button>
    <button class="btn" id="auto">⚖ Auto-distribute unassigned</button></div></div>
   <div class="card tw"><table><tr><th style="width:36px"><input type="checkbox" id="all" ${list.length&&list.every(r=>view.sel.has(r.id))?"checked":""}></th><th>Name</th><th>Number</th><th>City</th><th>Assigned to</th><th>Status</th><th>Last remark</th><th></th></tr>`;
@@ -847,7 +858,7 @@ function aImport(){
    <div class="card pad"><h3>Bulk import (paste from Excel)</h3>
    <p class="mute small" style="margin-top:-4px">One contact per line: <b>Name, Number, City</b>. Copy columns straight from Excel / Google Sheets – tabs work too.</p>
    <textarea id="bulk" style="min-height:170px" placeholder="Ramesh Kumar, 9876543210, Delhi&#10;Sunita Shah, 9123456780, Surat"></textarea>
-   <label class="f">Assign imported contacts to</label><select id="bEmp" style="width:100%"><option value="">Leave unassigned</option><option value="__auto">Auto-distribute equally</option>${empOpts()}</select>
+   <label class="f">Assign imported contacts to</label><select id="bEmp" style="width:100%"><option value="">Leave unassigned</option><option value="__auto">Auto-distribute equally</option>${asgOpts()}</select>
    <div style="margin-top:14px"><button class="btn pri" id="doBulk">Import contacts</button></div></div></div>`;
 }
 const roleOpts=sel=>ROLES.filter(r=>canManageRole(r)).map(r=>`<option ${r===sel?"selected":""}>${r}</option>`).join("");
@@ -1032,7 +1043,7 @@ function openLead(id,fromCall){
   $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(l.name)}</div><div><div style="font-weight:700">${esc(l.name)}</div><div class="num mute small">${esc(l.phone)} · ${esc(l.city)}</div></div><button class="x" id="mx">×</button></div>
   <div class="mb">
    ${fromCall?`<div class="card pad" style="background:var(--green-soft);border-color:#c7e8d2;margin-bottom:6px"><b style="color:var(--green)">📞 Dialing ${esc(l.phone)}…</b><div class="small mute" style="margin-top:3px">Your phone's dialer should open. After the call, record the outcome below.</div></div>`:""}
-   <div class="row"><a class="btn call" href="${telHref(l.phone)}">📞 Call ${esc(l.phone)}</a><span class="mute small">Assigned to ${esc(l.assignedTo?empName(l.assignedTo):"nobody")}</span></div>
+   <div class="row"><a class="btn call" href="${telHref(l.phone)}">📞 Call ${esc(l.phone)}</a>${isLead()?`<label class="small mute" style="display:flex;gap:6px;align-items:center">Assigned to <select id="mAsg"><option value="">— Unassigned —</option>${asgOpts(l.assignedTo)}</select></label>`:`<span class="mute small">Assigned to ${esc(l.assignedTo?empName(l.assignedTo):"nobody")}</span>`}</div>
    <label class="f">Call outcome</label>
    <div class="outs">${Object.entries(OUTCOMES).map(([k,o])=>`<button class="out" data-out="${k}"><span class="pill ${o.cls}">${o.label}</span></button>`).join("")}</div>
    <div id="fuWrap" style="display:none"><label class="f">Call back on</label><input type="datetime-local" id="fu" style="width:100%"></div>
@@ -1043,6 +1054,9 @@ function openLead(id,fromCall){
   $("#mbg").classList.add("show");
   const close=()=>$("#mbg").classList.remove("show");
   $("#mx").onclick=close;$("#mc").onclick=close;
+  const ma=$("#mAsg");if(ma)ma.onchange=async()=>{const to=ma.value;ma.disabled=true;
+    const ok=await write(api=>api.assign([l.id],to),to?`${l.name} assigned to ${empName(to)}`:`${l.name} unassigned`);
+    if(!ok){ma.value=l.assignedTo||""}ma.disabled=false};
   document.querySelectorAll("[data-out]").forEach(b=>b.onclick=()=>{M.out=b.dataset.out;document.querySelectorAll("[data-out]").forEach(x=>x.classList.toggle("on",x===b));
     $("#fuWrap").style.display=M.out==="cb"?"block":"none";
     if(M.out==="cb"&&!$("#fu").value){const d=new Date(Date.now()+864e5);$("#fu").value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T11:00`}});

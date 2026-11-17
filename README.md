@@ -24,7 +24,8 @@ A lightweight calling CRM for a tele-calling team. A manager assigns lists of na
 
 **Admin / Manager**
 - Dashboard: total leads, unassigned, calls today, interested, converted, pending callbacks, and progress per employee
-- Leads: customers marked Interested / Converted, filter by date, telecaller and status
+- Leads: customers marked Interested / Converted, filter by date, telecaller and status; tick cases and **assign** them to a telecaller (Admin, Manager and Team Lead)
+- In any customer's call window, Admin / Manager / Team Lead can change **Assigned to** directly
 - Calling List & Assign: search, multi-select, assign or unassign contacts to a telecaller, or auto-distribute all unassigned contacts equally
 - Add / Import Contacts: add one contact, or paste many lines (`Name, Number, City`) straight from Excel / Google Sheets
 - Employees: add or remove employees (removing one unassigns their contacts)
