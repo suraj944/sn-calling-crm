@@ -74,7 +74,7 @@ Everyone logs in with **their own name and PIN** (no mobile number needed). The 
 | Phone (optional) | Contact number only |
 | Active | `Yes` / `No` (dropdown). `No` blocks login and unassigns their leads |
 | Role | `Admin` / `Manager` / `Team Lead` / `Telecaller Executive` (dropdown) |
-| PIN (first-time) | 4–8 digits, kept as text. Cleared after first login |
+| PIN (4 digits) | Exactly 4 digits, kept as text. Cleared after the next login |
 | PIN Hash (auto) | Salted SHA-256 of the PIN – the real PIN is never stored (protected column) |
 | Last Login (auto) | Updated on each successful login (protected column) |
 | Created | When the account was added |
@@ -84,7 +84,8 @@ Everyone logs in with **their own name and PIN** (no mobile number needed). The 
 **LoginLog** tab: every login attempt (time, name entered, ID, result: Success / Wrong PIN / Unknown name / Inactive / Locked).
 **Roles** tab: what each role can see and do.
 
-- To give someone a first-time PIN, type it in the **PIN** column (or use *Reset PIN* in the app). On their first login it is replaced by a salted SHA-256 hash and the PIN cell is cleared.
+- PINs are exactly **4 digits**.
+- To give someone a first PIN **or reset a PIN**, type the new 4-digit PIN in the **PIN** column (or use *Reset PIN* in the app, which writes it there too). A PIN in that column always replaces the old one straight away. On their next login it is replaced by a salted SHA-256 hash and the PIN cell is cleared.
 - After 5 wrong PINs, that login is locked for 15 minutes. Sessions last 30 days, and a PIN reset logs the person out of all devices.
 - Anyone can change their own PIN with **🔑 PIN**.
 - **Open sheet** only works for people whose Google account also has access to the sheet, so share the sheet with your managers and team leads.

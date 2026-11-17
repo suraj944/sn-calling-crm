@@ -16,7 +16,8 @@
  *   - People log in with their NAME + PIN. Names must be unique (case doesn't matter).
  *   - Role: Admin, Manager, Team Lead, Sales Manager or Telecaller Executive (see the Roles tab).
  *     Old "Employee" values are treated as Telecaller Executive.
- *   - PIN: type a 4–8 digit first-time PIN; on first login it is replaced by a salted hash and cleared.
+ *   - PIN: exactly 4 digits. Type it in the PIN column for a new person OR to reset someone's PIN –
+ *     a PIN typed here always wins over the old one. On the next login it is replaced by a salted hash and cleared.
  * LoginLog tab: every login attempt (time, name entered, result).
  * Website enquiries (home page callback form) are added to Leads as new, unassigned leads.
  * Field Work tab: SM meetings (same fields as the old Google Form) – see saveMeeting_.
@@ -70,6 +71,7 @@ function doPost(e) {
 function login_(login, pin) {
   login = String(login || "").trim(); pin = String(pin || "").trim();
   if (!login || !pin) throw new Error("Enter your name and PIN");
+  if (!/^\d{4}$/.test(pin)) throw new Error("PIN must be exactly 4 digits");
   const cache = CacheService.getScriptCache(), fk = "fail:" + norm_(login);
   const fails = Number(cache.get(fk) || 0);
   if (fails >= MAX_FAILS) { audit_(login, null, "Locked (too many attempts)"); throw new Error("Too many wrong attempts. Try again in " + LOCK_MIN + " minutes."); }
@@ -77,11 +79,13 @@ function login_(login, pin) {
   const e = emps.find(x => norm_(x.name) === norm_(login)) || emps.find(x => x.id.toLowerCase() === login.toLowerCase());
   let ok = false;
   if (e && e.active) {
-    if (e.hash) ok = hash_(e.id, pin) === e.hash;
-    else if (e.pin) {
+    if (e.pin) {                       // PIN typed in the sheet (new person or a reset) wins over the old hash
       ok = String(e.pin).trim() === pin;
-      if (ok) sheet_("Employees").getRange(e.row, 6, 1, 2).setValues([["", hash_(e.id, pin)]]); // move first-time PIN to hash
-    }
+      if (ok) {
+        sheet_("Employees").getRange(e.row, 6, 1, 2).setValues([["", hash_(e.id, pin)]]); // move it to the hash
+        if (e.hash) logoutAll_(e.id);  // it was a reset: sign out old devices
+      }
+    } else if (e.hash) ok = hash_(e.id, pin) === e.hash;
   }
   if (!ok) {
     cache.put(fk, String(fails + 1), LOCK_MIN * 60);
@@ -203,13 +207,15 @@ function resetPin_(me, id, pin) {
   if (!e) throw new Error("Team member not found");
   if (e.id !== me.id) canManage_(me, e.role);
   checkPin_(pin);
-  sheet_("Employees").getRange(e.row, 6, 1, 2).setValues([["", hash_(e.id, pin)]]);
+  // New PIN goes into the sheet's PIN column (visible to admins); the old PIN stops working right away.
+  sheet_("Employees").getRange(e.row, 6, 1, 2).setNumberFormat("@").setValues([[String(pin).trim(), ""]]);
   logoutAll_(e.id);
   return { reset: true };
 }
 
 function changePin_(me, oldPin, newPin) {
-  const ok = me.hash ? hash_(me.id, String(oldPin || "").trim()) === me.hash : String(me.pin) === String(oldPin || "").trim();
+  const old = String(oldPin || "").trim();
+  const ok = me.pin ? String(me.pin) === old : hash_(me.id, old) === me.hash;
   if (!ok) throw new Error("Current PIN is wrong");
   checkPin_(newPin);
   sheet_("Employees").getRange(me.row, 6, 1, 2).setValues([["", hash_(me.id, newPin)]]);
@@ -329,7 +335,7 @@ function emps_() {
   })).filter(x => x.id && x.name);
 }
 const pub_ = e => ({ id: e.id, name: e.name, role: e.role, phone: e.phone });
-function checkPin_(p) { if (!/^\d{4,8}$/.test(String(p || "").trim())) throw new Error("PIN must be 4–8 digits"); }
+function checkPin_(p) { if (!/^\d{4}$/.test(String(p || "").trim())) throw new Error("PIN must be exactly 4 digits"); }
 function checkName_(n, selfId) {
   n = String(n || "").trim();
   if (n.length < 2) throw new Error("Enter a name (it's used to log in)");
