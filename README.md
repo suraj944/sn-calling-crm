@@ -16,6 +16,10 @@ Contact details shown on the home page are set in the `CONTACT` block at the bot
 
 **By Employee** tab (Admin, Manager, Team Lead): pick a person to see their calling list, leads and calls, with counts for everyone side by side.
 
+**Lead Cases:** when a telecaller marks a customer **Interested**, a case opens by itself (code like SN2611-0001) in the **Lead Cases** tab of the sheet and goes to that telecaller's Team Lead. The Team Lead follows up and fills Product, Amount, Bank, Banker, Status, Disbursed date and so on. The telecaller can only view the case. Admin and Manager see all cases.
+
+**Access:** *Viewing as* and *Open sheet* are Admin-only. Team Leads get **My Team** (members, last login, reset a member's PIN) and **My calls** (their own list). Nobody can assign contacts to an Admin.
+
 **Words used:** a **contact** is any name + number on the calling list. A **lead** is a contact marked **Interested** on a call (or later Converted). The **Leads** tab in the CRM and the **Leads** tab in the sheet show only these.
 
 **Field Work** (everyone): Sales Managers log their meetings with the same 16 fields as the old Google Form (Timestamp, SM Name, Meeting Type, Meeting Entity, Name of the CP/Developer/Customer/Connector, Name of The Entity, Willing to work with SN, Existing % received in market if any, Contact no of the Entity, Purpose of Meeting, Meeting Outcome, Remarks, Any Tieup currently?, If Yes Tie up with which company, Interested / Not interested, Current pass back received, Feedback). Names are saved in proper case automatically (SBI, HDFC etc. kept in capitals). Each SM sees and edits only their own entries; Admin / Manager / Team Lead see and edit everyone's; Admin / Manager can delete. Stored in the **Field Work** tab of the CRM sheet.

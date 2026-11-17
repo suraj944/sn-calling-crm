@@ -292,7 +292,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.srv2=Array.isArray(j.cases);ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu){await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu)})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -440,7 +440,8 @@ function render(){
 
 /* ---------- ADMIN / MANAGER / TEAM LEAD ---------- */
 function renderAdmin(){
-  const tabs=[["dash","Dashboard"],["lead","Leads"],["cases","Lead Cases"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine","My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(isMgr()?[["reports","⬇ Reports"]]:[])];
+  if(!S.srv2&&(view.tab==="cases"||view.tab==="myteam"))view.tab="dash";
+  const tabs=[["dash","Dashboard"],["lead","Leads"],...(S.srv2?[["cases","Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine","My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(isMgr()?[["reports","⬇ Reports"]]:[])];
   if(!tabs.some(t=>t[0]===view.tab))view.tab="dash";
   let h=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${view.tab===k?"on":""}" data-tab="${k}">${l}</button>`).join("")}</div>`;
   const TLs=teamLeads();
@@ -547,11 +548,11 @@ function aLeadsTab(){
       <select id="lto"><option value="">Assign selected to…</option>${asgOpts()}</select>
       <button class="btn pri" id="ldo" ${view.lsel.size?"":"disabled"}>Assign</button></div>`:""}</div>`;
   const ck=isLead();
-  h+=`<div class="card tw"><table><tr>${ck?`<th style="width:36px"><input type="checkbox" id="lall" ${list.length&&list.every(l=>view.lsel.has(l.id))?"checked":""}></th>`:""}<th>Lead since</th><th>Customer</th><th>Number</th><th>Telecaller</th><th>Status</th><th>Last remark</th><th>Follow-up</th><th>Lead case</th><th></th></tr>`;
+  h+=`<div class="card tw"><table><tr>${ck?`<th style="width:36px"><input type="checkbox" id="lall" ${list.length&&list.every(l=>view.lsel.has(l.id))?"checked":""}></th>`:""}<th>Lead since</th><th>Customer</th><th>Number</th><th>Telecaller</th><th>Status</th><th>Last remark</th><th>Follow-up</th><th>${S.srv2?"Lead case":"Source"}</th><th></th></tr>`;
   h+=list.map(l=>`<tr>${ck?`<td><input type="checkbox" data-lsel="${esc(l.id)}" ${view.lsel.has(l.id)?"checked":""}></td>`:""}<td class="small num">${fmt(leadAt(l))}</td><td><b>${esc(l.name)}</b><div class="small mute">${esc(l.city)}</div></td>
     <td class="num"><a class="lnk" href="${telHref(l.phone)}">${esc(l.phone)}</a></td><td>${l.assignedTo?esc(empName(l.assignedTo)):'<span class="mute">Unassigned</span>'}</td>
     <td>${pill(l.status)}</td><td class="small" style="max-width:260px">${esc(lastOf(l)?.remark||"")||'<span class="mute">—</span>'}</td><td class="small num">${l.followUp?fmt(l.followUp):"—"}</td>
-    <td class="small" style="white-space:nowrap">${caseOf(l.id)?`<a class="lnk" href="#" data-case="${esc(caseOf(l.id).code)}">${esc(caseOf(l.id).code)}</a><div>${casePill(caseOf(l.id))}</div>`:ck?`<button class="btn sm" data-mkcase="${esc(l.id)}">Open case</button>`:'<span class="mute">—</span>'}</td><td><button class="btn sm" data-open="${esc(l.id)}">Open</button></td></tr>`).join("")
+    <td class="small" style="white-space:nowrap">${!S.srv2?esc(l.source||""):caseOf(l.id)?`<a class="lnk" href="#" data-case="${esc(caseOf(l.id).code)}">${esc(caseOf(l.id).code)}</a><div>${casePill(caseOf(l.id))}</div>`:ck?`<button class="btn sm" data-mkcase="${esc(l.id)}">Open case</button>`:'<span class="mute">—</span>'}</td><td><button class="btn sm" data-open="${esc(l.id)}">Open</button></td></tr>`).join("")
     ||`<tr><td colspan="10"><div class="empty">No leads in this period${all.length?" match these filters":" – customers marked Interested on a call show up here"}.</div></td></tr>`;
   return h+`</table></div>`;
 }
@@ -1117,9 +1118,11 @@ function renderEmp(){
     const list=myLeads.slice().sort((a,b)=>(leadAt(b)||0)-(leadAt(a)||0));
     const myCases=CASES().filter(c=>c["Telecaller ID"]===me.id||(me.role==="Team Lead"&&c.tlId===me.id)).sort((a,b)=>(b.at||0)-(a.at||0));
     const noCase=list.filter(l=>!caseOf(l.id));
+    if(!S.srv2){h+=`<div class="small mute" style="margin-bottom:10px">Customers ${own?"you":"they"}'ve marked <b>Interested</b> (or Converted), newest first – all dates.</div>`;
+      h+=`<div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No leads yet – customers marked Interested on a call show up here.</div>`}</div>`;}else{
     h+=`<div class="small mute" style="margin-bottom:10px">When ${own?"you mark":"they mark"} a customer <b>Interested</b>, a lead case goes to ${own?"your":"their"} Team Lead, who follows up. ${own&&!isLead()?"You can see every update here.":""}</div>`;
     h+=casesTable(myCases,{empty:"No lead cases yet – mark a customer Interested on a call to hand them to your Team Lead."});
-    if(noCase.length)h+=`<h3 style="margin:18px 0 8px">Interested, no case yet</h3><div class="card">${noCase.map(l=>leadRow(l)).join("")}</div>`;
+    if(noCase.length)h+=`<h3 style="margin:18px 0 8px">Interested, no case yet</h3><div class="card">${noCase.map(l=>leadRow(l)).join("")}</div>`;}
   }else if(ctab==="calls"){
     const co=view.cOut||"all";const list=calls.filter(g=>co==="all"||g.outcome===co);
     h+=`<div class="row" style="margin-bottom:10px"><select id="cOut"><option value="all">All outcomes</option>${Object.entries(OUTCOMES).map(([k,o])=>`<option value="${k}" ${co===k?"selected":""}>${o.label} · ${oc(k)}</option>`).join("")}</select>
@@ -1264,7 +1267,7 @@ function openLead(id,fromCall){
     const btn=$("#ms");btn.disabled=true;btn.textContent="Saving…";
     const fu=M.out==="cb"&&$("#fu").value?parseT($("#fu").value):null;
     const by=ME?ME.id:(view.who!=="admin"?view.who:(l.assignedTo||"ADMIN_LOG"));
-    const ok=await write(api=>api.logCall(l.id,M.out,$("#rem").value.trim(),fu,by),M.out==="int"&&!caseOf(l.id)?"Call logged · lead case opened for the Team Lead":"Call logged");
+    const ok=await write(api=>api.logCall(l.id,M.out,$("#rem").value.trim(),fu,by),M.out==="int"&&!caseOf(l.id)&&S.srv2?"Call logged · lead case opened for the Team Lead":"Call logged");
     if(ok)close();else{btn.disabled=false;btn.textContent="Save call log"}};
 }
 $("#mbg").onclick=e=>{if(e.target.id==="mbg")$("#mbg").classList.remove("show")};
