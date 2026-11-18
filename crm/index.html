@@ -112,6 +112,9 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .cfm-b{padding:0 18px 14px;color:#374151;line-height:1.5}
 .cfm-b ul{margin:6px 0 0;padding-left:18px}.cfm-b li{margin:3px 0}
 .cfm-f{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--line)}
+.perm{display:flex;gap:8px;align-items:center;padding:6px 9px;font-size:13px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.perm em{margin-left:auto;font-style:normal;font-size:11px;color:var(--mute)}.perm.off{opacity:.55;cursor:not-allowed}
+.pgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}@media(max-width:560px){.pgrid{grid-template-columns:1fr}}.pgrp+.pgrp{margin-top:16px}
 .btn.danger{background:var(--red);border-color:var(--red);color:#fff}
 @media(min-width:640px){.modal-bg{align-items:center}}
 .modal{background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;max-height:92vh;overflow:auto}
@@ -216,7 +219,17 @@ let view={who:"admin",tab:"dash",filter:"all",q:"",sel:new Set(),assignFilter:"a
 const emp=id=>S.allEmps.find(e=>e.id===id);
 const empName=id=>id==="ADMIN_LOG"?"Admin":(emp(id)?.name||id||"—");
 const isLead=()=>!ME||rank(ME.role)<=rank("Team Lead");
-const canViewAs=()=>!ME||ME.role==="Admin";          // "Viewing as" (open anyone's page) is for Admin only
+/* ---- Permission levels (same lists as the server). Role defaults + per-person ticks set by Admin. ---- */
+const PERM_DEF=[["Tabs they can see",[["dash","Dashboard"],["lead","Leads"],["cases","Lead Cases"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],["team","Employees / My Team"],["logs","Call Logs"],["meet","Field Work"],["reports","Reports & downloads"]]],
+  ["What they can do",[["doAssign","Assign contacts & share out"],["caseEdit","Open & edit lead cases"],["caseTL","Move a case to another Team Lead"],["caseRemove","Remove lead cases"],["empEdit","Add, edit & remove employees"],["pinReset","Reset PINs"],["sheet","Open the Google Sheet"],["viewAs","Open anyone's page (Viewing as)"]]]];
+const PERM_KEYS=PERM_DEF.flatMap(g=>g[1].map(x=>x[0]));
+const ROLE_PERMS={"Manager":["dash","lead","cases","byemp","assign","import","team","logs","meet","reports","doAssign","caseEdit","caseTL","empEdit","pinReset"],
+  "Team Lead":["dash","lead","cases","byemp","assign","import","team","logs","meet","doAssign","caseEdit","pinReset"]};
+const PERM_ALLOWED={"Manager":PERM_KEYS,"Team Lead":PERM_KEYS.filter(k=>k!=="empEdit")};
+function permsOf(e){if(!e)return new Set();if(e.role==="Admin")return new Set(PERM_KEYS);const set=new Set(ROLE_PERMS[e.role]||[]),ok=new Set(PERM_ALLOWED[e.role]||[]);
+  String(e.permRaw||"").split(/[,\s]+/).forEach(t=>{const k=t.slice(1);if(!ok.has(k))return;if(t[0]==="+")set.add(k);else if(t[0]==="-")set.delete(k)});return set}
+const can=k=>!ME||ME.role==="Admin"||(Array.isArray(ME.perms)?ME.perms.includes(k):permsOf(ME).has(k));
+const canViewAs=()=>!ME||ME.role==="Admin"||(isLead()&&can("viewAs"));   // "Viewing as" (open anyone's page): Admin, or anyone Admin allows
 const isTL=()=>!!ME&&ME.role==="Team Lead";                 // Team Leads get only their own team from the server
 // Teams: a Team Lead + everyone whose "Team Lead" is them. Admin / Manager can filter every page by team.
 const teamLeads=(R=RAW||S)=>R.allEmps.filter(e=>e.role==="Team Lead"&&e.active);
@@ -236,7 +249,7 @@ const canManageRole=r=>!ME||ME.role==="Admin"||rank(r)>rank(ME.role);
 function build(eRows,lRows,cRows){
   const allEmps=eRows.map((r,i)=>({id:String(r[0]||"").trim(),name:String(r[1]||"").trim(),phone:String(r[2]??""),
     active:String(r[3]||"Yes").trim().toLowerCase()!=="no",role:ROLES.find(x=>x.toLowerCase()===String(r[4]||"").trim().toLowerCase())||"Telecaller Executive",
-    pinSet:!!(String(r[5]||"").trim()||String(r[6]||"").trim()),tlRaw:String(r[6]||"").trim(),lastLogin:parseT(r[7]),row:i+2})).filter(e=>e.id&&e.name);
+    pinSet:!!(String(r[5]||"").trim()||String(r[6]||"").trim()),tlRaw:String(r[6]||"").trim(),lastLogin:parseT(r[7]),permRaw:String(r[8]||"").trim(),row:i+2})).filter(e=>e.id&&e.name);
   allEmps.forEach(e=>{const t=allEmps.find(x=>x.role==="Team Lead"&&x.id===e.tlRaw&&e.role!=="Team Lead");e.tl=t?t.id:"";delete e.tlRaw});
   const findEmp=v=>{v=String(v||"").trim();if(!v)return null;const lv=v.toLowerCase();const e=allEmps.find(e=>e.id.toLowerCase()===lv||e.name.toLowerCase()===lv);return e?e.id:v};
   const leads=lRows.map((r,i)=>({id:String(r[0]||"").trim(),name:String(r[1]||""),phone:String(r[2]??""),city:String(r[3]||""),assignedTo:findEmp(r[4]),
@@ -295,6 +308,7 @@ const Live={
   async saveCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async createCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async removeCase(){throw new Error("Open the website version of the CRM for lead cases")},
+  async setPerms(){throw new Error("Open the website version of the CRM to change permissions")},
   async deleteMeeting(){throw new Error("Open the website version of the CRM to delete meetings")}
 };
 
@@ -328,6 +342,7 @@ const Script={
   async saveCase(c){await this.req("saveCase",{c})},
   async createCase(leadId){await this.req("createCase",{leadId})},
   async removeCase(code){await this.req("removeCase",{code})},
+  async setPerms(id,perms){await this.req("setPerms",{id,perms})},
   async deleteMeeting(id){await this.req("deleteMeeting",{id})}
 };
 let LIVE=Live;
@@ -413,7 +428,7 @@ function setSync(){
   $("#banner").innerHTML=demoReason?`<div>⚠ ${esc(demoReason)}</div>`:"";
   // header controls by role
   const live=MODE==="live";
-  const os=$("#openSheet");const showSheet=live&&canViewAs()&&!!SHEET_URL;/* Open sheet: Admin only */os.style.display=showSheet?"":"none";if(showSheet)os.href=SHEET_URL;
+  const os=$("#openSheet");const showSheet=live&&!!SHEET_URL&&can("sheet");/* Open sheet: the server only sends the link to people allowed to open it */os.style.display=showSheet?"":"none";if(showSheet)os.href=SHEET_URL;
   $("#refresh").style.display=MODE==="login"?"none":"";
   $("#whoBox").style.display=(MODE==="login"||!isLead()||!canViewAs())?"none":"";
   $("#userBox").innerHTML=ME&&MODE!=="login"?`<div class="userchip"><div class="av">${initials(ME.name)}</div><div><b>${esc(ME.name)}</b><div class="small mute">${esc(ME.role)}</div></div></div>
@@ -464,8 +479,10 @@ function render(){
 /* ---------- ADMIN / MANAGER / TEAM LEAD ---------- */
 function renderAdmin(){
   if(!S.srv2&&(view.tab==="cases"||view.tab==="myteam"))view.tab="dash";
-  const tabs=[["dash","Dashboard"],["lead","Leads"],...(S.srv2?[["cases","Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine","My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(isMgr()?[["reports","⬇ Reports"]]:[])];
-  if(!tabs.some(t=>t[0]===view.tab))view.tab="dash";
+  const tabs=[["dash","Dashboard"],["lead","Leads"],...(S.srv2?[["cases","Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine","My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],["reports","⬇ Reports"]]
+    .filter(([k])=>k==="mine"||can(k==="myteam"?"team":k));   /* tabs this person is allowed to see */
+  if(!tabs.length)tabs.push(["mine","My calls"]);
+  if(!tabs.some(t=>t[0]===view.tab))view.tab=tabs[0][0];
   let h=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${view.tab===k?"on":""}" data-tab="${k}">${l}</button>`).join("")}</div>`;
   const TLs=teamLeads();
   if(isMgr()&&!isTL()&&TLs.length&&SCOPED_TABS.has(view.tab))h+=`<div class="row" style="margin:-4px 0 12px"><label class="small mute" style="display:flex;gap:8px;align-items:center">Team
@@ -491,7 +508,7 @@ function aMyTeam(){
       <td class="small num">${e.lastLogin?fmt(e.lastLogin):'<span class="mute">never</span>'}</td><td class="num">${list.length}</td><td class="num">${list.filter(l=>l.status==="new").length}</td>
       <td class="num" style="color:var(--green)">${list.filter(isLeadC).length}</td><td class="num">${callsToday}</td><td class="num">${due?`<b style="color:var(--amber)">${due}</b>`:0}</td>
       <td class="small">${e.pinSet?"✓ PIN set":'<span style="color:var(--amber)">No PIN</span>'}</td>
-      <td style="text-align:right;white-space:nowrap">${self?`<button class="btn sm" id="myPin2">🔑 My PIN</button>`:`<button class="btn sm" data-pin="${esc(e.id)}">Reset PIN</button>`} ${canViewAs()?`<button class="btn sm" data-as="${esc(e.id)}">View list</button>`:""}</td></tr>`}).join("");
+      <td style="text-align:right;white-space:nowrap">${self?`<button class="btn sm" id="myPin2">🔑 My PIN</button>`:can("pinReset")?`<button class="btn sm" data-pin="${esc(e.id)}">Reset PIN</button>`:""} ${canViewAs()?`<button class="btn sm" data-as="${esc(e.id)}">View list</button>`:""}</td></tr>`}).join("");
   return h+`</table></div>`;
 }
 /* ---------- BY EMPLOYEE: each telecaller's calling list, leads and calls ---------- */
@@ -567,10 +584,10 @@ function aLeadsTab(){
     <select id="lst"><option value="all">Interested + Converted</option><option value="int" ${f.st==="int"?"selected":""}>Interested (not yet converted)</option><option value="conv" ${f.st==="conv"?"selected":""}>Converted</option></select>
     <span class="mute small">${list.length} lead${list.length===1?"":"s"} · ${esc(rangeLabel())}</span></div>
     <div class="small mute" style="margin-top:8px">A lead is a customer marked <b>Interested</b> on a call. The date is when they first said they were interested.</div>
-    ${isLead()?`<div class="row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"><b class="small">Assign cases</b><span class="mute small">${view.lsel.size} selected</span>
+    ${isLead()&&can("doAssign")?`<div class="row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"><b class="small">Assign cases</b><span class="mute small">${view.lsel.size} selected</span>
       <select id="lto"><option value="">Assign selected to…</option>${asgOpts()}</select>
       <button class="btn pri" id="ldo" ${view.lsel.size?"":"disabled"}>Assign</button></div>`:""}</div>`;
-  const ck=isLead();
+  const ck=isLead()&&can("caseEdit");
   h+=`<div class="card tw"><table><tr>${ck?`<th style="width:36px"><input type="checkbox" id="lall" ${list.length&&list.every(l=>view.lsel.has(l.id))?"checked":""}></th>`:""}<th>Lead since</th><th>Customer</th><th>Number</th><th>Telecaller</th><th>Status</th><th>Last remark</th><th>Follow-up</th><th>${S.srv2?"Lead case":"Source"}</th><th></th></tr>`;
   h+=list.map(l=>`<tr>${ck?`<td><input type="checkbox" data-lsel="${esc(l.id)}" ${view.lsel.has(l.id)?"checked":""}></td>`:""}<td class="small num">${fmt(leadAt(l))}</td><td><b>${esc(l.name)}</b><div class="small mute">${esc(l.city)}</div></td>
     <td class="num"><a class="lnk" href="${telHref(l.phone)}">${esc(l.phone)}</a></td><td>${l.assignedTo?esc(empName(l.assignedTo)):'<span class="mute">Unassigned</span>'}</td>
@@ -980,9 +997,9 @@ function aAssign(){
    <input id="q" placeholder="Search name, number, city" value="${esc(view.q)}" style="flex:1;min-width:180px">
    <select id="af"><option value="all">All contacts</option>${isTL()?"":`<option value="none">Unassigned</option>`}${empOpts()}</select>
    <span class="mute small">${view.sel.size} selected</span>
-   <select id="toEmp"><option value="">Assign selected to…</option>${asgOpts()}</select>
+   ${can("doAssign")?`<select id="toEmp"><option value="">Assign selected to…</option>${asgOpts()}</select>
    <button class="btn pri" id="doAssign" ${view.sel.size?"":"disabled"}>Assign</button>
-   ${isTL()?"":`<button class="btn" id="auto">⚖ Auto-distribute unassigned</button>`}</div></div>
+   ${isTL()?"":`<button class="btn" id="auto">⚖ Auto-distribute unassigned</button>`}`:""}</div></div>
   <div class="card tw"><table><tr><th style="width:36px"><input type="checkbox" id="all" ${list.length&&list.every(r=>view.sel.has(r.id))?"checked":""}></th><th>Name</th><th>Number</th><th>City</th><th>Assigned to</th><th>Status</th><th>Last remark</th><th></th></tr>`;
   h+=list.map(l=>`<tr><td><input type="checkbox" data-sel="${esc(l.id)}" ${view.sel.has(l.id)?"checked":""}></td><td><b>${esc(l.name)}</b><div class="small mute">${esc(l.id)}</div></td><td class="num">${esc(l.phone)}</td><td>${esc(l.city)}</td>
   <td>${l.assignedTo?esc(empName(l.assignedTo)):'<span class="mute">Unassigned</span>'}</td><td>${pill(l.status)}</td><td class="small mute" style="max-width:220px">${esc(lastOf(l)?.remark||"—")}</td><td><button class="btn sm" data-open="${esc(l.id)}">View</button></td></tr>`).join("")||`<tr><td colspan="8"><div class="empty">No contacts match</div></td></tr>`;
@@ -1002,20 +1019,39 @@ function aImport(){
    <div style="margin-top:14px"><button class="btn pri" id="doBulk">Import contacts</button></div></div></div>`;
 }
 const roleOpts=sel=>ROLES.filter(r=>canManageRole(r)).map(r=>`<option ${r===sel?"selected":""}>${r}</option>`).join("");
+/* "Access" column: Full / Role default / Custom (n changes) / Own page */
+function accessLabel(e){if(e.role==="Admin")return'<span class="pill" style="background:#e8f0fe;color:var(--brand)">Full access</span>';
+  if(!PERM_ALLOWED[e.role])return'<span class="mute">Own calling page</span>';
+  const n=String(e.permRaw||"").split(/[,\s]+/).filter(t=>/^[+-]/.test(t)&&PERM_ALLOWED[e.role].includes(t.slice(1))).length;
+  return n?`<span class="pill" style="background:#fff4e0;color:#b26a00">Custom · ${n} change${n===1?"":"s"}</span>`:'<span class="mute">Role default</span>'}
+function openPerms(id){const e=emp(id);if(!e||!PERM_ALLOWED[e.role])return;const base=new Set(ROLE_PERMS[e.role]||[]),cur=permsOf(e);
+  const box=(k,l)=>{const allowed=PERM_ALLOWED[e.role].includes(k);return `<label class="perm ${allowed?"":"off"}"><input type="checkbox" data-pk="${k}" ${cur.has(k)?"checked":""} ${allowed?"":"disabled"}> <span>${esc(l)}</span>${!allowed?'<em>Admin / Manager only</em>':base.has(k)?'<em>default</em>':""}</label>`};
+  $("#modal").innerHTML=`<div class="mh"><div><b>Permissions – ${esc(e.name)}</b><div class="small mute">${esc(e.role)} · ticks marked <i>default</i> come with the role</div></div><button class="x" id="mc">✕</button></div>
+   <div class="mb">${PERM_DEF.map(([g,items])=>`<div class="pgrp"><div class="small" style="font-weight:700;margin-bottom:6px">${g}</div><div class="pgrid">${items.map(([k,l])=>box(k,l)).join("")}</div></div>`).join("")}</div>
+   <div class="mf"><button class="btn" id="pdef" style="margin-right:auto">Reset to ${esc(e.role)} default</button><button class="btn" id="mc2">Cancel</button><button class="btn pri" id="psave">Save permissions</button></div>`;
+  $("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mc").onclick=close;$("#mc2").onclick=close;
+  $("#pdef").onclick=()=>document.querySelectorAll("[data-pk]").forEach(x=>{if(!x.disabled)x.checked=base.has(x.dataset.pk)});
+  $("#psave").onclick=async()=>{const want=[...document.querySelectorAll("[data-pk]:checked")].map(x=>x.dataset.pk);
+    const name=k=>PERM_DEF.flatMap(g=>g[1]).find(x=>x[0]===k)[1];
+    const on=want.filter(k=>!cur.has(k)),off=[...cur].filter(k=>!want.includes(k)&&PERM_ALLOWED[e.role].includes(k));
+    if(!on.length&&!off.length)return toast("Nothing changed");
+    if(!await askOk({title:"Change "+e.name+"'s permissions?",ok:"Yes, save",body:`<ul>${on.map(k=>`<li>✅ <b>Allow</b>: ${esc(name(k))}</li>`).join("")}${off.map(k=>`<li>⛔ <b>Remove</b>: ${esc(name(k))}</li>`).join("")}</ul><div class="small mute">${esc(e.name.split(" ")[0])} sees the change the next time their CRM refreshes.</div>`}))return;
+    $("#psave").disabled=true;if(await write(api=>api.setPerms(e.id,want),"Permissions saved for "+e.name))close();else $("#psave").disabled=false}}
 function aTeam(){
-  let h=`<div class="card pad" style="margin-bottom:12px"><h3>Add a team member</h3><div class="row">
+  let h=can("empEdit")?`<div class="card pad" style="margin-bottom:12px"><h3>Add a team member</h3><div class="row">
    <input id="eName" placeholder="Name (used to log in)" style="flex:2;min-width:150px">
    <input id="ePhone" inputmode="tel" placeholder="Mobile (optional)" style="flex:2;min-width:150px">
    <select id="eRole">${roleOpts("Telecaller Executive")}</select>
    <select id="eTl" title="Team Lead"><option value="">No Team Lead</option>${teamLeads().map(t=>`<option value="${esc(t.id)}">Team: ${esc(t.name)}</option>`).join("")}</select>
    <input id="ePin" inputmode="numeric" maxlength="4" placeholder="First PIN (4 digits)" style="flex:1;min-width:140px">
    <button class="btn pri" id="addEmp">Add</button></div>
-   <p class="small mute" style="margin:8px 0 0">They log in with this <b>name</b> and PIN (names must be unique), and can change the PIN later. Pick a <b>Team Lead</b> for telecallers – each Team Lead sees and assigns only their own team. Admin and Manager see everyone.</p></div>
-  <div class="card tw"><table><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Role</th><th>Team Lead</th><th>Contacts</th><th>Login</th><th></th></tr>`;
-  h+=S.employees.map(e=>{const m=S.leads.filter(l=>l.assignedTo===e.id),can=canManageRole(e.role)||(ME&&e.id===ME.id),self=ME&&e.id===ME.id;
-    return `<tr><td class="mute">${esc(e.id)}</td><td><b>${esc(e.name)}</b>${self?' <span class="small mute">(you)</span>':""}</td><td class="num">${esc(e.phone)||'<span class="mute">—</span>'}</td><td>${esc(e.role)}</td><td>${e.role==="Team Lead"?'<span class="small mute">leads a team</span>':e.tl?esc(empName(e.tl)):'<span class="mute">—</span>'}</td><td class="num">${m.length}</td>
+   <p class="small mute" style="margin:8px 0 0">They log in with this <b>name</b> and PIN (names must be unique), and can change the PIN later. Pick a <b>Team Lead</b> for telecallers – each Team Lead sees and assigns only their own team. Admin and Manager see everyone.</p></div>`:"";
+  if(ME&&ME.role==="Admin")h+=`<div class="small" style="margin:0 0 12px;padding:10px 12px;background:var(--brand-soft);border-radius:10px">🛡 <b>Permissions:</b> each role starts with its usual access. Click <b>Permissions</b> on a Manager or Team Lead to switch tabs and actions on or off for that one person. Admin always has full access.</div>`;
+  h+=`<div class="card tw"><table><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Role</th><th>Team Lead</th><th>Contacts</th><th>Access</th><th>Login</th><th></th></tr>`;
+  h+=S.employees.map(e=>{const m=S.leads.filter(l=>l.assignedTo===e.id),cm=canManageRole(e.role)||(ME&&e.id===ME.id),self=ME&&e.id===ME.id;
+    return `<tr><td class="mute">${esc(e.id)}</td><td><b>${esc(e.name)}</b>${self?' <span class="small mute">(you)</span>':""}</td><td class="num">${esc(e.phone)||'<span class="mute">—</span>'}</td><td>${esc(e.role)}</td><td>${e.role==="Team Lead"?'<span class="small mute">leads a team</span>':e.tl?esc(empName(e.tl)):'<span class="mute">—</span>'}</td><td class="num">${m.length}</td><td class="small">${accessLabel(e)}</td>
     <td class="small">${e.pinSet?"✓ PIN set":'<span style="color:var(--amber)">No PIN</span>'}</td>
-    <td style="text-align:right;white-space:nowrap">${can?`<button class="btn sm" data-edit="${esc(e.id)}">Edit</button> <button class="btn sm" data-pin="${esc(e.id)}">Reset PIN</button>${self?"":` <button class="btn sm" data-del="${esc(e.id)}">Remove</button>`}`:'<span class="small mute">Admin only</span>'}
+    <td style="text-align:right;white-space:nowrap">${ME&&ME.role==="Admin"&&PERM_ALLOWED[e.role]?`<button class="btn sm" data-perm="${esc(e.id)}">🛡 Permissions</button> `:""}${cm?`${can("empEdit")?`<button class="btn sm" data-edit="${esc(e.id)}">Edit</button> `:""}${can("pinReset")||self?`<button class="btn sm" data-pin="${esc(e.id)}">Reset PIN</button>`:""}${self||!can("empEdit")?"":` <button class="btn sm" data-del="${esc(e.id)}">Remove</button>`}`:'<span class="small mute">Admin only</span>'}
     ${canViewAs()?`<button class="btn sm" data-as="${esc(e.id)}">View list</button>`:""}</td></tr>`}).join("");
   return h+`</table></div>`;
 }
@@ -1066,6 +1102,7 @@ function bindAdmin(){
   document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEditEmp(b.dataset.edit));
   document.querySelectorAll("[data-pin]").forEach(b=>b.onclick=()=>openResetPin(b.dataset.pin));
   on("#myPin2","onclick",()=>openChangePin());
+  document.querySelectorAll("[data-perm]").forEach(b=>b.onclick=()=>openPerms(b.dataset.perm));
   document.querySelectorAll("[data-del]").forEach(b=>{b.onclick=async()=>{
     if(!await askOk({title:"Remove "+empName(b.dataset.del)+"?",ok:"Yes, remove",danger:true,body:"They can't log in any more and their contacts become unassigned."}))return;
     await write(api=>api.removeEmp(b.dataset.del),"Removed – their contacts are now unassigned")}});
@@ -1225,30 +1262,30 @@ function bindCases(){document.querySelectorAll("[data-case]").forEach(b=>b.oncli
     if(!await askOk({title:"Open a lead case?",ok:"Yes, open case",body:`A new lead case will be opened for <b>${esc(l.name||"this customer")}</b> (${esc(l.phone||"")})${tl?` and sent to <b>${esc(tl)}</b> to follow up`:""}.<div class="small mute" style="margin-top:8px">Opened by mistake? Only Admin can remove a case.</div>`}))return;
     b.disabled=true;if(!await write(api=>api.createCase(b.dataset.mkcase),"Lead case opened"))b.disabled=false})}
 function openCase(code){
-  const c=CASES().find(x=>x.code===code);if(!c)return;const can=isLead();
+  const c=CASES().find(x=>x.code===code);if(!c)return;const canEd=isLead()&&can("caseEdit");
   const ro=(h,v)=>`<div><div class="small mute">${h}</div><div style="font-weight:600">${v||'<span class="mute" style="font-weight:400">—</span>'}</div></div>`;
   const inp=(h,type="text")=>{const id="cf_"+h.replace(/\W/g,"");const v=c[h]||"";
-    if(!can)return ro(h,h==="Amount Required"?inr(v):esc(v));
+    if(!canEd)return ro(h,h==="Amount Required"?inr(v):esc(v));
     if(CASE_PICK.has(h)){const opts=caseOpts(h);const all=v&&!opts.includes(v)?[v,...opts]:opts;
       return `<div><label class="f" for="${id}">${h}</label><select id="${id}" style="width:100%"><option value="">${h==="Bank Name"?"— Choose bank —":"— Choose —"}</option>${all.map(o=>`<option ${o===v?"selected":""}>${esc(o)}</option>`).join("")}</select></div>`}
     const list=CASE_OPTS[h]||(h==="SM Name"?(S.allEmps||[]).filter(e=>e.role==="Sales Manager"&&e.active).map(e=>e.name):null);
     return `<div><label class="f" for="${id}">${h}</label><input id="${id}" type="${type}" value="${esc(v)}" style="width:100%" ${list?`list="${id}_l"`:""} ${h==="Amount Required"?'inputmode="numeric" placeholder="e.g. 500000"':""}>${list?`<datalist id="${id}_l">${list.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>`:""}</div>`};
-  const tlSel=isMgr()&&!isTL()?`<div><label class="f">Team Lead</label><select id="cf_TL" style="width:100%"><option value="">— None —</option>${(S.allEmps||[]).filter(e=>e.role==="Team Lead"&&e.active).map(e=>`<option value="${esc(e.id)}" ${c.tlId===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select></div>`:ro("Team Lead",esc(c["Team Lead"]));
+  const tlSel=canEd&&can("caseTL")?`<div><label class="f">Team Lead</label><select id="cf_TL" style="width:100%"><option value="">— None —</option>${(S.allEmps||[]).filter(e=>e.role==="Team Lead"&&e.active).map(e=>`<option value="${esc(e.id)}" ${c.tlId===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select></div>`:ro("Team Lead",esc(c["Team Lead"]));
   $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(c["Customer Name"])}</div><div><div style="font-weight:700">${esc(c["Customer Name"])} · <span class="num">${esc(c.code)}</span></div>
      <div class="num mute small">${esc(c["Contact Number"])} · lead date ${esc(c["Lead Date"])} · shared by ${esc(c["Lead Shared by"])}</div></div><button class="x" id="mx">×</button></div>
    <div class="mb">
-    ${can?`<div class="row" style="margin-bottom:6px"><a class="btn call" href="${telHref(c["Contact Number"])}">📞 Call ${esc(c["Contact Number"])}</a>${casePill(c)}</div>`
-      :`<div class="card pad" style="background:#f5f7fb;margin-bottom:8px"><b>This customer is with your Team Lead.</b><div class="small mute">You can see every update here; your Team Lead does the follow-up.</div></div>`}
+    ${canEd?`<div class="row" style="margin-bottom:6px"><a class="btn call" href="${telHref(c["Contact Number"])}">📞 Call ${esc(c["Contact Number"])}</a>${casePill(c)}</div>`
+      :(isLead()?`<div class="card pad" style="background:#f5f7fb;margin-bottom:8px"><b>View only.</b><div class="small mute">Editing lead cases is switched off for you – ask Admin if you need it.</div></div>`:`<div class="card pad" style="background:#f5f7fb;margin-bottom:8px"><b>This customer is with your Team Lead.</b><div class="small mute">You can see every update here; your Team Lead does the follow-up.</div></div>`)}
     <div class="cgrid">
      ${tlSel}${inp("SM Name")}${inp("Status")}${inp("Customer Status")}
      ${inp("Product")}${inp("Amount Required")}${inp("Lead Type")}${inp("Lead Source")}
      ${inp("Bank Name")}${inp("Banker Name")}${inp("Banker Contact No","tel")}${inp("Disbursed Date","date")}
      ${inp("Connector Name")}${inp("Connector Contact No","tel")}${inp("Connector Location")}${ro("Disbursed Month",esc(c["Disbursed Month"]))}
     </div>
-    ${can?`<label class="f" for="cf_Remarks">Remarks</label><textarea id="cf_Remarks" style="width:100%;min-height:70px">${esc(c.Remarks)}</textarea>`:`<div style="margin-top:10px">${ro("Remarks",esc(c.Remarks))}</div>`}
+    ${canEd?`<label class="f" for="cf_Remarks">Remarks</label><textarea id="cf_Remarks" style="width:100%;min-height:70px">${esc(c.Remarks)}</textarea>`:`<div style="margin-top:10px">${ro("Remarks",esc(c.Remarks))}</div>`}
     <div class="small mute" style="margin-top:8px">Monthly: ${esc(c.Monthly)} · Last update ${c.upd?fmt(c.upd):"—"} by ${esc(c["Updated by"])}</div>
    </div>
-   <div class="mf">${ME&&ME.role==="Admin"?`<button class="btn" id="crm" style="margin-right:auto;color:var(--red)">🗑 Remove case</button>`:""}<button class="btn" id="mc">${can?"Cancel":"Close"}</button>${can?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
+   <div class="mf">${isLead()&&can("caseRemove")?`<button class="btn" id="crm" style="margin-right:auto;color:var(--red)">🗑 Remove case</button>`:""}<button class="btn" id="mc">${canEd?"Cancel":"Close"}</button>${canEd?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
   $("#modal").style.maxWidth="880px";$("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#mc").onclick=close;
   const rmb=$("#crm");if(rmb)rmb.onclick=async()=>{
     if(!await askOk({title:"Remove case "+c.code+"?",ok:"Yes, remove",danger:true,body:`<b>${esc(c["Customer Name"])}</b> · ${esc(c["Contact Number"])}<br>The case leaves Lead Cases for everyone. A copy is kept in the <b>Removed Cases</b> tab of the sheet with your name and the time. The contact stays in the Calling List and can get a new case later.`}))return;
@@ -1302,7 +1339,7 @@ function openLead(id,fromCall){
   $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(l.name)}</div><div><div style="font-weight:700">${esc(l.name)}</div><div class="num mute small">${esc(l.phone)} · ${esc(l.city)}</div></div><button class="x" id="mx">×</button></div>
   <div class="mb">
    ${fromCall?`<div class="card pad" style="background:var(--green-soft);border-color:#c7e8d2;margin-bottom:6px"><b style="color:var(--green)">📞 Dialing ${esc(l.phone)}…</b><div class="small mute" style="margin-top:3px">Your phone's dialer should open. After the call, record the outcome below.</div></div>`:""}
-   <div class="row"><a class="btn call" href="${telHref(l.phone)}">📞 Call ${esc(l.phone)}</a>${isLead()?`<label class="small mute" style="display:flex;gap:6px;align-items:center">Assigned to <select id="mAsg">${l.assignedTo?"":`<option value="" selected disabled>Choose a telecaller…</option>`}${asgOpts(l.assignedTo)}</select></label>`:`<span class="mute small">Assigned to ${esc(l.assignedTo?empName(l.assignedTo):"nobody")}</span>`}</div>
+   <div class="row"><a class="btn call" href="${telHref(l.phone)}">📞 Call ${esc(l.phone)}</a>${isLead()&&can("doAssign")?`<label class="small mute" style="display:flex;gap:6px;align-items:center">Assigned to <select id="mAsg">${l.assignedTo?"":`<option value="" selected disabled>Choose a telecaller…</option>`}${asgOpts(l.assignedTo)}</select></label>`:`<span class="mute small">Assigned to ${esc(l.assignedTo?empName(l.assignedTo):"nobody")}</span>`}</div>
    <label class="f">Call outcome</label>
    <div class="outs">${Object.entries(OUTCOMES).map(([k,o])=>`<button class="out" data-out="${k}"><span class="pill ${o.cls}">${o.label}</span></button>`).join("")}</div>
    <div id="fuWrap" style="display:none"><label class="f">Call back on</label><input type="datetime-local" id="fu" style="width:100%"></div>

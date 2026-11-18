@@ -31,6 +31,23 @@
  */
 
 const ROLES = ["Admin", "Manager", "Team Lead", "Sales Manager", "Telecaller Executive"];
+// ---- Permission levels: each role starts with its defaults; Admin can tick/untick extras per person
+// (saved in Employees column K as e.g. "+reports, -doAssign"). Admin always has everything.
+const PERM_KEYS = ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "reports",
+  "doAssign", "caseEdit", "caseTL", "caseRemove", "empEdit", "pinReset", "sheet", "viewAs"];
+const ROLE_PERMS = {
+  "Manager":   ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "reports", "doAssign", "caseEdit", "caseTL", "empEdit", "pinReset"],
+  "Team Lead": ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "doAssign", "caseEdit", "pinReset"]
+};
+const PERM_ALLOWED = { "Manager": PERM_KEYS, "Team Lead": PERM_KEYS.filter(k => k !== "empEdit") };   // what Admin may tick per role
+function perms_(e) {
+  if (!e) return new Set();
+  if (e.role === "Admin") return new Set(PERM_KEYS);
+  const set = new Set(ROLE_PERMS[e.role] || []), ok = new Set(PERM_ALLOWED[e.role] || []);
+  String(e.permRaw || "").split(/[,\s]+/).forEach(t => { const k = t.slice(1); if (!ok.has(k)) return; if (t[0] === "+") set.add(k); else if (t[0] === "-") set.delete(k); });
+  return set;
+}
+function can_(me, key) { if (!perms_(me).has(key)) throw new Error("You don't have permission to do that – ask Admin"); }
 const MEET_COLS = 21;
 // Lead Cases tab – column order follows the team's own lead sheet, then a few columns the CRM fills in
 const CASE_HDR = ["Timestamp", "SM Name", "Customer Name", "Contact Number", "Product", "Amount Required", "Lead Source",
@@ -67,18 +84,19 @@ function doPost(e) {
     try {
       switch (b.action) {
         case "logCall":   return logCall_(me, b);
-        case "assign":    need_(me, "Team Lead"); if (!b.to) throw new Error("Choose a telecaller"); return assign_(b.ids || [], b.to, me);
-        case "addLeads":  need_(me, "Team Lead"); return addLeads_(b.leads || [], me);
-        case "addEmp":    need_(me, "Manager");   return addEmp_(me, b);
-        case "updateEmp": need_(me, "Manager");   return updateEmp_(me, b);
-        case "resetPin":  need_(me, "Team Lead"); return resetPin_(me, b.id, b.pin);
-        case "removeEmp": need_(me, "Manager");   return removeEmp_(me, b.id);
+        case "assign":    need_(me, "Team Lead"); can_(me, "doAssign"); if (!b.to) throw new Error("Choose a telecaller"); return assign_(b.ids || [], b.to, me);
+        case "addLeads":  need_(me, "Team Lead"); can_(me, "import"); return addLeads_(b.leads || [], me);
+        case "addEmp":    need_(me, "Manager"); can_(me, "empEdit"); return addEmp_(me, b);
+        case "updateEmp": need_(me, "Manager"); can_(me, "empEdit"); return updateEmp_(me, b);
+        case "resetPin":  need_(me, "Team Lead"); can_(me, "pinReset"); return resetPin_(me, b.id, b.pin);
+        case "removeEmp": need_(me, "Manager"); can_(me, "empEdit"); return removeEmp_(me, b.id);
         case "changePin": return changePin_(me, b.oldPin, b.newPin);
         case "saveMeeting":   return saveMeeting_(me, b.m || {});
         case "deleteMeeting": need_(me, "Manager"); return deleteMeeting_(b.id);
-        case "saveCase":   need_(me, "Team Lead"); return saveCase_(me, b.c || {});
-        case "createCase": need_(me, "Team Lead"); return createCaseFor_(me, b.leadId);
-        case "removeCase": need_(me, "Admin"); return removeCase_(me, b.code);
+        case "saveCase":   need_(me, "Team Lead"); can_(me, "caseEdit"); return saveCase_(me, b.c || {});
+        case "createCase": need_(me, "Team Lead"); can_(me, "caseEdit"); return createCaseFor_(me, b.leadId);
+        case "removeCase": need_(me, "Team Lead"); can_(me, "caseRemove"); return removeCase_(me, b.code);
+        case "setPerms":   need_(me, "Admin"); return setPerms_(me, b.id, b.perms || []);
         default: throw new Error("Unknown action: " + b.action);
       }
     } finally { lock.releaseLock(); }
@@ -155,9 +173,9 @@ function load_(me) {
   }
   return {
     me: pub_(me),
-    employees: people.map(x => [x.id, x.name, x.phone, x.active ? "Yes" : "No", x.role, x.hash || x.pin ? "set" : "", x.tl || "", isLead ? x.last : ""]),
+    employees: people.map(x => [x.id, x.name, x.phone, x.active ? "Yes" : "No", x.role, x.hash || x.pin ? "set" : "", x.tl || "", isLead ? x.last : "", me.role === "Admin" ? x.permRaw : ""]),
     leads, logs,
-    sheetUrl: me.role === "Admin" ? sheetUrlFor_(me) : "",   // only Admin gets the Google Sheet link
+    sheetUrl: perms_(me).has("sheet") ? sheetUrlFor_(me) : "",   // Google Sheet link only for people allowed to open it
     ...meetings_(me, isLead),
     cases: (fillCodesSafe_(), cases_(me, emps)),
     ...listsOut_(),
@@ -447,10 +465,26 @@ function createCaseFor_(me, leadId) {                                  // open a
 }
 // Admin only: take a case out of Lead Cases (e.g. opened by mistake). The row is kept in the "Removed Cases" tab
 // with who removed it and when, so nothing is lost. The contact stays in the Calling List and can get a new case later.
+// Admin only: save one person's permissions as differences from their role's defaults (Employees column K)
+function setPerms_(me, id, list) {
+  const e = emps_().find(x => x.id === id);
+  if (!e) throw new Error("Employee not found");
+  if (!PERM_ALLOWED[e.role]) throw new Error(e.role + " permissions can't be changed here");
+  const want = new Set(list.filter(k => PERM_ALLOWED[e.role].indexOf(k) >= 0)), base = new Set(ROLE_PERMS[e.role] || []);
+  const diff = PERM_ALLOWED[e.role].filter(k => want.has(k) !== base.has(k)).map(k => (want.has(k) ? "+" : "-") + k);
+  const sh = sheet_("Employees");
+  if (sh.getMaxColumns() < 11) sh.insertColumnsAfter(sh.getMaxColumns(), 11 - sh.getMaxColumns());
+  if (!String(sh.getRange(1, 11).getDisplayValues()[0][0]).trim()) sh.getRange(1, 11).setValues([["Permissions (set in CRM)"]]);
+  sh.getRange(e.row, 11).setValues([[diff.join(", ")]]);
+  audit_(me.name, me, "Permissions for " + e.name + ": " + (diff.join(", ") || "role default"));
+  return { saved: true };
+}
 function removeCase_(me, code) {
   const sh = caseSheet_(), rows = caseRows_();
   const i = rows.findIndex(r => String(r[C_["Unique Lead Code"]]).trim() === String(code || "").trim());
   if (i < 0) throw new Error("Case " + code + " not found");
+  const emps = emps_();
+  if (!canSeeCase_(me, rows[i], emps, me.role === "Team Lead" ? teamIds_(me, emps) : new Set())) throw new Error("This case isn't in your team");
   const ss = SpreadsheetApp.getActiveSpreadsheet(), nc = sh.getLastColumn();
   const hdr = sh.getRange(1, 1, 1, nc).getDisplayValues()[0], row = sh.getRange(i + 2, 1, 1, nc).getValues()[0];
   let rm = ss.getSheetByName("Removed Cases");
@@ -472,7 +506,7 @@ function saveCase_(me, c) {
   ["Connector Contact No", "Banker Contact No"].forEach(h => row[C_[h]] = text_(row[C_[h]]));
   const dd = String(row[C_["Disbursed Date"]]).match(/^(\d{4})-(\d{2})-(\d{2})/);
   row[C_["Disbursed Month"]] = dd ? Utilities.formatDate(new Date(+dd[1], +dd[2] - 1, +dd[3]), "Asia/Kolkata", "MMM-yyyy") : "";
-  if (c["Team Lead"] !== undefined && rank_(me.role) <= rank_("Manager")) {   // Admin / Manager can move a case to another Team Lead
+  if (c["Team Lead"] !== undefined && perms_(me).has("caseTL")) {   // people allowed to move a case to another Team Lead
     const t = emps.find(x => x.role === "Team Lead" && (x.id === c["Team Lead"] || norm_(x.name) === norm_(c["Team Lead"])));
     row[C_["Team Lead"]] = t ? t.name : "";
   }
@@ -520,12 +554,13 @@ function tidyText_(s){s=String(s==null?"":s).replace(/[ \t]+/g," ").trim().repla
 function emps_() {
   const sh = sheet_("Employees"), n = sh.getLastRow() - 1;
   if (n < 1) return [];
-  const list = sh.getRange(2, 1, n, 10).getDisplayValues().map((r, i) => ({
+  const nc = Math.min(11, sh.getMaxColumns());
+  const list = sh.getRange(2, 1, n, nc).getDisplayValues().map((r, i) => ({
     id: String(r[0]).trim(), name: String(r[1]).trim(), phone: String(r[2]).trim(),
     active: String(r[3] || "Yes").trim().toLowerCase() !== "no",
     role: ROLES.find(x => x.toLowerCase() === String(r[4] || "").trim().toLowerCase()) || "Telecaller Executive",
     pin: String(r[5] || "").trim(), hash: String(r[6] || "").trim(), tlRaw: String(r[9] || "").trim(),
-    last: String(r[7] || "").trim(), row: i + 2
+    last: String(r[7] || "").trim(), permRaw: String(r[10] || "").trim(), row: i + 2
   })).filter(x => x.id && x.name);
   // column J "Team Lead" may hold the Team Lead's name or ID
   const tls = list.filter(x => x.role === "Team Lead");
@@ -561,7 +596,7 @@ function tlName_(tlId, role) {
   if (!t) throw new Error("Choose a Team Lead from the list");
   return t.name;
 }
-const pub_ = e => ({ id: e.id, name: e.name, role: e.role, phone: e.phone });
+const pub_ = e => ({ id: e.id, name: e.name, role: e.role, phone: e.phone, perms: [...perms_(e)] });
 function checkPin_(p) { if (!/^\d{4}$/.test(String(p || "").trim())) throw new Error("PIN must be exactly 4 digits"); }
 function checkName_(n, selfId) {
   n = String(n || "").trim();
