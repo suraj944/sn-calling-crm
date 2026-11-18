@@ -33,12 +33,12 @@
 const ROLES = ["Admin", "Manager", "Team Lead", "Sales Manager", "Telecaller Executive"];
 // ---- Permission levels: each role starts with its defaults; Admin can tick/untick extras per person
 // (saved in Employees column K as e.g. "+reports, -doAssign"). Admin always has everything.
-const PERM_KEYS = ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "reports",
-  "doAssign", "caseEdit", "caseTL", "caseRemove", "empEdit", "pinReset", "sheet", "viewAs", "caseTransfer", "scopeTeam", "scopeAll"];
-const TAB_KEYS = PERM_KEYS.slice(0, 10);
+const PERM_KEYS = ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "reports", "perf",
+  "doAssign", "caseEdit", "caseTL", "caseRemove", "empEdit", "pinReset", "sheet", "viewAs", "caseTransfer", "targetEdit", "scopeTeam", "scopeAll"];
+const TAB_KEYS = PERM_KEYS.slice(0, 11);
 const ROLE_PERMS = {
-  "Manager":   ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "reports", "doAssign", "caseEdit", "caseTL", "empEdit", "pinReset", "scopeAll"],
-  "Team Lead": ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "doAssign", "caseEdit", "pinReset", "scopeTeam"],
+  "Manager":   ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "reports", "perf", "doAssign", "caseEdit", "caseTL", "empEdit", "pinReset", "scopeAll"],
+  "Team Lead": ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "perf", "doAssign", "caseEdit", "pinReset", "scopeTeam"],
   "Sales Manager": [],            // own field work page – Admin can add tabs / actions / wider data
   "Telecaller Executive": []      // own calling page – Admin can add tabs / actions / wider data
 };
@@ -82,11 +82,13 @@ const MEET_COLS = 21;
 const CASE_HDR = ["Timestamp", "SM Name", "Customer Name", "Contact Number", "Product", "Amount Required", "Lead Source",
   "Connector Name", "Connector Contact No", "Connector Location", "Lead Type", "Lead Shared by", "Lead Date", "Monthly",
   "Unique Lead Code", "Bank Name", "Banker Name", "Banker Contact No", "Status", "Remarks", "Disbursed Date", "Disbursed Month",
-  "Customer Status", "Contact ID", "Team Lead", "Telecaller ID", "Last updated", "Updated by"];
+  "Customer Status", "Contact ID", "Team Lead", "Telecaller ID", "Last updated", "Updated by",
+  "Follow-up history", "Next follow-up", "Login date", "Sanction date"];   // last three are added to the sheet automatically
 const CASE_COLS = CASE_HDR.length, C_ = Object.fromEntries(CASE_HDR.map((h, i) => [h, i]));
 // what a Team Lead / Manager / Admin may change from the CRM (everything else is filled automatically)
-const CASE_EDIT = ["SM Name", "Product", "Amount Required", "Lead Source", "Connector Name", "Connector Contact No", "Connector Location",
-  "Lead Type", "Bank Name", "Banker Name", "Banker Contact No", "Status", "Remarks", "Disbursed Date", "Customer Status"];
+const CASE_EDIT = ["SM Name", "Lead Shared by", "Product", "Amount Required", "Lead Source", "Connector Name", "Connector Contact No", "Connector Location",
+  "Lead Type", "Bank Name", "Banker Name", "Banker Contact No", "Status", "Remarks", "Disbursed Date", "Customer Status", "Next follow-up"];
+const TARGET_HDR = ["Month", "Employee ID", "Name", "Calls", "Leads", "Cases", "Logins", "Disbursed cases", "Disbursal amount", "Set by", "Set at"];
 const SESSION_DAYS = 30;
 const MAX_FAILS = 5, LOCK_MIN = 15;
 
@@ -122,10 +124,12 @@ function doPost(e) {
         case "changePin": return changePin_(me, b.oldPin, b.newPin);
         case "saveMeeting":   return saveMeeting_(me, b.m || {});
         case "deleteMeeting": need_(me, "Manager"); return deleteMeeting_(b.id);
-        case "saveCase":   can_(me, "caseEdit"); return saveCase_(me, b.c || {});
+        case "saveCase":   return saveCase_(me, b.c || {});              // who may edit is checked inside (canEditCase_)
+        case "newCase":    return newCase_(me, b.c || {}, !!b.force, String(b.to || ""));
         case "createCase": can_(me, "caseEdit"); return createCaseFor_(me, b.leadId);
         case "removeCase": can_(me, "caseRemove"); return removeCase_(me, b.code);
-        case "transferCase": can_(me, "caseTransfer"); return transferCase_(me, b.code, b.to, b.note);
+        case "transferCase": return transferCase_(me, b.code, b.to, b.note);   // Admin (caseTransfer) or the SM who filled the case, while it's still with them
+    case "saveTargets": can_(me, "targetEdit"); return saveTargets_(me, b.month, b.list);
         case "setPerms":   need_(me, "Admin"); return setPerms_(me, b.id, b.perms || []);
         default: throw new Error("Unknown action: " + b.action);
       }
@@ -193,6 +197,7 @@ function canManage_(me, targetRole) { // Managers can't create/edit Admins or ot
 function load_(me) {
   const emps = emps_(), isLead = hasDesk_(me), lim = limit_(me, emps);
   let leads = rows_("Leads", 12), logs = rows_("CallLogs", 10), people = isLead ? emps : [me];
+  const allLogs = logs;
   if (lim) {                                           // own contacts, or their team's – Admin can widen this per person
     if (isLead) people = emps.filter(x => lim.has(x.id));
     leads = leads.filter(r => lim.has(String(r[4]).trim()));
@@ -208,6 +213,8 @@ function load_(me) {
     cases: (fillCodesSafe_(), cases_(me, emps)),
     ...listsOut_(),
     transferTo: perms_(me).has("caseTransfer") ? transferTargets_(me, emps).map(x => [x.id, x.name, x.role]) : [],
+    handTo: handTargets_(me, emps).map(x => [x.id, x.name, x.role]),
+    ...perfOut_(me, emps, allLogs),
     serverTime: now_()
   };
 }
@@ -392,8 +399,15 @@ function caseSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName("Lead Cases");
   if (!sh) { sh = ss.insertSheet("Lead Cases"); sh.getRange(1, 1, 1, CASE_COLS).setValues([CASE_HDR]); sh.setFrozenRows(1); }
+  if (!caseColsOk_) {                                   // add Next follow-up / Login date / Sanction date columns once
+    if (sh.getMaxColumns() < CASE_COLS) sh.insertColumnsAfter(sh.getMaxColumns(), CASE_COLS - sh.getMaxColumns());
+    const hdr = sh.getRange(1, 1, 1, CASE_COLS).getDisplayValues()[0];
+    if (hdr.some((h, i) => !String(h).trim())) sh.getRange(1, 1, 1, CASE_COLS).setValues([hdr.map((h, i) => String(h).trim() || CASE_HDR[i])]);
+    caseColsOk_ = true;
+  }
   return sh;
 }
+let caseColsOk_ = false;
 // Unique Lead Code: SNFS-1, SNFS-2 … always one more than the highest code in the sheet
 function fillCodesSafe_() {
   const lk = LockService.getScriptLock();
@@ -403,8 +417,9 @@ function fillCodesSafe_() {
 function nextCode_(rows) {
   let max = 0;
   const rm = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Removed Cases");   // never reuse a removed case's code
-  if (rm && rm.getLastRow() > 1) rows = rows.concat(rm.getRange(2, 1, rm.getLastRow() - 1, CASE_COLS).getDisplayValues());
-  rows.forEach(r => { const m = String(r[C_["Unique Lead Code"]]).trim().match(/^SNFS-(\d+)$/i); if (m) max = Math.max(max, +m[1]); });
+  const codes = rows.map(r => r[C_["Unique Lead Code"]]);
+  if (rm && rm.getLastRow() > 1) rm.getRange(2, C_["Unique Lead Code"] + 1, rm.getLastRow() - 1, 1).getDisplayValues().forEach(r => codes.push(r[0]));
+  codes.forEach(v => { const m = String(v).trim().match(/^SNFS-(\d+)$/i); if (m) max = Math.max(max, +m[1]); });
   return "SNFS-" + (max + 1);
 }
 // Rows typed straight into the Lead Cases tab without a code get the next SNFS number
@@ -419,7 +434,16 @@ function fillCodes_() {
 // Every drop-down list lives in the Lists tab of the sheet: one column per drop-down, name in row 1.
 // Admin adds a new choice by typing it at the bottom of the right column. "Counts as" (next to Status)
 // tells the dashboard how a status counts: New, In progress, Disbursed or Closed.
-const LIST_COLS = ["Status", "Customer Status", "Product", "Lead Type", "Lead Source", "SM Name", "Bank Name"];
+const LIST_COLS = ["Status", "Customer Status", "Product", "Lead Type", "Lead Source", "SM Name", "Bank Name", "Lead Shared by"];
+// Targets and monthly numbers: everyone with the Performance tab sees the whole leaderboard, others only themselves
+function perfOut_(me, emps, logs) {
+  try {
+    const all = perms_(me).has("perf"), mine = id => all || id === me.id;
+    const b = board_(logs, caseRows_(), emps, lists_()), board = {};
+    Object.keys(b).forEach(m => { board[m] = {}; Object.keys(b[m]).forEach(id => { if (mine(id)) board[m][id] = b[m][id]; }); });
+    return { targets: targets_().filter(r => mine(r[1])), board, boardNames: all ? emps.map(x => [x.id, x.name, x.role, x.active ? "Yes" : "No", x.tl || ""]) : [] };
+  } catch (e) { return { targets: [], board: {}, perfError: String(e.message || e) }; }
+}
 function listsOut_() { const L = lists_(); return { lists: L.lists, statusType: L.statusType, banks: L.lists["Bank Name"] || [] }; }
 function lists_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet(), sh = ss.getSheetByName("Lists"), lists = {}, statusType = {};
@@ -453,6 +477,75 @@ function pick_(h, v, old, L) {
   if (v === String(old || "").trim()) return v;
   throw new Error("Choose " + h + " from the list. To add a new choice, Admin types it in the Lists tab of the sheet.");
 }
+// Next follow-up date: yyyy-MM-dd (or empty)
+function fuDate_(v) {
+  const s = String(v == null ? "" : v).trim();
+  if (!s) return "";
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/) || null;
+  if (!m) throw new Error("Next follow-up should be a date");
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  if (isNaN(d) || d.getFullYear() < 2020 || d.getFullYear() > 2100) throw new Error("Next follow-up should be a date");
+  return Utilities.formatDate(d, "Asia/Kolkata", "yyyy-MM-dd");
+}
+// how a status counts: "new", "prog", "disb" or "closed" (Counts as column in the Lists tab, else the built-in rule)
+function stType_(st, L) {
+  const t = String(((L || lists_()).statusType || {})[st] || "").toLowerCase();
+  if (t.indexOf("new") === 0) return "new"; if (t.indexOf("disb") === 0) return "disb";
+  if (/^(clos|drop|lost)/.test(t)) return "closed"; if (t) return "prog";
+  return !st || st === "New" ? "new" : st === "Disbursed" ? "disb" : ["Not Interested", "Cancelled", "Case Rejected", "Case Closed"].indexOf(st) >= 0 ? "closed" : "prog";
+}
+const MON_ = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function mon_(v) {                                      // "2026-11-18 …" or "Nov-2026" → "Nov-2026"
+  const s = String(v || "").trim(), m = s.match(/^(\d{4})-(\d{1,2})/);
+  if (m) return MON_[+m[2] - 1] + "-" + m[1];
+  return /^[A-Z][a-z]{2}-\d{4}$/.test(s) ? s : "";
+}
+const num_ = v => { const n = parseFloat(String(v || "").replace(/[^\d.]/g, "")); return isFinite(n) ? n : 0; };
+
+/* ---------------- monthly targets & what each person actually did ---------------- */
+function targetSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName("Targets");
+  if (!sh) { sh = ss.insertSheet("Targets"); sh.getRange(1, 1, 1, TARGET_HDR.length).setValues([TARGET_HDR]); sh.setFrozenRows(1); }
+  return sh;
+}
+function targets_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet(), sh = ss.getSheetByName("Targets");
+  if (!sh || sh.getLastRow() < 2) return [];
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 9).getDisplayValues().filter(r => r[0] && r[1]);
+}
+// per month, per person: [calls, leads, cases, logins, disbursed cases, disbursal amount]
+function board_(logs, rows, emps, L) {
+  const out = {}, add = (m, id, k, n) => { if (!m || !id) return; const a = ((out[m] = out[m] || {})[id] = out[m][id] || [0, 0, 0, 0, 0, 0]); a[k] += n; };
+  logs.forEach(r => { const m = mon_(r[1]), id = String(r[5]).trim(); add(m, id, 0, 1); if (/^(interested|converted)$/i.test(String(r[7]).trim())) add(m, id, 1, 1); });
+  const tlId = {};                                      // Team Lead name in a case → that person's ID
+  rows.forEach(r => {
+    const t = String(r[C_["Team Lead"]]).trim(); if (!t) return;
+    if (!(t in tlId)) { const e = emps.find(x => tlMatch_(t, x)); tlId[t] = e ? e.id : ""; }
+    const id = tlId[t]; if (!id || !r[C_["Unique Lead Code"]]) return;
+    add(mon_(r[C_["Lead Date"]]) || mon_(r[C_["Monthly"]]), id, 2, 1);
+    add(mon_(r[C_["Login date"]]), id, 3, 1);
+    if (stType_(String(r[C_["Status"]]), L) === "disb") { const m = mon_(r[C_["Disbursed Month"]]) || mon_(r[C_["Disbursed Date"]]); add(m, id, 4, 1); add(m, id, 5, num_(r[C_["Amount Required"]])); }
+  });
+  return out;
+}
+// Admin (or someone allowed): replace one month's targets
+function saveTargets_(me, month, list) {
+  if (!/^[A-Z][a-z]{2}-\d{4}$/.test(String(month || ""))) throw new Error("Choose a month");
+  const emps = emps_(), sh = targetSheet_(), at = now_();
+  const keep = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, TARGET_HDR.length).getDisplayValues().filter(r => r[0] && r[0] !== month) : [];
+  const add = (list || []).map(t => {
+    const e = emps.find(x => x.id === String(t.id || "")); if (!e) return null;
+    const v = [t.calls, t.leads, t.cases, t.logins, t.disb, t.amt].map(x => { const n = Math.round(num_(x)); return n > 0 ? n : ""; });
+    return v.some(x => x !== "") ? [month, e.id, e.name].concat(v, [me.name, at]) : null;
+  }).filter(Boolean);
+  const all = keep.concat(add), n = Math.max(all.length, sh.getLastRow() - 1);      // rewrite the list; blank out leftover rows
+  while (all.length < n) all.push(TARGET_HDR.map(() => ""));
+  if (n > 0) sh.getRange(2, 1, n, TARGET_HDR.length).setValues(all);
+  audit_(me.name, me, "Targets for " + month + ": " + add.length + " people");
+  return { saved: true, count: add.length };
+}
+
 function caseRows_() { try { const sh = caseSheet_(), n = sh.getLastRow() - 1; return n < 1 ? [] : sh.getRange(2, 1, n, CASE_COLS).getDisplayValues(); } catch (e) { return []; } }
 // the Team Lead a case belongs to: the contact's telecaller's Team Lead (or the telecaller, if they lead a team)
 function caseTL_(emps, assigneeId, me) {
@@ -469,6 +562,16 @@ function canSeeCase_(me, row, emps, team) {
   const tel = String(row[C_["Telecaller ID"]]).trim();
   return sc === "team" ? team.has(tel) : tel === me.id;                 // their team's cases / their own cases
 }
+// Who may change a case: the person it is with now; the SM who filled it, until they transfer it;
+// and people with "Edit lead cases" who can see the whole team or everyone.
+function canEditCase_(me, row, emps) {
+  const holder = String(row[C_["Team Lead"]] || "").trim(), mine = String(row[C_["Telecaller ID"]]).trim() === me.id;
+  if (holder && tlMatch_(holder, me)) return true;
+  if (!holder && mine) return true;
+  return perms_(me).has("caseEdit") && scope_(me) !== "own" && canSeeCase_(me, row, emps, teamFor_(me, emps));
+}
+// Who a case can be handed to: active people with Lead Cases access (they fill in the rest), never Admin
+const handTargets_ = (me, emps) => emps.filter(x => x.active && x.id !== me.id && x.role !== "Admin" && perms_(x).has("cases"));
 const teamFor_ = (me, emps) => scope_(me) === "team" ? teamOf_(me, emps) : new Set();
 function cases_(me, emps) {
   const team = teamFor_(me, emps);
@@ -486,6 +589,7 @@ function createCase_(me, lc, remark) {
   row[C_["Status"]] = "New"; row[C_["Remarks"]] = remark ? "Telecaller: " + remark : "";
   row[C_["Contact ID"]] = lc[0]; row[C_["Team Lead"]] = tl ? tl.name : ""; row[C_["Telecaller ID"]] = String(lc[4]).trim();
   row[C_["Last updated"]] = now_(); row[C_["Updated by"]] = me.name;
+  row[C_["Next follow-up"]] = Utilities.formatDate(now, "Asia/Kolkata", "yyyy-MM-dd");   // a new case shows in the Team Lead's Today list
   const sh = caseSheet_(); sh.getRange(sh.getLastRow() + 1, 1, 1, CASE_COLS).setValues([row]);
   return code;
 }
@@ -497,6 +601,49 @@ function createCaseFor_(me, leadId) {                                  // open a
   const lim = limit_(me, emps_());
   if (lim && !lim.has(String(lc[4]).trim())) throw new Error("This contact isn't in your team");
   return { saved: true, caseCode: createCase_(me, lc, String(lc[7] || "")) };
+}
+// Lead & Inquiry form inside the CRM: the SM fills it, Lead Date is today. Every choice must come from the Lists tab.
+// People without Lead Cases access (telecaller executives) fill only the basics and must send the case to someone.
+function newCase_(me, c, force, to) {
+  const L = lists_(), emps = emps_(), now = new Date(), full = perms_(me).has("cases");
+  if (!full && !to) throw new Error("Choose who to send this case to");
+  const cl = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "").replace(/\s+/g, " ").trim().slice(0, 300);
+  const need = (h, label) => { const v = cl(c[h]); if (!v) throw new Error("Fill in " + (label || h)); return v; };
+  const choose = h => { const v = need(h); const list = L.lists[h] || []; if (!list.length) return properName_(v);
+    const hit = list.find(x => x.toLowerCase() === v.toLowerCase()); if (!hit) throw new Error("Choose " + h + " from the list"); return hit; };
+  const ph = digits_(need("Contact Number")).replace(/^(91|0)(?=\d{10}$)/, "");
+  if (!/^[6-9]\d{9}$/.test(ph)) throw new Error("Contact Number should be a 10-digit mobile number");
+  const amt = full ? Math.round(num_(need("Amount Required"))) : "";
+  if (full && !(amt > 0)) throw new Error("Amount Required should be a number, e.g. 500000");
+  let cph = full ? digits_(cl(c["Connector Contact No"])).replace(/^(91|0)(?=\d{10}$)/, "") : "";
+  if (cph && !/^\d{10}$/.test(cph)) throw new Error("Connector Contact No should have 10 digits");
+  const rows = caseRows_();
+  if (!force) {                                                        // same mobile number already has a case?
+    const dup = rows.filter(r => digits_(r[C_["Contact Number"]]).slice(-10) === ph).map(r => ({ code: r[C_["Unique Lead Code"]], name: r[C_["Customer Name"]], status: r[C_["Status"]], with: r[C_["Team Lead"]], date: r[C_["Lead Date"]] }));
+    if (dup.length) return { duplicate: dup.slice(0, 5) };
+  }
+  let t = null;
+  if (to) { t = handTargets_(me, emps).find(x => x.id === to); if (!t) throw new Error("Choose who to send the case to from the list"); }
+  const row = new Array(CASE_COLS).fill(""), today = Utilities.formatDate(now, "Asia/Kolkata", "yyyy-MM-dd"), d = Utilities.formatDate(now, "Asia/Kolkata", "d-MM");
+  row[C_["Timestamp"]] = now_(); row[C_["Lead Date"]] = today; row[C_["Monthly"]] = Utilities.formatDate(now, "Asia/Kolkata", "MMM-yyyy");
+  row[C_["Lead Type"]] = choose("Lead Type"); row[C_["Customer Name"]] = properName_(need("Customer Name"));
+  row[C_["Contact Number"]] = ph.slice(0, 5) + " " + ph.slice(5); row[C_["SM Name"]] = choose("SM Name"); row[C_["Product"]] = choose("Product");
+  row[C_["Lead Shared by"]] = choose("Lead Shared by");
+  if (full) {                                                          // the rest only from people with Lead Cases access
+    row[C_["Amount Required"]] = amt; row[C_["Lead Source"]] = choose("Lead Source");
+    row[C_["Connector Name"]] = properName_(cl(c["Connector Name"])); row[C_["Connector Contact No"]] = cph ? cph.slice(0, 5) + " " + cph.slice(5) : "";
+    row[C_["Connector Location"]] = properName_(cl(c["Connector Location"]));
+  }
+  const code = nextCode_(rows); row[C_["Unique Lead Code"]] = code;
+  row[C_["Status"]] = "New"; row[C_["Telecaller ID"]] = me.id; row[C_["Next follow-up"]] = today;
+  const note = tidyText_(cl(c.Remarks)), lines = [];
+  if (t) lines.push(d + " Transferred from " + me.name + " to " + t.name + " by " + me.name);
+  if (note) lines.push(d + " " + note);
+  row[C_["Remarks"]] = lines.join(" // ");
+  row[C_["Team Lead"]] = t ? t.name : "";
+  row[C_["Last updated"]] = now_(); row[C_["Updated by"]] = me.name;
+  const sh = caseSheet_(); sh.getRange(sh.getLastRow() + 1, 1, 1, CASE_COLS).setValues([row]);
+  return { saved: true, code, to: t ? t.name : "" };
 }
 // Admin only: take a case out of Lead Cases (e.g. opened by mistake). The row is kept in the "Removed Cases" tab
 // with who removed it and when, so nothing is lost. The contact stays in the Calling List and can get a new case later.
@@ -516,6 +663,7 @@ function setPerms_(me, id, list) {
 }
 // Case transfer: to someone at the same or a higher level (Team Lead / Manager) – never to an Admin
 function transferTargets_(me, emps) {
+  if (me.role === "Admin") return handTargets_(me, emps);
   return emps.filter(x => x.active && x.id !== me.id && (x.role === "Team Lead" || x.role === "Manager") &&
     (me.role === "Admin" || rank_(x.role) <= rank_(me.role)));
 }
@@ -525,10 +673,15 @@ function transferCase_(me, code, to, note) {
   if (i < 0) throw new Error("Case " + code + " not found");
   const row = rows[i].slice();
   if (!canSeeCase_(me, row, emps, teamFor_(me, emps))) throw new Error("This case isn't in your team");
-  const t = transferTargets_(me, emps).find(x => x.id === to);
-  if (!t) throw new Error("You can only transfer a case to a Team Lead or Manager at your level or above");
+  const holder = String(row[C_["Team Lead"]] || "").trim();
+  const owner = String(row[C_["Telecaller ID"]]).trim() === me.id && (!holder || tlMatch_(holder, me));
+  const admin = perms_(me).has("caseTransfer");
+  if (!admin && !owner) throw new Error(holder ? "This case is already with " + holder + " – only Admin can move it now" : "Only Admin can transfer this case");
+  const t = (admin ? transferTargets_(me, emps) : handTargets_(me, emps)).find(x => x.id === to);
+  if (!t) throw new Error(admin ? "You can only transfer a case to a Team Lead or Manager at your level or above" : "Choose someone from the list");
   if (tlMatch_(row[C_["Team Lead"]], t)) throw new Error("This case is already with " + t.name);
-  const from = String(row[C_["Team Lead"]] || "").trim() || "no Team Lead";
+  const filler = emps.find(x => x.id === String(row[C_["Telecaller ID"]]).trim());
+  const from = holder || (filler ? filler.name : "no Team Lead");
   note = String(note || "").replace(/[<>]/g, "").replace(/^[=+\-@]/, "").replace(/\s+/g, " ").trim().slice(0, 200);
   const d = Utilities.formatDate(new Date(), "Asia/Kolkata", "d-MM");
   const line = d + " Transferred from " + from + " to " + t.name + " by " + me.name + (note ? ": " + note : "");
@@ -558,10 +711,17 @@ function saveCase_(me, c) {
   const i = rows.findIndex(r => String(r[C_["Unique Lead Code"]]) === String(c.code || ""));
   if (i < 0) throw new Error("Case " + c.code + " not found");
   const row = rows[i].slice();
-  if (!canSeeCase_(me, row, emps, teamFor_(me, emps))) throw new Error("This case isn't in your team");
+  if (!canEditCase_(me, row, emps)) throw new Error(String(row[C_["Team Lead"]]).trim() ? "This case is with " + row[C_["Team Lead"]] + " – you can see its updates, but only they (or Admin) can change it" : "You can't change this case – ask Admin");
   const cl = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "'$&").trim().slice(0, 500);
   const L = lists_();
-  CASE_EDIT.forEach(h => { if (c[h] !== undefined) row[C_[h]] = h === "Remarks" ? tidyText_(cl(c[h])) : LIST_COLS.indexOf(h) >= 0 ? pick_(h, cl(c[h]), rows[i][C_[h]], L) : h === "Banker Name" || h === "Connector Name" ? properName_(cl(c[h])) : cl(c[h]); });
+  CASE_EDIT.forEach(h => { if (c[h] !== undefined) row[C_[h]] = h === "Remarks" ? tidyText_(cl(c[h])) : h === "Next follow-up" ? fuDate_(c[h]) : LIST_COLS.indexOf(h) >= 0 ? pick_(h, cl(c[h]), rows[i][C_[h]], L) : h === "Banker Name" || h === "Connector Name" ? properName_(cl(c[h])) : cl(c[h]); });
+  const st = String(row[C_["Status"]]), was = String(rows[i][C_["Status"]]), today = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
+  if (st !== was) {                                     // remember when a case reached login and sanction (for the funnel and targets)
+    if (/sanction/i.test(st)) { if (!row[C_["Sanction date"]]) row[C_["Sanction date"]] = today; if (!row[C_["Login date"]]) row[C_["Login date"]] = today; }
+    else if (/login/i.test(st) && !row[C_["Login date"]]) row[C_["Login date"]] = today;
+  }
+  const ty = stType_(st, L);
+  if (ty === "disb" || ty === "closed") row[C_["Next follow-up"]] = "";   // nothing more to follow up
   row[C_["Contact Number"]] = text_(row[C_["Contact Number"]]);
   ["Connector Contact No", "Banker Contact No"].forEach(h => row[C_[h]] = text_(row[C_[h]]));
   const dd = String(row[C_["Disbursed Date"]]).match(/^(\d{4})-(\d{2})-(\d{2})/);

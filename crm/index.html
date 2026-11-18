@@ -175,6 +175,27 @@ body.working .topbar{opacity:1}
 .proc b{font-size:15px}.spin.big{width:28px;height:28px;border-width:3px;color:var(--brand);flex:none}
 @keyframes fadein{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.topbar::before,.spin,#refresh.spinning .ri,.boot .bl,.skel div{animation:none}}
+.fub{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.fub.over{background:#fdecec;color:#c0392b}.fub.today{background:#fff4e0;color:#b26a00}.fub.later{background:#eef0f3;color:#3d4350}.fub.none{color:#8a919c;border:1px dashed #cfd4da}
+.fubox{background:#f5f8fc;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:4px 0 12px;display:grid;grid-template-columns:1.5fr 1fr;gap:14px}
+.qb{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.qb .btn{padding:3px 9px;font-size:12px}
+.bar{height:6px;background:#eceef2;border-radius:3px;overflow:hidden;margin-top:5px}.bar>i{display:block;height:100%;background:var(--brand);border-radius:3px}
+.bar.ok>i{background:var(--green)}.bar.low>i{background:var(--amber)}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}
+h2.ph{font-size:17px;margin:26px 0 8px;padding-top:14px;border-top:1px solid var(--line)}
+.pcols{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:14px;align-items:start}.pcols2{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+.funnel .fstep{margin-bottom:12px}.funnel .flab{display:flex;justify-content:space-between;gap:8px;font-size:13px}.fbar{height:22px;background:#f0f2f5;border-radius:6px;overflow:hidden;margin-top:4px}.fbar>i{display:block;height:100%;border-radius:6px}
+table.lb td,table.lb th{vertical-align:top}table.tg td{padding:6px 8px}
+details>summary{cursor:pointer;list-style-position:outside}
+#printArea{display:none}
+ol.tl{list-style:none;margin:6px 0 0;padding:0 0 0 14px;border-left:2px solid var(--line)}ol.tl li{position:relative;padding:4px 0 8px 10px;font-size:13px}ol.tl li:before{content:"";position:absolute;left:-20px;top:9px;width:9px;height:9px;border-radius:50%;background:var(--brand)}ol.tl li+li:before{background:#c5ccd8}
+.cgrid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}.cgrid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 12px}.nf .chips{display:flex;gap:6px;flex-wrap:wrap}.nf label.f{margin-top:12px}
+@media(max-width:640px){.cgrid2,.cgrid3{grid-template-columns:1fr}}
+@media(max-width:820px){.fubox,.pcols,.pcols2{grid-template-columns:1fr}}
+@media print{body.printing>*:not(#printArea){display:none!important}body.printing{background:#fff}body.printing #printArea{display:block;font:11px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;color:#111}
+ #printArea .pr-h{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #2453d6;padding-bottom:8px;margin-bottom:12px}#printArea .pr-t{font-size:20px;font-weight:700;color:#2453d6}
+ #printArea .pr-k{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:10px}#printArea .pr-k div{border:1px solid #ddd;border-radius:6px;padding:6px 8px}#printArea .pr-k span{display:block;color:#666;font-size:10px}#printArea .pr-k b{font-size:16px}#printArea .pr-k small{display:block;color:#666}
+ #printArea h2{font-size:13px;margin:14px 0 4px;break-after:avoid}#printArea table{width:100%;border-collapse:collapse;break-inside:auto}#printArea th,#printArea td{border:1px solid #ddd;padding:3px 6px;text-align:left}#printArea th{background:#f1f4fb}#printArea tr{break-inside:avoid}}
 </style>
 </head>
 <body>
@@ -250,19 +271,19 @@ const rank=r=>{const i=ROLES.indexOf(r);return i<0?99:i};
 let S={employees:[],allEmps:[],leads:[]};
 let MODE="loading", BUSY=false, lastSync=null, demoReason="";
 let ME=null, SHEET_URL="";              // ME is set only for personal logins (website). null = full access (claude.ai / demo)
-let view={who:"admin",tab:"dash",filter:"all",q:"",sel:new Set(),assignFilter:"all",logEmp:"all",logOut:"all"};
+let view={who:"admin",tab:"today",filter:"all",q:"",sel:new Set(),assignFilter:"all",logEmp:"all",logOut:"all"};
 const emp=id=>S.allEmps.find(e=>e.id===id);
 const empName=id=>id==="ADMIN_LOG"?"Admin":(emp(id)?.name||id||"—");
 /* "Desk" view (tabs): Admin, Manager, Team Lead – or anyone Admin has given at least one tab */
 const isLead=()=>!ME||rank(ME.role)<=rank("Team Lead")||TAB_KEYS.some(k=>can(k));
 /* ---- Permission levels (same lists as the server). Role defaults + per-person ticks set by Admin. ---- */
 const SCOPE_OPTS=[["own","Only their own","their own contacts, calls & cases"],["team","Their team","everyone under the same Team Lead"],["all","Everyone","the whole company"]];
-const PERM_DEF=[["Tabs they can see",[["dash","Dashboard"],["lead","Leads"],["cases","Lead Cases"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],["team","Employees / My Team"],["logs","Call Logs"],["meet","Field Work"],["reports","Reports & downloads"]]],
-  ["What they can do",[["doAssign","Assign contacts & share out"],["caseEdit","Open & edit lead cases"],["caseTL","Move a case to another Team Lead"],["caseTransfer","Transfer a case (Admin by default)"],["caseRemove","Remove lead cases"],["empEdit","Add, edit & remove employees"],["pinReset","Reset PINs"],["sheet","Open the Google Sheet"],["viewAs","Open anyone's page (Viewing as)"]]]];
+const PERM_DEF=[["Tabs they can see",[["dash","Dashboard"],["lead","Leads"],["cases","Lead Cases"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],["team","Employees / My Team"],["logs","Call Logs"],["meet","Field Work"],["reports","Reports & downloads"],["perf","Performance & targets"]]],
+  ["What they can do",[["doAssign","Assign contacts & share out"],["caseEdit","Open & edit lead cases"],["caseTL","Move a case to another Team Lead"],["caseTransfer","Transfer a case (Admin by default)"],["caseRemove","Remove lead cases"],["empEdit","Add, edit & remove employees"],["pinReset","Reset PINs"],["sheet","Open the Google Sheet"],["viewAs","Open anyone's page (Viewing as)"],["targetEdit","Set monthly targets"]]]];
 const PERM_KEYS=[...PERM_DEF.flatMap(g=>g[1].map(x=>x[0])),"scopeTeam","scopeAll"];
 const TAB_KEYS=PERM_DEF[0][1].map(x=>x[0]);
-const ROLE_PERMS={"Manager":["dash","lead","cases","byemp","assign","import","team","logs","meet","reports","doAssign","caseEdit","caseTL","empEdit","pinReset","scopeAll"],
-  "Team Lead":["dash","lead","cases","byemp","assign","import","team","logs","meet","doAssign","caseEdit","pinReset","scopeTeam"],"Sales Manager":[],"Telecaller Executive":[]};
+const ROLE_PERMS={"Manager":["dash","lead","cases","byemp","assign","import","team","logs","meet","reports","perf","doAssign","caseEdit","caseTL","empEdit","pinReset","scopeAll"],
+  "Team Lead":["dash","lead","cases","byemp","assign","import","team","logs","meet","perf","doAssign","caseEdit","pinReset","scopeTeam"],"Sales Manager":[],"Telecaller Executive":[]};
 const NOT_EMP=PERM_KEYS.filter(k=>k!=="empEdit");
 const PERM_ALLOWED={"Manager":PERM_KEYS,"Team Lead":NOT_EMP,"Sales Manager":NOT_EMP,"Telecaller Executive":NOT_EMP.filter(k=>k!=="pinReset")};
 const basePerms=r=>ROLE_PERMS[r]||[],allowedPerms=r=>PERM_ALLOWED[r]||PERM_ALLOWED["Telecaller Executive"];
@@ -351,6 +372,8 @@ const Live={
   async removeCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async transferCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async setPerms(){throw new Error("Open the website version of the CRM to change permissions")},
+  async saveTargets(){throw new Error("Open the website version of the CRM to set targets")},
+  async newCase(){throw new Error("Open the website version of the CRM to fill the lead form")},
   async deleteMeeting(){throw new Error("Open the website version of the CRM to delete meetings")}
 };
 
@@ -370,7 +393,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu){await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu)})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -386,6 +409,8 @@ const Script={
   async removeCase(code){await this.req("removeCase",{code})},
   async transferCase(code,to,note){await this.req("transferCase",{code,to,note})},
   async setPerms(id,perms){await this.req("setPerms",{id,perms})},
+  async saveTargets(month,list){await this.req("saveTargets",{month,list})},
+  async newCase(c,force,to){return await this.req("newCase",{c,force,to})},
   async deleteMeeting(id){await this.req("deleteMeeting",{id})}
 };
 let LIVE=Live;
@@ -495,7 +520,7 @@ function setSync(){
   $("#whoBox").style.display=(MODE==="login"||MODE==="loading"||!isLead()||!canViewAs())?"none":"";
   $("#userBox").innerHTML=ME&&MODE!=="login"?`<div class="userchip"><div class="av">${initials(ME.name)}</div><div><b>${esc(ME.name)}</b><div class="small mute">${esc(ME.role)}</div></div></div>
     <button class="btn sm" id="chPin">🔑 PIN</button><button class="btn sm" id="logout">Log out</button>`:"";
-  if($("#logout"))$("#logout").onclick=async()=>{await Script.logout();view={...view,who:"admin",tab:"dash",sel:new Set()};showLogin()};
+  if($("#logout"))$("#logout").onclick=async()=>{await Script.logout();view={...view,who:"admin",tab:"today",ctab:"",sel:new Set()};showLogin()};
   if($("#chPin"))$("#chPin").onclick=openChangePin;
 }
 $("#refresh").onclick=()=>{if(!BUSY&&MODE!=="login")reload()};
@@ -515,7 +540,7 @@ function showLogin(err){
   const id=$("#lgId");id.focus();
   $("#lg").onsubmit=async e=>{e.preventDefault();const l=id.value.trim(),p=$("#lgPin").value.trim();if(!l||!p)return;
     const b=$("#lgBtn");b.disabled=true;b.innerHTML=`<span class="spin"></span> Logging in…`;
-    try{await Script.login(l,p);MODE="loading";view.who=ME.id;view.tab=isLead()?"dash":"my";if(isLead())view.who="admin";render();await reload();if(MODE==="live")toast("Welcome, "+ME.name.split(" ")[0])}
+    try{await Script.login(l,p);MODE="loading";view.who=ME.id;view.tab=isLead()?"today":"my";view.ctab="";if(isLead())view.who="admin";render();await reload();if(MODE==="live")toast("Welcome, "+ME.name.split(" ")[0])}
     catch(x){b.disabled=false;b.textContent="Log in";$("#lgErr").textContent=x.auth||/wrong|too many|enter|name/i.test(x.message)?x.message:explain(x)}};
 }
 
@@ -541,8 +566,9 @@ function render(){
 /* ---------- ADMIN / MANAGER / TEAM LEAD ---------- */
 function renderAdmin(){
   if(!S.srv2&&(view.tab==="cases"||view.tab==="myteam"))view.tab="dash";
-  const tabs=[["dash","Dashboard"],["lead","Leads"],...(S.srv2?[["cases","Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine",ME.role==="Sales Manager"?"My page":"My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],["reports","⬇ Reports"]]
-    .filter(([k])=>k==="mine"||can(k==="myteam"?"team":k));   /* tabs this person is allowed to see */
+  const dueN=CASES().filter(c=>{const x=fuState(c);return x==="over"||x==="today"}).length;
+  const tabs=[["today","Today"+(dueN?" · "+dueN:"")],["dash","Dashboard"],["lead","Leads"],...(S.srv2?[["cases","Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine",ME.role==="Sales Manager"?"My page":"My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],["perf","📈 Performance"],["reports","⬇ Reports"]]
+    .filter(([k])=>k==="mine"||k==="today"||can(k==="myteam"?"team":k));   /* tabs this person is allowed to see */
   if(!tabs.length)tabs.push(["mine","My calls"]);
   if(!tabs.some(t=>t[0]===view.tab))view.tab=tabs[0][0];
   let h=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${view.tab===k?"on":""}" data-tab="${k}">${l}</button>`).join("")}</div>`;
@@ -551,11 +577,11 @@ function renderAdmin(){
       <select id="teamSel"><option value="all">All teams</option>${TLs.map(e=>`<option value="${esc(e.id)}" ${view.team===e.id?"selected":""}>${esc(e.name)}'s team</option>`).join("")}<option value="none" ${view.team==="none"?"selected":""}>No team</option></select></label>
       ${view.team&&view.team!=="all"?`<span class="small mute">Showing only ${esc(teamName(view.team))}${view.team!=="none"?" ("+RAW.allEmps.filter(e=>e.active&&teamOf(e)===view.team).length+" people)":""}</span>`:""}</div>`;
   else if(isTL()||(ME&&rank(ME.role)>rank("Team Lead")))h+=`<div class="small mute" style="margin:-4px 0 12px">${S.employees.length>1?"Showing your team: "+esc(S.employees.map(e=>e.name).join(", ")):"Showing only your own contacts, calls and cases"}</div>`;
-  h+=({dash:aDash,lead:aLeadsTab,cases:aCases,byemp:aByEmp,myteam:aMyTeam,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings})[view.tab]();
+  h+=({today:aToday,perf:aPerf,dash:aDash,lead:aLeadsTab,cases:aCases,byemp:aByEmp,myteam:aMyTeam,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings})[view.tab]();
   $("#app").innerHTML=h;
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{if(b.dataset.tab==="mine"){view.who=ME.id;view.etab="leads";render();return}view.tab=b.dataset.tab;render()});
   const ts=$("#teamSel");if(ts)ts.onchange=()=>{view.team=ts.value;view.sel.clear();if(view.lsel)view.lsel.clear();render()};
-  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();bindCasesTab();bindCases();
+  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();bindCasesTab();bindCases();bindToday();bindPerf();bindMonthly();
 }
 /* ---------- MY TEAM (Team Leads): members' details + reset PIN ---------- */
 function aMyTeam(){
@@ -869,6 +895,9 @@ if(!view.repEmp){view.repEmp="all";view.repOut="all";view.repLeadsAll=false}
 function aReports(){
   let h=rangeBar();
   h+=`<div class="card pad" style="margin-bottom:12px"><div class="small mute">Reports use the data shown in the CRM right now (last synced ${lastSync?new Date(lastSync).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}):"—"}). Press <b>⟳ Refresh</b> first if your team is calling at the moment. Excel files open in Excel or Google Sheets; CSV works anywhere.</div></div><div class="reports">`;
+  h+=`<div class="card pad rep" style="border-color:#c9d6f6;background:#f7f9ff"><div class="rep-h"><div><h3>Monthly owner report</h3><p class="small mute" style="margin:4px 0 0">Targets vs actual, conversion funnel, days to disbursal, lead sources and connectors, disbursed cases and overdue follow-ups – one Excel file or a PDF.</p></div></div>
+    <div class="row" style="margin-top:12px"><select id="mrPer">${PERIODS.map(([k,l])=>`<option value="${k}" ${(view.pp||"cur")===k?"selected":""}>${l}${k==="cur"||k==="prev"?" ("+(k==="cur"?curMon():monAdd(curMon(),-1))+")":""}</option>`).join("")}</select>
+    <button class="btn pri sm" data-mrep="xlsx">⬇ Excel</button><button class="btn sm" data-mrep="pdf">🖨 Save as PDF</button></div></div>`;
   h+=REPORTS.map(r=>{const n=r.rows?r.rows().length-1:null;
     return `<div class="card pad rep"><div class="rep-h"><div><h3>${r.title}</h3><p class="small mute" style="margin:4px 0 0">${r.desc}</p></div>${n!=null?`<span class="pill s-new">${n} row${n===1?"":"s"}</span>`:""}</div>
       ${r.filters?`<div class="row" style="margin-top:12px"><select id="repEmp"><option value="all">All telecallers</option>${S.employees.map(e=>`<option value="${esc(e.id)}" ${view.repEmp===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select>
@@ -1249,7 +1278,8 @@ function renderEmp(){
   const calls=allLogs().filter(g=>g.by===me.id&&inRange(g.at));
   const con=calls.filter(g=>g.outcome!=="na"&&g.outcome!=="wn").length;
   const oc=k=>calls.filter(g=>g.outcome===k).length;
-  const ctab=view.ctab||"leads";
+  const ctab=view.ctab||(own?"today":"leads");
+  const t0=sod(Date.now()),cbAll=mine.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<t0+DAY).sort((a,b)=>a.followUp-b.followUp);
   const myLeadsP=leadsIn(mine),myLeads=mine.filter(isLeadC);
   const tlBtn=me.role==="Team Lead"&&isMgr()&&!isTL()&&!own?`<button class="btn sm" id="seeTeam">👥 See ${esc(me.name.split(" ")[0])}'s team view</button>`:"";
   const backBtn=ME&&own&&isLead()&&!canViewAs()?`<button class="btn sm" id="backTeam">← Team overview</button>`:"";
@@ -1262,8 +1292,26 @@ function renderEmp(){
   <div class="card stat"><span>Converted</span><b style="color:var(--brand)">${oc("conv")}</b><div class="small mute">${oc("cb")} call back later</div></div>
   <div class="card stat"><span>${own?"My calling list":"Calling list"}</span><b>${mine.length}</b><div class="small mute">${mine.filter(l=>l.status==="new").length} not yet called</div></div>
   <div class="card stat"><span>Callbacks due</span><b style="color:var(--amber)">${due.length}</b><div class="small mute">now</div></div></div>`;
-  h+=`<div class="tabs" style="margin-bottom:12px">${[["leads",(own?"My calling list":"Calling list")+" · "+mine.length],["int",(own?"My leads":"Leads")+" · "+myLeads.length],["calls","Call history · "+calls.length]].map(([k,l])=>`<button class="tab ${ctab===k?"on":""}" data-ctab="${k}">${l}</button>`).join("")}</div>`;
-  if(ctab==="int"){
+  h+=`<div class="tabs" style="margin-bottom:12px">${[["today",(own?"My day":"Today")+" · "+cbAll.length],["leads",(own?"My calling list":"Calling list")+" · "+mine.length],["int",(own?"My leads":"Leads")+" · "+myLeads.length],["cases",(own?"My cases":"Cases")+" · "+CASES().filter(c=>c["Telecaller ID"]===me.id||normName(c["Team Lead"])===normName(me.name)).length],["calls","Call history · "+calls.length]].map(([k,l])=>`<button class="tab ${ctab===k?"on":""}" data-ctab="${k}">${l}</button>`).join("")}</div>`;
+  if(ctab==="today"){
+    const od=cbAll.filter(l=>l.followUp<t0),td=cbAll.filter(l=>l.followUp>=t0),fresh=mine.filter(l=>l.status==="new");
+    const casesMine=CASES().filter(c=>c["Telecaller ID"]===me.id),moved=casesMine.filter(c=>c.upd&&c.upd>=Date.now()-3*DAY).sort((a,b)=>b.upd-a.upd);
+    if(own)h+=`<div class="card pad" style="margin-bottom:14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:#f7f9ff;border-color:#c9d6f6"><div style="flex:1;min-width:220px"><b>Got a new lead or enquiry?</b><div class="small mute">Fill the lead form – it becomes a case with its own SNFS code.</div></div><button class="btn pri" data-newcase>📝 Fill lead form</button></div>`;
+    h+=progressCard(me.id,me.role,{title:(own?"My target":me.name.split(" ")[0]+"'s target")+" – "+monLong(curMon())});
+    const withMe=CASES().filter(c=>caseActive(c)&&(normName(c["Team Lead"])===normName(me.name)||(!c["Team Lead"]&&c["Telecaller ID"]===me.id))&&["over","today","none"].includes(fuState(c)));
+    if(withMe.length)h+=`<h3 style="margin:6px 0 8px">📂 Cases with ${own?"me":"them"} to follow up (${withMe.length})</h3>`+fuTable(withMe.sort((a,b)=>(a.fu||0)-(b.fu||0)),{tl:false})+'<div style="height:14px"></div>';
+    h+=`<div class="card pad" style="margin-bottom:14px;display:flex;gap:16px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><b>Plan for today</b><div class="small mute">Overdue callbacks first, then today's callbacks, then new contacts.</div></div>
+      <div class="row" style="gap:18px"><div><div class="small mute">Overdue</div><b style="font-size:20px;color:#c0392b">${od.length}</b></div><div><div class="small mute">Due today</div><b style="font-size:20px;color:var(--amber)">${td.length}</b></div><div><div class="small mute">Not called yet</div><b style="font-size:20px">${fresh.length}</b></div></div></div>`;
+    h+=`<h3 style="margin:6px 0 8px;color:#c0392b">⚠ Overdue callbacks (${od.length})</h3><div class="card">${od.map(l=>leadRow(l)).join("")||`<div class="empty">Nothing overdue. 👍</div>`}</div>`;
+    h+=`<h3 style="margin:18px 0 8px;color:var(--amber)">📅 Callbacks today (${td.length})</h3><div class="card">${td.map(l=>leadRow(l)).join("")||`<div class="empty">No callbacks booked for today.</div>`}</div>`;
+    h+=`<h3 style="margin:18px 0 8px">🆕 Not called yet (${fresh.length})</h3><div class="card">${fresh.slice(0,10).map(l=>leadRow(l)).join("")||`<div class="empty">Everyone on ${own?"your":"the"} list has been called at least once.</div>`}${fresh.length>10?`<div class="pad" style="padding:10px 16px"><button class="btn sm" id="goNew">See all ${fresh.length} in ${own?"my":"the"} calling list →</button></div>`:""}</div>`;
+    if(moved.length)h+=`<h3 style="margin:18px 0 8px">🤝 Updates on ${own?"my":"their"} customers with the Team Lead</h3>`+casesTable(moved.slice(0,10));
+  }else if(ctab==="cases"){
+    const sent=CASES().filter(c=>c["Telecaller ID"]===me.id).sort((a,b)=>(b.at||0)-(a.at||0)),got=CASES().filter(c=>c["Telecaller ID"]!==me.id&&normName(c["Team Lead"])===normName(me.name));
+    h+=`<div class="card pad" style="margin-bottom:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><b>${own?"Cases I filled":"Cases they filled"} (${sent.length})</b><div class="small mute">“With” shows who has the case now. Open one to see its updates${own?" or to transfer it while it's still with you":""}.</div></div>${own?`<button class="btn pri" data-newcase>📝 Fill lead form</button>`:""}</div>`;
+    h+=casesTable(sent,{empty:own?"No cases yet – press Fill lead form when you get a lead.":"No cases yet."});
+    if(got.length)h+=`<h3 style="margin:18px 0 8px">Cases sent to ${own?"me":"them"} (${got.length})</h3>`+casesTable(got);
+  }else if(ctab==="int"){
     const list=myLeads.slice().sort((a,b)=>(leadAt(b)||0)-(leadAt(a)||0));
     const myCases=CASES().filter(c=>c["Telecaller ID"]===me.id||(me.role==="Team Lead"&&c.tlId===me.id)).sort((a,b)=>(b.at||0)-(a.at||0));
     const noCase=list.filter(l=>!caseOf(l.id));
@@ -1295,6 +1343,7 @@ function renderEmp(){
   $("#app").innerHTML=h;
   bindEtabs();bindRange();bindTips();
   document.querySelectorAll("[data-ctab]").forEach(b=>b.onclick=()=>{view.ctab=b.dataset.ctab;render()});bindCases();
+  const gn=$("#goNew");if(gn)gn.onclick=()=>{view.ctab="leads";view.filter="new";render()};document.querySelectorAll("[data-newcase]").forEach(b=>b.onclick=()=>openNewCase());
   const bt=$("#backTeam");if(bt)bt.onclick=()=>{view.who="admin";view.tab="dash";render()};
   const st=$("#seeTeam");if(st)st.onclick=()=>{view.team=me.id;view.who="admin";view.tab="byemp";render()};
   const cs=$("#cOut");if(cs)cs.onchange=()=>{view.cOut=cs.value;render()};
@@ -1304,7 +1353,7 @@ function renderEmp(){
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false));
 }
 /* ---------- LEAD CASES: Interested customers handed to the Team Lead ---------- */
-const CASE_HDR=["Timestamp","SM Name","Customer Name","Contact Number","Product","Amount Required","Lead Source","Connector Name","Connector Contact No","Connector Location","Lead Type","Lead Shared by","Lead Date","Monthly","Unique Lead Code","Bank Name","Banker Name","Banker Contact No","Status","Remarks","Disbursed Date","Disbursed Month","Customer Status","Contact ID","Team Lead","Telecaller ID","Last updated","Updated by"];
+const CASE_HDR=["Timestamp","SM Name","Customer Name","Contact Number","Product","Amount Required","Lead Source","Connector Name","Connector Contact No","Connector Location","Lead Type","Lead Shared by","Lead Date","Monthly","Unique Lead Code","Bank Name","Banker Name","Banker Contact No","Status","Remarks","Disbursed Date","Disbursed Month","Customer Status","Contact ID","Team Lead","Telecaller ID","Last updated","Updated by","Follow-up history","Next follow-up","Login date","Sanction date"];
 const CASE_OPTS={"Product":["Home Loan","Balance Transfer","Top-up","Personal Loan","Business Loan","LAP","Commercial Property","Commercial Loan","Industrial Plot","Project Finance","Working Capital","OD Loan","Unsecured OD","Professional Loan","Car Loan","Two-wheeler Loan","Gold Loan","Education Loan","Machinery Loan"],
   "Status":["New","Follow Up","In Process","Login Done","Sanction Done","Disbursed","On Hold","Not Responding","Not Interested","Cancelled","Case Rejected","Case Closed"],
   "Lead Source":["Personal Data","Telecalling","Website","CP","Site","A1","Ai","Uptown Site","Urban Hills","Connector","Walk-in","Reference"],"Lead Type":["Lead","Inquiry"],
@@ -1312,37 +1361,38 @@ const CASE_OPTS={"Product":["Home Loan","Balance Transfer","Top-up","Personal Lo
 /* Bank Name must be chosen from the Banks tab (sent by the server); this list is only used until the new server is live */
 const BANKS_FALLBACK=["Aditya Birla Capital","Aeon Finance","AU Small Finance Bank","Axis Bank","Bajaj Finance","Bandhan Bank","Bank of Baroda","Bank of India","Bank of Maharashtra","Canara Bank","Cholamandalam Finance","DBS Bank","Federal Bank","Finnable","Godrej Capital","HDFC Bank","Hero FinCorp","Home First Finance","ICICI Bank","IDFC First Bank","IIFL Finance","InCred Finance","IndusInd Bank","Jio Finance","Kotak Mahindra Bank","L&T Finance","Lendingkart","LIC Housing Finance","Muthoot Finance","Orange Finance","Piramal Finance","PNB Housing Finance","Poonawalla Fincorp","Protium","Punjab National Bank","Samman Capital","Shriram Finance","Standard Chartered Bank","State Bank of India","Tata Capital","Union Bank of India","Werize","Yes Bank"];
 const BANKS=()=>S.banks&&S.banks.length?S.banks:BANKS_FALLBACK;
-const CASE_PICK=new Set(["SM Name","Status","Customer Status","Product","Lead Type","Lead Source","Bank Name"]);   /* real drop-downs: choose from the list only – no typing */
+const CASE_PICK=new Set(["SM Name","Lead Shared by","Status","Customer Status","Product","Lead Type","Lead Source","Bank Name"]);   /* real drop-downs: choose from the list only – no typing */
 const SM_NAMES=["Abhilash Shandilya","Amol","Anita Gupta","Apeksha","Arshiya Shaikh","Ashish","Iram","Ishwar","Jyotsna Rokade","Khushi","Komal","Management Lead","Mayur","Omkar Shinde","Prerna","Presika Vishwakarma","Priyanka Singh","Sahil","Sana Momin","Surojit Ghosh"];
 const smNames=()=>[...new Set([...SM_NAMES,...(S.allEmps||[]).filter(e=>e.role==="Sales Manager"&&e.active).map(e=>e.name),...CASES().map(c=>c["SM Name"]).filter(Boolean)])].sort((a,b)=>a.localeCompare(b));
 /* Drop-down choices come from the Lists tab of the sheet (sent by the server); the built-in lists are only a fallback */
-const caseOpts=h=>{const L=S.lists&&S.lists[h];if(L&&L.length)return L;return h==="Bank Name"?BANKS():h==="SM Name"?smNames():CASE_OPTS[h]};
+const caseOpts=h=>{const L=S.lists&&S.lists[h];if(L&&L.length)return L;return(h==="Bank Name"?BANKS():h==="SM Name"?smNames():h==="Lead Shared by"?[...new Set(CASES().map(c=>c["Lead Shared by"]).filter(Boolean))].sort():CASE_OPTS[h])||[]};
 /* How a status counts on the dashboard: "Counts as" column next to Status in the Lists tab, else the built-in rule */
 const stType=st=>{const t=String((S.stype||{})[st]||"").toLowerCase();if(t.startsWith("new"))return"new";if(t.startsWith("disb"))return"disb";if(t.startsWith("clos")||t.startsWith("drop")||t.startsWith("lost"))return"closed";if(t)return"prog";
   return !st||st==="New"?"new":st==="Disbursed"?"disb":CASE_CLOSED.includes(st)?"closed":"prog"};
 const CASE_CLOSED=["Not Interested","Cancelled","Case Rejected","Case Closed"];
 const CASE_TONE={"New":"amber","Follow Up":"amber","In Process":"amber","On Hold":"gray","Not Responding":"gray","Login Done":"blue","Sanction Done":"blue","Disbursed":"green","Not Interested":"red","Cancelled":"red","Case Rejected":"red","Case Closed":"gray"};
 function buildCases(rows){return (rows||[]).map(r=>{const o={};CASE_HDR.forEach((h,i)=>o[h]=String(r[i]==null?"":r[i]).trim());o.code=o["Unique Lead Code"];o.at=parseT(o["Timestamp"]);o.upd=parseT(o["Last updated"]);
+  o.fu=dayOf(o["Next follow-up"]);o.login=dayOf(o["Login date"]);o.sanc=dayOf(o["Sanction date"]);o.leadD=dayOf(o["Lead Date"]);o.disbD=dayOf(o["Disbursed Date"]);
   const t=(S.allEmps||[]).find(e=>e.role==="Team Lead"&&(e.id===o["Team Lead"]||normName(e.name)===normName(o["Team Lead"])));o.tlId=t?t.id:"";return o}).filter(o=>o.code)}
 const CASES=()=>S.cases||[];
 const caseOf=leadId=>CASES().find(c=>c["Contact ID"]===leadId);
 const casePill=c=>{const t=CASE_TONE[c.Status]||{new:"amber",disb:"green",closed:"red",prog:"amber"}[stType(c.Status)];return `<span class="pill" style="${t==="green"?"background:var(--green-soft);color:var(--green)":t==="red"?"background:#fdecec;color:#c0392b":t==="blue"?"background:#e8f0fe;color:var(--brand)":t==="amber"?"background:#fff4e0;color:#b26a00":"background:#eef0f3;color:#555"}">${esc(c.Status||"New")}</span>`};
 const inr=v=>{const n=parseFloat(String(v).replace(/[^\d.]/g,""));return isFinite(n)&&n>0?"₹"+n.toLocaleString("en-IN"):esc(v||"")};
 function casesTable(list,{empty="No lead cases yet."}={}){
-  return `<div class="card tw"><table class="ctab"><tr><th>Lead code</th><th>Lead date</th><th>Customer</th><th>Product</th><th>Amount</th><th>Shared by</th><th>Team Lead</th><th>Bank</th><th>Status</th><th>Last update</th><th></th></tr>
+  return `<div class="card tw"><table class="ctab"><tr><th>Lead code</th><th>Lead date</th><th>Customer</th><th>Product</th><th>Amount</th><th>Shared by</th><th>With</th><th>Bank</th><th>Status</th><th>Next follow-up</th><th>Last update</th><th></th></tr>
    ${list.map(c=>`<tr><td class="num" style="white-space:nowrap"><b>${esc(c.code)}</b></td><td class="small num" style="white-space:nowrap">${esc(c["Lead Date"])}</td>
      <td><b>${esc(c["Customer Name"])}</b><div class="small mute num" style="white-space:nowrap">${isLead()?`<a class="lnk" href="${telHref(c["Contact Number"])}">${esc(c["Contact Number"])}</a>`:esc(c["Contact Number"])}</div></td>
      <td class="small">${esc(c.Product)||'<span class="mute">—</span>'}</td><td class="num" style="white-space:nowrap">${inr(c["Amount Required"])||'<span class="mute">—</span>'}</td>
-     <td class="small">${esc(c["Lead Shared by"])}</td><td class="small" style="white-space:nowrap">${esc(c["Team Lead"])||'<span style="color:var(--amber)">No Team Lead</span>'}</td><td class="small">${esc(c["Bank Name"])||'<span class="mute">—</span>'}</td>
-     <td>${casePill(c)}</td><td class="small" style="min-width:200px;max-width:280px">${c.upd?fmt(c.upd):""}<div class="mute clip" title="${esc(c.Remarks)}">${esc(c.Remarks)}</div></td>
-     <td><button class="btn sm" data-case="${esc(c.code)}">${isLead()?"Open":"View"}</button></td></tr>`).join("")||`<tr><td colspan="11"><div class="empty">${empty}</div></td></tr>`}</table></div>`;
+     <td class="small">${esc(c["Lead Shared by"])}</td><td class="small" style="white-space:nowrap">${esc(c["Team Lead"])||(c["Telecaller ID"]&&!/^L\d/.test(c["Contact ID"]||"")?`<span style="color:var(--amber)" title="Filled by ${esc(empName(c["Telecaller ID"])||"")} – not sent to anyone yet">Not sent yet</span>`:'<span style="color:var(--amber)">No Team Lead</span>')}</td><td class="small">${esc(c["Bank Name"])||'<span class="mute">—</span>'}</td>
+     <td>${casePill(c)}</td><td>${fuBadge(c)}</td><td class="small" style="min-width:200px;max-width:280px">${c.upd?fmt(c.upd):""}<div class="mute clip" title="${esc(c.Remarks)}">${esc(c.Remarks)}</div></td>
+     <td><button class="btn sm" data-case="${esc(c.code)}">${canEditCase(c)?"Open":"View"}</button></td></tr>`).join("")||`<tr><td colspan="12"><div class="empty">${empty}</div></td></tr>`}</table></div>`;
 }
 function bindCases(){document.querySelectorAll("[data-case]").forEach(b=>b.onclick=e=>{e.preventDefault();openCase(b.dataset.case)});
   document.querySelectorAll("[data-mkcase]").forEach(b=>b.onclick=async()=>{const l=S.leads.find(x=>x.id===b.dataset.mkcase)||{},tl=tlOf(l.assignedTo);
     if(!await askOk({title:"Open a lead case?",ok:"Yes, open case",body:`A new lead case will be opened for <b>${esc(l.name||"this customer")}</b> (${esc(l.phone||"")})${tl?` and sent to <b>${esc(tl)}</b> to follow up`:""}.<div class="small mute" style="margin-top:8px">Opened by mistake? Only Admin can remove a case.</div>`}))return;
     const done=btnBusy(b,"Opening…");if(!await write(api=>api.createCase(b.dataset.mkcase),"Lead case opened","Opening lead case…"))done()})}
 function openCase(code){
-  const c=CASES().find(x=>x.code===code);if(!c)return;const canEd=isLead()&&can("caseEdit");
+  const c=CASES().find(x=>x.code===code);if(!c)return;const canEd=canEditCase(c),sentByMe=isMine(c)&&!heldByMe(c);
   const ro=(h,v)=>`<div><div class="small mute">${h}</div><div style="font-weight:600">${v||'<span class="mute" style="font-weight:400">—</span>'}</div></div>`;
   const inp=(h,type="text")=>{const id="cf_"+h.replace(/\W/g,"");const v=c[h]||"";
     if(!canEd)return ro(h,h==="Amount Required"?inr(v):esc(v));
@@ -1350,32 +1400,39 @@ function openCase(code){
       return `<div><label class="f" for="${id}">${h}</label><select id="${id}" style="width:100%"><option value="">${h==="Bank Name"?"— Choose bank —":"— Choose —"}</option>${all.map(o=>`<option ${o===v?"selected":""}>${esc(o)}</option>`).join("")}</select></div>`}
     const list=CASE_OPTS[h]||(h==="SM Name"?(S.allEmps||[]).filter(e=>e.role==="Sales Manager"&&e.active).map(e=>e.name):null);
     return `<div><label class="f" for="${id}">${h}</label><input id="${id}" type="${type}" value="${esc(v)}" style="width:100%" ${list?`list="${id}_l"`:""} ${h==="Amount Required"?'inputmode="numeric" placeholder="e.g. 500000"':""}>${list?`<datalist id="${id}_l">${list.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>`:""}</div>`};
-  const tlSel=canEd&&can("caseTL")?`<div><label class="f">Team Lead</label><select id="cf_TL" style="width:100%"><option value="">— None —</option>${(S.allEmps||[]).filter(e=>e.role==="Team Lead"&&e.active).map(e=>`<option value="${esc(e.id)}" ${c.tlId===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select></div>`:ro("Team Lead",esc(c["Team Lead"]));
+  const tlSel=canEd&&can("caseTL")?`<div><label class="f">Team Lead</label><select id="cf_TL" style="width:100%"><option value="">— None —</option>${(S.allEmps||[]).filter(e=>e.role==="Team Lead"&&e.active).map(e=>`<option value="${esc(e.id)}" ${c.tlId===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select></div>`:ro("With",esc(c["Team Lead"])||(c["Telecaller ID"]?esc(empName(c["Telecaller ID"])||"")+' <span class="small mute" style="font-weight:400">(not sent yet)</span>':""));
   $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(c["Customer Name"])}</div><div><div style="font-weight:700">${esc(c["Customer Name"])} · <span class="num">${esc(c.code)}</span></div>
      <div class="num mute small">${esc(c["Contact Number"])} · lead date ${esc(c["Lead Date"])} · shared by ${esc(c["Lead Shared by"])}</div></div><button class="x" id="mx">×</button></div>
    <div class="mb">
     ${canEd?`<div class="row" style="margin-bottom:6px"><a class="btn call" href="${telHref(c["Contact Number"])}">📞 Call ${esc(c["Contact Number"])}</a>${casePill(c)}</div>`
+      :sentByMe?`<div class="card pad" style="background:#eef6f0;border-color:#cfe6d6;margin-bottom:8px"><b>📨 You sent this case to ${esc(holderOf(c))}.</b><div class="small mute">You can follow every update here. Only ${esc(holderOf(c))} or Admin can change it.</div></div>`
       :(isLead()?`<div class="card pad" style="background:#f5f7fb;margin-bottom:8px"><b>View only.</b><div class="small mute">Editing lead cases is switched off for you – ask Admin if you need it.</div></div>`:`<div class="card pad" style="background:#f5f7fb;margin-bottom:8px"><b>This customer is with your Team Lead.</b><div class="small mute">You can see every update here; your Team Lead does the follow-up.</div></div>`)}
+    ${canEd?`<div class="fubox"><div><label class="f" for="cf_upd" style="margin-top:0">Today's update <span class="mute" style="font-weight:400">– added to Remarks with today's date</span></label><input id="cf_upd" maxlength="300" style="width:100%" placeholder="e.g. Documents received, login at HDFC tomorrow">
+       <div class="small mute" style="margin-top:6px">Latest: ${esc(lastLine(c))||"no remark yet"}</div></div>
+      <div><label class="f" for="cf_fu" style="margin-top:0">Next follow-up ${caseActive(c)&&!c.fu?'<span style="color:var(--amber);font-weight:600">· not set</span>':""}</label><input type="date" id="cf_fu" value="${c.fu?ymd(c.fu):""}" style="width:100%">
+       <div class="qb">${[[0,"Today"],[1,"Tomorrow"],[3,"In 3 days"],[7,"Next week"]].map(([n,l])=>`<button class="btn" type="button" data-fq="${n}">${l}</button>`).join("")}<button class="btn" type="button" data-fq="x">Clear</button></div></div></div>`
+     :`<div class="row" style="margin-bottom:10px;gap:14px">${ro("Next follow-up",c.fu?dShort(c.fu)+" · "+fuBadge(c):(caseActive(c)?'<span class="mute" style="font-weight:400">Not set</span>':"—"))}</div>`}
     <div class="cgrid">
      ${tlSel}${inp("SM Name")}${inp("Status")}${inp("Customer Status")}
      ${inp("Product")}${inp("Amount Required")}${inp("Lead Type")}${inp("Lead Source")}
      ${inp("Bank Name")}${inp("Banker Name")}${inp("Banker Contact No","tel")}${inp("Disbursed Date","date")}
      ${inp("Connector Name")}${inp("Connector Contact No","tel")}${inp("Connector Location")}${ro("Disbursed Month",esc(c["Disbursed Month"]))}
+     ${inp("Lead Shared by")}
     </div>
-    ${canEd?`<label class="f" for="cf_Remarks">Remarks</label><textarea id="cf_Remarks" style="width:100%;min-height:70px">${esc(c.Remarks)}</textarea>`:`<div style="margin-top:10px">${ro("Remarks",esc(c.Remarks))}</div>`}
-    <div class="small mute" style="margin-top:8px">Monthly: ${esc(c.Monthly)} · Last update ${c.upd?fmt(c.upd):"—"} by ${esc(c["Updated by"])}</div>
+    ${canEd?`<label class="f" for="cf_Remarks">Remarks</label><textarea id="cf_Remarks" style="width:100%;min-height:70px">${esc(c.Remarks)}</textarea>`:`<div style="margin-top:14px"><div class="small mute">Updates (newest first)</div>${updatesTimeline(c)}</div>`}
+    ${c["Follow-up history"]?`<details style="margin-top:10px"><summary class="small"><b>Earlier follow-up history</b> <span class="mute">(from the old sheet)</span></summary><div class="small" style="margin-top:6px;white-space:pre-wrap;background:#f7f8fa;border-radius:8px;padding:8px 10px">${esc(c["Follow-up history"])}</div></details>`:""}
+    <div class="small mute" style="margin-top:8px">Monthly: ${esc(c.Monthly)}${c.login?" · Login "+esc(ymd(c.login)):""}${c.sanc?" · Sanction "+esc(ymd(c.sanc)):""} · Last update ${c.upd?fmt(c.upd):"—"} by ${esc(c["Updated by"])}</div>
    </div>
-   <div class="mf">${isLead()&&can("caseRemove")?`<button class="btn" id="crm" style="margin-right:auto;color:var(--red)">🗑 Remove case</button>`:""}${canEd&&can("caseTransfer")&&(S.transferTo||[]).length?`<button class="btn" id="ctr">⇄ Transfer case</button>`:""}<button class="btn" id="mc">${canEd?"Cancel":"Close"}</button>${canEd?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
+   <div class="mf">${isLead()&&can("caseRemove")?`<button class="btn" id="crm" style="margin-right:auto;color:var(--red)">🗑 Remove case</button>`:""}${canTransferCase(c)?`<button class="btn" id="ctr">⇄ Transfer case</button>`:""}<button class="btn" id="mc">${canEd?"Cancel":"Close"}</button>${canEd?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
   $("#modal").style.maxWidth="880px";$("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#mc").onclick=close;
+  document.querySelectorAll("[data-fq]").forEach(b=>b.onclick=()=>{const v=b.dataset.fq;$("#cf_fu").value=v==="x"?"":ymd(sod(Date.now())+(+v)*DAY+3600e3)});
   const trb=$("#ctr");if(trb)trb.onclick=async()=>{
-    const cur=c["Team Lead"]||"",list=(S.transferTo||[]).filter(x=>normName(x.name)!==normName(cur)),grp=r=>list.filter(x=>x.role===r);
-    const myLevel=ME&&ME.role==="Manager"?"Manager":"Team Lead",lvl=x=>ME&&ME.role!=="Admin"&&x.role===ME.role?"same level":"higher level";
-    if(!list.length)return toast("There's no other Team Lead or Manager to transfer to");
+    const adm=can("caseTransfer")&&(S.transferTo||[]).length>0,cur=c["Team Lead"]||"",list=(adm?S.transferTo:S.handTo||[]).filter(x=>normName(x.name)!==normName(cur));
+    if(!list.length)return toast("There's nobody else to transfer to");
     const pr=askOk({title:"Transfer case "+c.code+"?",ok:"Yes, transfer",body:`<b>${esc(c["Customer Name"])}</b> · ${esc(c["Contact Number"])}<div class="small mute" style="margin:2px 0 10px">Now with: <b>${esc(cur||"no Team Lead")}</b></div>
-      <label class="f" for="trTo">Transfer to</label><select id="trTo" style="width:100%"><option value="">— Choose a person —</option>
-      ${["Team Lead","Manager"].filter(r=>grp(r).length).map(r=>`<optgroup label="${r==="Manager"?"Managers":"Team Leads"}">${grp(r).map(x=>`<option value="${esc(x.id)}">${esc(x.name)} · ${r}${ME&&ME.role!=="Admin"?" ("+lvl(x)+")":""}</option>`).join("")}</optgroup>`).join("")}</select>
+      <label class="f" for="trTo">Transfer to</label><select id="trTo" style="width:100%"><option value="">— Choose a person —</option>${peopleOptions(list)}</select>
       <label class="f" for="trNote" style="margin-top:10px">Reason (optional)</label><textarea id="trNote" maxlength="200" style="width:100%;min-height:60px" placeholder="e.g. Customer is in Thane – Amit's area"></textarea>
-      <div class="small mute" style="margin-top:8px">The case moves to their list and a line is added to Remarks. ${ME&&ME.role!=="Admin"?"You may stop seeing it if the telecaller isn't in your team.":""}</div>`});
+      <div class="small mute" style="margin-top:8px">The case moves to their list and a line is added to Remarks. ${!adm?"<b>After this you can still see every update, but you can't change the case.</b>":ME&&ME.role!=="Admin"?"You may stop seeing it if the telecaller isn't in your team.":""}</div>`});
     $("#cfmYes").disabled=true;$("#trTo").onchange=()=>$("#cfmYes").disabled=!$("#trTo").value;
     if(!await pr)return;const to=$("#trTo").value,note=$("#trNote").value.trim(),who=(list.find(x=>x.id===to)||{}).name||"";if(!to)return;
     const done=btnBusy(trb,"Transferring…");if(await write(api=>api.transferCase(c.code,to,note),"Case "+c.code+" transferred to "+who,"Transferring case "+c.code+" to "+who+"…"))close();else done()};
@@ -1383,20 +1440,24 @@ function openCase(code){
     if(!await askOk({title:"Remove case "+c.code+"?",ok:"Yes, remove",danger:true,body:`<b>${esc(c["Customer Name"])}</b> · ${esc(c["Contact Number"])}<br>The case leaves Lead Cases for everyone. A copy is kept in the <b>Removed Cases</b> tab of the sheet with your name and the time. The contact stays in the Calling List and can get a new case later.`}))return;
     const done=btnBusy(rmb,"Removing…");if(await write(api=>api.removeCase(c.code),"Case "+c.code+" removed","Removing case "+c.code+"…"))close();else done()};
   const sv=$("#csave");if(sv)sv.onclick=async()=>{const o={code:c.code};
-    ["SM Name","Status","Customer Status","Product","Amount Required","Lead Type","Lead Source","Bank Name","Banker Name","Banker Contact No","Disbursed Date","Connector Name","Connector Contact No","Connector Location","Remarks"].forEach(h=>{const el=$("#cf_"+h.replace(/\W/g,""));if(el)o[h]=el.value.trim()});
+    ["SM Name","Lead Shared by","Status","Customer Status","Product","Amount Required","Lead Type","Lead Source","Bank Name","Banker Name","Banker Contact No","Disbursed Date","Connector Name","Connector Contact No","Connector Location","Remarks"].forEach(h=>{const el=$("#cf_"+h.replace(/\W/g,""));if(el)o[h]=el.value.trim()});
     if(o.Status==="Disbursed"&&!o["Disbursed Date"])return toast("Add the disbursed date");
+    const upd=($("#cf_upd")||{}).value;if(upd&&upd.trim()){const d=new Date();o.Remarks=`${d.getDate()}-${pad(d.getMonth()+1)} ${upd.trim()}`+(o.Remarks?" // "+o.Remarks:"")}
+    const fuEl=$("#cf_fu");if(fuEl)o["Next follow-up"]=fuEl.value;
+    const willClose=["disb","closed"].includes(stType(o.Status||c.Status));if(willClose)o["Next follow-up"]="";
     const tl=$("#cf_TL");if(tl)o["Team Lead"]=tl.value;
-    const ch=Object.keys(o).filter(h=>h!=="code"&&h!=="Team Lead"&&String(o[h])!==String(c[h]||"")).map(h=>[h,c[h]||"",o[h]]);
+    const ch=Object.keys(o).filter(h=>h!=="code"&&h!=="Team Lead"&&(h==="Next follow-up"?(o[h]||"")!==(c.fu?ymd(c.fu):""):String(o[h])!==String(c[h]||""))).map(h=>[h,h==="Next follow-up"?(c.fu?dShort(c.fu):""):c[h]||"",h==="Next follow-up"&&o[h]?dShort(dayOf(o[h])):o[h]]);
     if(tl&&tl.value!==c.tlId)ch.push(["Team Lead",c["Team Lead"]||"",empName(tl.value)||"None"]);
     if(!ch.length)return toast("Nothing changed");
     const cut=v=>esc(String(v).length>60?String(v).slice(0,60)+"…":v)||'<span class="mute">empty</span>';
-    if(!await askOk({title:"Save changes to "+c.code+"?",ok:"Yes, save",body:`<ul>${ch.map(([h,a,b])=>`<li><b>${esc(h)}</b>: ${cut(a)} → ${cut(b)}</li>`).join("")}</ul>`}))return;
+    const noFu=!willClose&&!o["Next follow-up"]?`<div class="small" style="margin-top:8px;padding:8px 10px;background:#fff4e0;border-radius:8px;color:#8a5300">⚠ No next follow-up date – this case won't show in anyone's <b>Today</b> list.</div>`:"";
+    if(!await askOk({title:"Save changes to "+c.code+"?",ok:"Yes, save",body:`<ul>${ch.map(([h,a,b])=>`<li><b>${esc(h)}</b>: ${cut(a)} → ${cut(b)}</li>`).join("")}</ul>${noFu}`}))return;
     sv.disabled=true;sv.innerHTML=`<span class="spin"></span> Saving…`;if(await write(api=>api.saveCase(o),"Case "+c.code+" saved","Saving case "+c.code+"…"))close();else{sv.disabled=false;sv.textContent="Save case"}};
 }
 function aCases(){
-  const f=view.cf||(view.cf={st:"all",mon:"all",q:""}),q=f.q.toLowerCase(),all=CASES();
+  const f=view.cf||(view.cf={st:"all",mon:"all",q:"",fu:"all"}),q=f.q.toLowerCase(),all=CASES();f.fu=f.fu||"all";
   const months=[...new Set(all.map(c=>c.Monthly).filter(Boolean))];
-  const list=all.filter(c=>(f.st==="all"||c.Status===f.st)&&(f.mon==="all"||c.Monthly===f.mon)&&(!q||(c["Customer Name"]+c["Contact Number"]+c.code+c["Bank Name"]+c["Lead Shared by"]).toLowerCase().includes(q))).sort((a,b)=>(b.at||0)-(a.at||0));
+  const list=all.filter(c=>(f.fu==="all"||fuState(c)===f.fu)&&(f.st==="all"||c.Status===f.st)&&(f.mon==="all"||c.Monthly===f.mon)&&(!q||(c["Customer Name"]+c["Contact Number"]+c.code+c["Bank Name"]+c["Lead Shared by"]).toLowerCase().includes(q))).sort((a,b)=>(b.at||0)-(a.at||0));
   const ofType=t=>all.filter(c=>stType(c.Status)===t),disb=ofType("disb"),closed=ofType("closed").length,newN=ofType("new").length,cnt=st=>st==="New"?newN:all.filter(c=>c.Status===st).length;
   const amt=disb.reduce((s,c)=>s+(parseFloat(String(c["Amount Required"]).replace(/[^\d.]/g,""))||0),0);
   let h=`<div class="stats sm"><div class="card stat"><span>Lead cases</span><b>${all.length}</b><div class="small mute">${cnt("New")} new – not yet followed up</div></div>
@@ -1407,11 +1468,12 @@ function aCases(){
     <select id="cst"><option value="all">All statuses</option>${[...new Set([...caseOpts("Status"),...all.map(c=>c.Status).filter(Boolean)])].map(x=>`<option ${f.st===x?"selected":""}>${x}</option>`).join("")}</select>
     <select id="cmon"><option value="all">All months</option>${months.map(m=>`<option ${f.mon===m?"selected":""}>${esc(m)}</option>`).join("")}</select>
     <span class="small mute">${list.length} case${list.length===1?"":"s"}</span></div>
-    <div class="small mute" style="margin-top:8px">A case opens by itself when a telecaller marks a customer <b>Interested</b>. It goes to that telecaller's Team Lead, who follows up and fills in the details. Telecallers can only view their cases.</div>${ME&&ME.role==="Admin"?`<div class="small" style="margin-top:6px;padding:8px 10px;background:var(--brand-soft);border-radius:8px">➕ <b>New status, product, bank or other choice?</b> Type it at the bottom of its column in the <b>Lists</b> tab of the sheet${SHEET_URL?` (<a class="lnk" href="${esc(SHEET_URL)}" target="_blank" rel="noopener">Open sheet ↗</a>)`:""}, then press <b>⟳ Refresh</b> here. For a new status, also fill <b>Counts as</b>: New, In progress, Disbursed or Closed.</div>`:""}</div>`;
+    <div class="chips" style="margin:10px 0 0"><span class="small mute" style="align-self:center">Follow-up:</span>${FU_F.map(([k,l])=>{const n=k==="all"?all.length:all.filter(c=>fuState(c)===k).length;return `<button class="chip ${f.fu===k?"on":""}" data-cfu="${k}" ${k==="over"&&n?'style="color:#c0392b"':""}>${l} · ${n}</button>`}).join("")}</div>
+    <div class="row" style="margin-top:10px;justify-content:space-between"><div class="small mute" style="flex:1;min-width:260px">Cases come from the <b>lead form</b> (filled by the SM) or open by themselves when a telecaller marks a customer <b>Interested</b>. The person a case is <b>with</b> follows up; whoever sent it can still see the updates.</div><button class="btn pri sm" data-newcase>➕ New lead case</button></div>${ME&&ME.role==="Admin"?`<div class="small" style="margin-top:6px;padding:8px 10px;background:var(--brand-soft);border-radius:8px">➕ <b>New status, product, bank or other choice?</b> Type it at the bottom of its column in the <b>Lists</b> tab of the sheet${SHEET_URL?` (<a class="lnk" href="${esc(SHEET_URL)}" target="_blank" rel="noopener">Open sheet ↗</a>)`:""}, then press <b>⟳ Refresh</b> here. For a new status, also fill <b>Counts as</b>: New, In progress, Disbursed or Closed.</div>`:""}</div>`;
   return h+casesTable(list,{empty:all.length?"No cases match these filters.":"No lead cases yet – they appear when a customer is marked Interested."});
 }
 function bindCasesTab(){const q=$("#cq");if(!q)return;
-  $("#cst").onchange=e=>{view.cf.st=e.target.value;render()};$("#cmon").onchange=e=>{view.cf.mon=e.target.value;render()};
+  $("#cst").onchange=e=>{view.cf.st=e.target.value;render()};document.querySelectorAll("[data-newcase]").forEach(b=>b.onclick=()=>openNewCase());document.querySelectorAll("[data-cfu]").forEach(b=>b.onclick=()=>{view.cf.fu=b.dataset.cfu;render()});$("#cmon").onchange=e=>{view.cf.mon=e.target.value;render()};
   q.oninput=e=>{view.cf.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#cq");n.focus();n.setSelectionRange(p,p)};}
 function leadRow(l){
   const last=lastOf(l);
@@ -1423,6 +1485,305 @@ function leadRow(l){
    ${caseOf(l.id)&&!isLead()?`<button class="btn" data-case="${esc(caseOf(l.id).code)}">View updates</button>`:`<a class="btn call" href="${telHref(l.phone)}" data-call="${esc(l.id)}">📞 Call</a>
    <button class="btn" data-open="${esc(l.id)}">✎ Remark</button>`}</div></div>`;
 }
+
+/* ---------- FOLLOW-UPS: next follow-up date on lead cases ---------- */
+function dayOf(v){const s=String(v||"").trim();let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(m)return new Date(+m[1],m[2]-1,+m[3]).getTime();
+  m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);if(m)return new Date(+m[3],m[2]-1,+m[1]).getTime();return null}
+const caseActive=c=>{const t=stType(c.Status);return t!=="disb"&&t!=="closed"};
+function fuState(c){if(!caseActive(c))return"done";if(!c.fu)return"none";const t=sod(Date.now());return c.fu<t?"over":c.fu===t?"today":c.fu<=t+7*DAY?"week":"later"}
+const dShort=t=>new Date(t).toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short"});
+function fuBadge(c){const s=fuState(c);if(s==="done")return'<span class="mute small">—</span>';
+  if(s==="none")return`<span class="fub none" title="No next follow-up date – this case doesn't show in anyone's Today list">Not set</span>`;
+  if(s==="over"){const d=Math.round((sod(Date.now())-c.fu)/DAY);return`<span class="fub over">Overdue ${d} day${d===1?"":"s"}</span><div class="small mute num" style="margin-top:2px">${dShort(c.fu)}</div>`}
+  if(s==="today")return'<span class="fub today">Today</span>';return`<span class="fub later num">${dShort(c.fu)}</span>`}
+const FU_F=[["all","All"],["over","Overdue"],["today","Due today"],["week","Next 7 days"],["none","No date set"]];
+const lastLine=c=>String(c.Remarks||"").split(" // ")[0];
+function fuTable(list,{tl=true,empty="Nothing here."}={}){
+  return `<div class="card tw"><table class="ctab"><tr><th style="width:120px">Follow-up</th><th>Customer</th><th>Product · amount</th><th>Status</th><th>Latest remark</th>${tl?"<th>Team Lead</th>":""}<th></th></tr>
+   ${list.map(c=>`<tr><td>${fuBadge(c)}</td><td><b>${esc(c["Customer Name"])}</b> <span class="small mute num">${esc(c.code)}</span><div class="small num"><a class="lnk" href="${telHref(c["Contact Number"])}">📞 ${esc(c["Contact Number"])}</a></div></td>
+     <td class="small">${esc(c.Product)||'<span class="mute">—</span>'}<div class="num">${inr(c["Amount Required"])}</div></td><td>${casePill(c)}${c["Bank Name"]?`<div class="small mute">${esc(c["Bank Name"])}</div>`:""}</td>
+     <td class="small" style="max-width:300px"><div class="clip" title="${esc(c.Remarks)}">${esc(lastLine(c))||'<span class="mute">No remark yet</span>'}</div></td>
+     ${tl?`<td class="small">${esc(c["Team Lead"])||'<span style="color:var(--amber)">No Team Lead</span>'}</td>`:""}<td><button class="btn sm" data-case="${esc(c.code)}">Open</button></td></tr>`).join("")||`<tr><td colspan="7"><div class="empty">${empty}</div></td></tr>`}</table></div>`}
+
+/* ---------- MONTHS, TARGETS & PROGRESS ---------- */
+const MONS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const monOf=t=>{if(!t)return"";const d=new Date(t);return MONS[d.getMonth()]+"-"+d.getFullYear()};
+const curMon=()=>monOf(Date.now());
+const monTime=m=>{const[a,y]=String(m).split("-");return new Date(+y,MONS.indexOf(a),1).getTime()};
+const monAdd=(m,n)=>{const d=new Date(monTime(m));d.setMonth(d.getMonth()+n);return monOf(d.getTime())};
+const monLong=m=>{const d=new Date(monTime(m));return d.toLocaleDateString("en-IN",{month:"long",year:"numeric"})};
+const numOf=v=>{const n=parseFloat(String(v==null?"":v).replace(/[^\d.]/g,""));return isFinite(n)?n:0};
+const fmtL=n=>!n?"₹0":n>=1e7?"₹"+(n/1e7).toFixed(2).replace(/\.?0+$/,"")+" Cr":n>=1e5?"₹"+(n/1e5).toFixed(1).replace(/\.0$/,"")+" L":"₹"+Math.round(n).toLocaleString("en-IN");
+const MET=["Calls","Leads","Cases","Logins","Disbursed cases","Disbursal"];
+const isCaller=role=>!["Team Lead","Manager","Admin"].includes(role);
+const metIdx=role=>isCaller(role)?[0,1]:[2,3,4,5];
+function tgtOf(id,mons){const a=[0,0,0,0,0,0];(S.targets||[]).forEach(r=>{if(r[1]===id&&mons.includes(r[0]))r.slice(3,9).forEach((v,i)=>a[i]+=numOf(v))});return a}
+function actOf(id,mons){const a=[0,0,0,0,0,0];mons.forEach(m=>{const r=((S.board||{})[m]||{})[id];if(r)r.forEach((v,i)=>a[i]+=+v||0)});return a}
+const metVal=(i,v)=>i===5?fmtL(v):Math.round(v).toLocaleString("en-IN");
+// how far through the month we are (to say "on track" or "behind")
+function monthPace(m){if(m!==curMon())return 1;const d=new Date(),dim=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();return d.getDate()/dim}
+function progBar(a,t,pace){if(!t)return`<div class="small mute">No target set</div>`;const p=a/t,cls=p>=1?"ok":p>=pace*0.85?"":"low";
+  return `<div class="bar ${cls}"><i style="width:${Math.min(100,Math.round(p*100))}%"></i></div><div class="small ${p>=1?"":"mute"}" style="margin-top:3px;${p>=1?"color:var(--green);font-weight:600":""}">${Math.round(p*100)}% ${p>=1?"· target reached 🎉":p>=pace*0.85?"· on track":"· behind pace"}</div>`}
+function progressCard(id,role,{title}={}){
+  if(!S.board)return"";const m=curMon(),t=tgtOf(id,[m]),a=actOf(id,[m]),ix=metIdx(role),pace=monthPace(m),d=new Date(),dim=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+  return `<div class="card pad" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;margin-bottom:10px"><h3 style="margin:0">${title||"My target – "+monLong(m)}</h3><span class="small mute">Day ${d.getDate()} of ${dim}</span></div>
+   <div class="pgrid">${ix.map(i=>`<div><div class="small mute">${MET[i]}</div><div style="font-size:20px;font-weight:700" class="num">${metVal(i,a[i])}${t[i]?`<span class="mute" style="font-size:14px;font-weight:500"> / ${metVal(i,t[i])}</span>`:""}</div>${progBar(a[i],t[i],pace)}</div>`).join("")}</div></div>`}
+
+/* ---------- TODAY: the first screen after login ---------- */
+function aToday(){
+  const all=CASES(),act=all.filter(caseActive),t0=sod(Date.now()),endT=t0+DAY-1,tlF=view.tdTL||"all";
+  const inTL=c=>tlF==="all"||(tlF==="none"?!c["Team Lead"]:c.tlId===tlF||normName(c["Team Lead"])===normName(empName(tlF)));
+  const by=s=>act.filter(c=>fuState(c)===s&&inTL(c));
+  const over=by("over").sort((a,b)=>a.fu-b.fu),today=by("today"),week=by("week").sort((a,b)=>a.fu-b.fu),none=by("none").sort((a,b)=>(a.at||0)-(b.at||0));
+  const cbs=S.leads.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<=endT),myCbs=ME?cbs.filter(l=>l.assignedTo===ME.id).sort((a,b)=>a.followUp-b.followUp):[];
+  const wide=!isTL()&&teamLeads().length>0,showTL=!isTL();
+  let h=`<div style="margin-bottom:14px"><div class="mute small">${new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div><div class="row" style="justify-content:space-between"><div style="font-size:20px;font-weight:700">Good day${ME?", "+esc(ME.name.split(" ")[0]):""} – here's what needs you today</div><button class="btn pri sm" data-newcase>📝 Fill lead form</button></div></div>`;
+  h+=`<div class="stats sm"><div class="card stat"><span>Overdue follow-ups</span><b style="color:#c0392b">${over.length}</b><div class="small mute">lead cases past their date</div></div>
+    <div class="card stat"><span>Due today</span><b style="color:var(--amber)">${today.length}</b><div class="small mute">lead cases to call today</div></div>
+    <div class="card stat"><span>Callbacks due</span><b>${cbs.length}</b><div class="small mute">calling list, today or earlier</div></div>
+    <div class="card stat"><span>No follow-up date</span><b style="color:var(--mute)">${none.length}</b><div class="small mute">active cases nobody will be reminded about</div></div></div>`;
+  if(ME&&S.board&&(S.targets||[]).some(r=>r[1]===ME.id&&r[0]===curMon()))h+=progressCard(ME.id,ME.role);
+  if(wide){const tls=[...teamLeads().map(e=>({id:e.id,name:e.name})),{id:"none",name:"No Team Lead"}];
+    const cnt=(id,s)=>act.filter(c=>fuState(c)===s&&(id==="none"?!c["Team Lead"]:c.tlId===id)).length;
+    const rows=tls.map(t=>({...t,o:cnt(t.id,"over"),d:cnt(t.id,"today"),w:cnt(t.id,"week"),n:cnt(t.id,"none")})).filter(r=>r.o+r.d+r.w+r.n);
+    if(rows.length)h+=`<div class="card tw" style="margin-bottom:14px"><table><tr><th>Team Lead</th><th>Overdue</th><th>Due today</th><th>Next 7 days</th><th>No date set</th><th></th></tr>
+      ${rows.map(r=>`<tr ${tlF===r.id?'style="background:var(--brand-soft)"':""}><td><b>${esc(r.name)}</b></td><td class="num" style="${r.o?"color:#c0392b;font-weight:700":""}">${r.o}</td><td class="num" style="${r.d?"color:var(--amber);font-weight:700":""}">${r.d}</td><td class="num">${r.w}</td><td class="num mute">${r.n}</td>
+      <td><button class="btn sm" data-tdtl="${tlF===r.id?"all":esc(r.id)}">${tlF===r.id?"Show all":"Show only"}</button></td></tr>`).join("")}</table></div>`;
+    if(tlF!=="all")h+=`<div class="small" style="margin:-6px 0 12px">Showing <b>${esc(tlF==="none"?"cases without a Team Lead":empName(tlF)+"'s cases")}</b> · <a class="lnk" href="#" data-tdtl="all">show everyone</a></div>`}
+  h+=`<h3 style="margin:6px 0 8px;color:#c0392b">⚠ Overdue (${over.length})</h3>`+fuTable(over,{tl:showTL,empty:"Nothing overdue – well done."});
+  h+=`<h3 style="margin:18px 0 8px;color:var(--amber)">📅 Due today (${today.length})</h3>`+fuTable(today,{tl:showTL,empty:"No lead case follow-ups for today."});
+  if(myCbs.length)h+=`<h3 style="margin:18px 0 8px">📞 My calling-list callbacks (${myCbs.length})</h3><div class="card">${myCbs.map(l=>leadRow(l)).join("")}</div>`;
+  if(isLead()&&cbs.length>myCbs.length){const per={};cbs.forEach(l=>{const k=l.assignedTo||"";(per[k]=per[k]||{o:0,d:0});l.followUp<t0?per[k].o++:per[k].d++});
+    h+=`<h3 style="margin:18px 0 8px">📞 Callbacks due in the calling list</h3><div class="card tw"><table><tr><th>Telecaller</th><th>Overdue callbacks</th><th>Due today</th></tr>
+      ${Object.entries(per).sort((a,b)=>(b[1].o+b[1].d)-(a[1].o+a[1].d)).map(([k,v])=>`<tr><td><b>${esc(k?empName(k):"Not assigned")}</b></td><td class="num" style="${v.o?"color:#c0392b;font-weight:700":""}">${v.o}</td><td class="num">${v.d}</td></tr>`).join("")}</table></div>`}
+  h+=`<details class="card pad" style="margin-top:18px" ${view.tdOpen==="week"?"open":""} data-tdd="week"><summary><b>Coming up in the next 7 days (${week.length})</b></summary><div style="margin-top:10px">${fuTable(week,{tl:showTL,empty:"Nothing planned for the next 7 days."})}</div></details>`;
+  h+=`<details class="card pad" style="margin-top:12px" ${view.tdOpen==="none"?"open":""} data-tdd="none"><summary><b>Active cases with no follow-up date (${none.length})</b> <span class="small mute">– open each one and set a date so it isn't forgotten</span></summary><div style="margin-top:10px">${fuTable(none.slice(0,100),{tl:showTL,empty:"Every active case has a date. 👍"})}${none.length>100?`<div class="small mute" style="margin-top:6px">Showing the oldest 100 – the rest are in Lead Cases → No date set.</div>`:""}</div></details>`;
+  return h;
+}
+function bindToday(){document.querySelectorAll("[data-newcase]").forEach(b=>b.onclick=()=>openNewCase());document.querySelectorAll("[data-tdtl]").forEach(b=>b.onclick=e=>{e.preventDefault();view.tdTL=b.dataset.tdtl;render()});
+  document.querySelectorAll("details[data-tdd]").forEach(d=>d.ontoggle=()=>{if(d.open)view.tdOpen=d.dataset.tdd;else if(view.tdOpen===d.dataset.tdd)view.tdOpen=""});
+  document.querySelectorAll("[data-call]").forEach(a=>a.onclick=()=>{setTimeout(()=>openLead(a.dataset.call,true),400)});
+  document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false))}
+
+/* ---------- PERFORMANCE: targets, leaderboard, funnel, time to disbursal, sources ---------- */
+function perfMonths(){const set=new Set([curMon()]);Object.keys(S.board||{}).forEach(m=>set.add(m));CASES().forEach(c=>{const m=caseMon(c);if(m)set.add(m)});
+  return [...set].filter(m=>/^[A-Z][a-z]{2}-\d{4}$/.test(m)).sort((a,b)=>monTime(b)-monTime(a))}
+const caseMon=c=>monOf(c.leadD)||c.Monthly||"";
+const disbMon=c=>c["Disbursed Month"]||monOf(c.disbD);
+const PERIODS=[["cur","This month"],["prev","Last month"],["3m","Last 3 months"],["fy","This financial year"],["all","All time"]];
+function periodMonths(p){const c=curMon();if(p==="all")return null;if(p==="cur")return[c];if(p==="prev")return[monAdd(c,-1)];if(p==="3m")return[c,monAdd(c,-1),monAdd(c,-2)];
+  if(p==="fy"){const d=new Date(),y=d.getMonth()>=3?d.getFullYear():d.getFullYear()-1,out=[];let m="Apr-"+y;while(monTime(m)<=monTime(c)){out.push(m);m=monAdd(m,1)}return out}return[p]}
+const periodLabel=p=>{const f=PERIODS.find(x=>x[0]===p);if(p==="cur")return monLong(curMon());if(p==="prev")return monLong(monAdd(curMon(),-1));return f?f[1]:monLong(p)};
+// furthest a case got: 0 lead, 1 login, 2 sanction, 3 disbursed
+function stageOf(c){if(stType(c.Status)==="disb")return 3;const s=String(c.Status||"").toLowerCase();if(c.sanc||/sanction/.test(s))return 2;if(c.login||/login/.test(s)||/reject/.test(s))return 1;return 0}
+const pctS=(a,b)=>b?Math.round(a/b*100)+"%":"—";
+function funnelOf(list){const r={n:list.length,l:0,s:0,d:0,amt:0};list.forEach(c=>{const g=stageOf(c);if(g>=1)r.l++;if(g>=2)r.s++;if(g>=3){r.d++;r.amt+=numOf(c["Amount Required"])}});return r}
+function groupBy(list,key){const m=new Map();list.forEach(c=>{const k=String(key(c)||"").trim()||"Not recorded";if(!m.has(k))m.set(k,[]);m.get(k).push(c)});return[...m.entries()]}
+const DIMS=[["tl","Team Lead",c=>c["Team Lead"]||"No Team Lead"],["shared","Lead shared by",c=>c["Lead Shared by"]],["sm","SM Name",c=>c["SM Name"]],["prod","Product",c=>c.Product],["src","Lead source",c=>c["Lead Source"]],["bank","Bank",c=>c["Bank Name"]||"No bank yet"]];
+const dd=n=>{n=Math.round(n);return n+(n===1?" day":" days")};
+const median=a=>{if(!a.length)return 0;const s=a.slice().sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
+function tatOf(list){return list.filter(c=>stType(c.Status)==="disb"&&c.leadD&&c.disbD).map(c=>({c,d:Math.round((c.disbD-c.leadD)/DAY)})).filter(x=>x.d>=0&&x.d<=1000)}
+function perfData(p){
+  const ms=periodMonths(p),inP=m=>!ms||ms.includes(m),cases=CASES().filter(c=>inP(caseMon(c))),disb=CASES().filter(c=>stType(c.Status)==="disb"&&inP(disbMon(c)));
+  const people=(S.boardNames||[]).filter(r=>r[3]==="Yes"&&r[2]!=="Admin"&&r[2]!=="Sales Manager").map(r=>({id:r[0],name:r[1],role:r[2]}));
+  const mons=ms||perfMonths(),one=!!(ms&&ms.length===1);   // targets are monthly: compared only when one month is chosen
+  const lb=people.map(e=>{const a=actOf(e.id,mons),t=one?tgtOf(e.id,mons):[0,0,0,0,0,0],ix=metIdx(e.role),withT=ix.filter(i=>t[i]>0);
+    const score=withT.length?withT.reduce((s,i)=>s+Math.min(a[i]/t[i],1.5),0)/withT.length:null;return{...e,a,t,ix,score}});
+  const sortLB=arr=>arr.sort((x,y)=>(y.score??-1)-(x.score??-1)||(isCaller(x.role)?(y.a[1]-x.a[1])||(y.a[0]-x.a[0]):(y.a[5]-x.a[5])||(y.a[4]-x.a[4])));
+  return{ms,cases,disb,callers:sortLB(lb.filter(e=>isCaller(e.role))),leads:sortLB(lb.filter(e=>!isCaller(e.role))),f:funnelOf(cases),tat:tatOf(disb),pace:ms&&ms.length===1?monthPace(ms[0]):1}}
+function lbTable(rows,pace,single){const ix=rows[0]?rows[0].ix:[];if(!rows.length)return`<div class="card empty">Nobody here yet.</div>`;
+  const medal=(i,e)=>(e.score!=null?e.score>0:(e.a[ix[ix.length-1]]||e.a[ix[0]])>0)?["🥇","🥈","🥉"][i]||"":"";
+  return `<div class="card tw"><table class="lb"><tr><th style="width:44px">#</th><th>Name</th>${ix.map(i=>`<th>${MET[i]}${i===5?" (₹)":""}</th>`).join("")}<th style="width:150px">Overall vs target</th></tr>
+   ${rows.map((e,n)=>`<tr><td class="num"><b>${n+1}</b> ${medal(n,e)}</td><td><b>${esc(e.name)}</b><div class="small mute">${esc(e.role)}</div></td>
+     ${ix.map(i=>`<td style="min-width:120px"><div class="num"><b>${metVal(i,e.a[i])}</b>${e.t[i]?`<span class="mute"> / ${metVal(i,e.t[i])}</span>`:""}</div>${e.t[i]?`<div class="bar ${e.a[i]>=e.t[i]?"ok":e.a[i]/e.t[i]>=pace*0.85?"":"low"}"><i style="width:${Math.min(100,Math.round(e.a[i]/e.t[i]*100))}%"></i></div>`:""}</td>`).join("")}
+     <td>${e.score==null?'<span class="small mute">No target set</span>':`<b class="num" style="color:${e.score>=1?"var(--green)":e.score>=pace*0.85?"var(--ink)":"var(--amber)"}">${Math.round(e.score*100)}%</b><div class="small mute">${e.score>=1?"target reached":single?(e.score>=pace*0.85?"on track":"behind pace"):"of target"}</div>`}</td></tr>`).join("")}</table></div>`}
+function funnelVisual(f){const st=[["Lead cases",f.n,"var(--brand)"],["Logged in at a bank",f.l,"#4f7be8"],["Sanctioned",f.s,"#7c9cf0"],["Disbursed",f.d,"var(--green)"]];
+  return `<div class="funnel">${st.map(([l,v,c],i)=>`<div class="fstep"><div class="flab"><b>${l}</b><span class="num"><b>${v.toLocaleString("en-IN")}</b> <span class="mute">${i?pctS(v,f.n)+" of cases":""}</span></span></div>
+    <div class="fbar"><i style="width:${f.n?Math.max(2,Math.round(v/f.n*100)):0}%;background:${c}"></i></div>${i?`<div class="small mute" style="margin-top:2px">${pctS(v,st[i-1][1])} of the step before</div>`:""}</div>`).join("")}</div>
+    ${f.d?`<div class="small" style="margin-top:8px">Disbursed amount (loan amount of disbursed cases): <b>${fmtL(f.amt)}</b></div>`:""}`}
+function funnelRows(cases,dim){const d=DIMS.find(x=>x[0]===dim)||DIMS[0];return groupBy(cases,d[2]).map(([k,l])=>({k,...funnelOf(l)})).sort((a,b)=>b.n-a.n||b.d-a.d)}
+function funnelTable(rows,label){if(!rows.length)return`<div class="card empty">No cases in this period.</div>`;const top=rows.slice(0,25),rest=rows.slice(25);
+  if(rest.length)top.push({k:`Others (${rest.length})`,...rest.reduce((s,r)=>({n:s.n+r.n,l:s.l+r.l,s:s.s+r.s,d:s.d+r.d,amt:s.amt+r.amt}),{n:0,l:0,s:0,d:0,amt:0})});
+  const mx=Math.max(...top.map(r=>r.d?r.d/r.n:0),0.01);
+  return `<div class="card tw"><table><tr><th>${esc(label)}</th><th>Cases</th><th>Login</th><th>Sanction</th><th>Disbursed</th><th>Disbursed amount</th><th style="width:170px">Case → disbursed</th></tr>
+   ${top.map(r=>`<tr><td><b>${esc(r.k)}</b></td><td class="num">${r.n}</td><td class="num">${r.l} <span class="small mute">${pctS(r.l,r.n)}</span></td><td class="num">${r.s} <span class="small mute">${pctS(r.s,r.n)}</span></td><td class="num"><b>${r.d}</b></td><td class="num">${r.amt?fmtL(r.amt):'<span class="mute">—</span>'}</td>
+     <td><b class="num">${pctS(r.d,r.n)}</b><div class="bar ok"><i style="width:${r.n?Math.round(r.d/r.n/mx*100):0}%"></i></div></td></tr>`).join("")}</table></div>`}
+function tatRows(tat,key){return groupBy(tat.map(x=>x),x=>key(x.c)).map(([k,l])=>{const d=l.map(x=>x.d);return{k,n:l.length,avg:d.reduce((s,v)=>s+v,0)/l.length,med:median(d),min:Math.min(...d),max:Math.max(...d)}}).sort((a,b)=>b.n-a.n)}
+function tatTable(rows,label){if(!rows.length)return`<div class="card empty">No disbursed cases with both a lead date and a disbursed date in this period.</div>`;const mx=Math.max(...rows.map(r=>r.avg),1);
+  return `<div class="card tw"><table><tr><th>${label}</th><th>Disbursed cases</th><th style="width:200px">Average days</th><th>Median</th><th>Fastest</th><th>Slowest</th></tr>
+   ${rows.slice(0,20).map(r=>`<tr><td><b>${esc(r.k)}</b></td><td class="num">${r.n}</td><td><b class="num">${dd(r.avg)}</b><div class="bar"><i style="width:${Math.round(r.avg/mx*100)}%"></i></div></td><td class="num">${Math.round(r.med)}</td><td class="num">${r.min}</td><td class="num">${r.max}</td></tr>`).join("")}</table></div>`}
+function aPerf(){
+  const p=view.pp||"cur",D=perfData(p),dim=view.pdim||"tl",srcDim=view.psrc||"src",single=!!(D.ms&&D.ms.length===1);
+  const months=perfMonths().filter(m=>m!==curMon()&&m!==monAdd(curMon(),-1)).slice(0,24);
+  let h=`<div class="card pad" style="margin-bottom:14px"><div class="row" style="justify-content:space-between;gap:10px">
+    <div class="row"><label class="small mute" style="display:flex;gap:8px;align-items:center">Period <select id="pPer">${PERIODS.map(([k,l])=>`<option value="${k}" ${p===k?"selected":""}>${l}${k==="cur"||k==="prev"?" ("+(k==="cur"?curMon():monAdd(curMon(),-1))+")":""}</option>`).join("")}<optgroup label="Month">${months.map(m=>`<option value="${m}" ${p===m?"selected":""}>${monLong(m)}</option>`).join("")}</optgroup></select></label>
+     <span class="small mute">${D.cases.length} lead cases · ${D.disb.length} disbursed in ${esc(periodLabel(p))}</span></div>
+    <div class="row">${can("targetEdit")&&S.board?`<button class="btn sm" id="pTgt">🎯 Set targets</button>`:""}<button class="btn sm pri" data-mrep="xlsx">⬇ Monthly report (Excel)</button><button class="btn sm" data-mrep="pdf">🖨 Save as PDF</button></div></div></div>`;
+  // 1. targets & leaderboard
+  h+=`<h2 class="ph">Targets &amp; leaderboard</h2>`;
+  if(!S.board)h+=`<div class="card pad small">Targets need the new server code – paste Version 11 into Apps Script and deploy.</div>`;
+  else{h+=`<div class="small mute" style="margin:-4px 0 10px">${single?`Progress for ${esc(periodLabel(p))}${D.pace<1?` · ${Math.round(D.pace*100)}% of the month has gone, so “on track” means at least that share of the target`:""}.`:"Totals for the whole period. Targets are set per month – choose a single month (This month, Last month or a month name) to see progress against target."} Ranked by how much of their target each person has reached.</div>`;
+    h+=`<h3 style="margin:4px 0 8px">Team Leads &amp; Managers</h3>`+lbTable(D.leads,D.pace,single)+`<div class="small mute" style="margin:6px 0 0">Cases = new lead cases with them as Team Lead (by lead date) · Logins = cases moved to Login Done (from the day this feature starts) · Disbursed by disbursed month.</div>`;
+    h+=`<h3 style="margin:16px 0 8px">Telecallers</h3>`+lbTable(D.callers,D.pace,single)+`<div class="small mute" style="margin:6px 0 0">Calls = calls logged · Leads = calls marked Interested or Converted.</div>`}
+  // 2. funnel
+  h+=`<h2 class="ph">Conversion funnel</h2><div class="small mute" style="margin:-4px 0 10px">Lead cases that came in during ${esc(periodLabel(p))} (by lead date) and how far each one has got so far. Login and sanction come from the case status – and from now on, the date a case reached each step is saved too. A case rejected by the bank counts as logged in.</div>`;
+  h+=`<div class="pcols"><div class="card pad">${funnelVisual(D.f)}</div><div>
+    <div class="row" style="margin-bottom:8px"><span class="small mute">Split by</span>${DIMS.map(([k,l])=>`<button class="chip ${dim===k?"on":""}" data-pdim="${k}">${l}</button>`).join("")}</div>
+    ${funnelTable(funnelRows(D.cases,dim),(DIMS.find(x=>x[0]===dim)||DIMS[0])[1])}</div></div>`;
+  // 3. time to disbursal
+  const tAll=D.tat.map(x=>x.d);
+  h+=`<h2 class="ph">Time to disbursal</h2><div class="small mute" style="margin:-4px 0 10px">Days from lead date to disbursed date, for cases disbursed in ${esc(periodLabel(p))}.</div>`;
+  h+=`<div class="stats sm"><div class="card stat"><span>Average</span><b>${tAll.length?dd(tAll.reduce((s,v)=>s+v,0)/tAll.length):"—"}</b><div class="small mute">${tAll.length} disbursed case${tAll.length===1?"":"s"} with both dates</div></div>
+    <div class="card stat"><span>Median</span><b>${tAll.length?dd(Math.round(median(tAll))):"—"}</b><div class="small mute">half the cases are faster than this</div></div>
+    <div class="card stat"><span>Fastest</span><b>${tAll.length?dd(Math.min(...tAll)):"—"}</b><div class="small mute">&nbsp;</div></div>
+    <div class="card stat"><span>Slowest</span><b>${tAll.length?dd(Math.max(...tAll)):"—"}</b><div class="small mute">${D.disb.length-tAll.length?(D.disb.length-tAll.length)+" disbursed without dates":"&nbsp;"}</div></div></div>`;
+  h+=`<div class="pcols2"><div><h3 style="margin:4px 0 8px">By bank</h3>${tatTable(tatRows(D.tat,c=>c["Bank Name"]||"No bank recorded"),"Bank")}</div><div><h3 style="margin:4px 0 8px">By product</h3>${tatTable(tatRows(D.tat,c=>c.Product||"No product recorded"),"Product")}</div></div>`;
+  // 4. lead sources & connectors
+  const srcRows=srcDim==="conn"?groupBy(D.cases.filter(c=>c["Connector Name"]),c=>c["Connector Name"]).map(([k,l])=>({k,...funnelOf(l)})).sort((a,b)=>b.d-a.d||b.n-a.n):funnelRows(D.cases,"src").sort((a,b)=>b.d-a.d||b.n-a.n);
+  h+=`<h2 class="ph">Lead sources &amp; connectors</h2><div class="small mute" style="margin:-4px 0 10px">Which sources bring cases that actually disburse – lead cases from ${esc(periodLabel(p))}, best first.</div>
+    <div class="row" style="margin-bottom:8px">${[["src","Lead source"],["conn","Connector"]].map(([k,l])=>`<button class="chip ${srcDim===k?"on":""}" data-psrc="${k}">${l}</button>`).join("")}${srcDim==="conn"?`<span class="small mute">${D.cases.filter(c=>c["Connector Name"]).length} of ${D.cases.length} cases have a connector name filled in</span>`:""}</div>`;
+  h+=funnelTable(srcRows,srcDim==="conn"?"Connector":"Lead source");
+  return h;
+}
+function bindPerf(){const pp=$("#pPer");if(!pp)return;pp.onchange=()=>{view.pp=pp.value;render()};
+  document.querySelectorAll("[data-pdim]").forEach(b=>b.onclick=()=>{view.pdim=b.dataset.pdim;render()});
+  document.querySelectorAll("[data-psrc]").forEach(b=>b.onclick=()=>{view.psrc=b.dataset.psrc;render()});
+  const t=$("#pTgt");if(t)t.onclick=()=>openTargets()}
+function bindMonthly(){const mp=$("#mrPer");if(mp)mp.onchange=()=>{view.pp=mp.value};document.querySelectorAll("[data-mrep]").forEach(b=>b.onclick=()=>b.dataset.mrep==="pdf"?printReport(view.pp||"cur"):monthlyExcel(view.pp||"cur"))}
+
+/* ---------- SET TARGETS (Admin) ---------- */
+function openTargets(){
+  const people=(S.boardNames||[]).filter(r=>r[3]==="Yes"&&r[2]!=="Admin"&&r[2]!=="Sales Manager").map(r=>({id:r[0],name:r[1],role:r[2]}));
+  let mon=view.tgMon||curMon();
+  const draw=()=>{const prev=monAdd(mon,-1),hasPrev=(S.targets||[]).some(r=>r[0]===prev);
+    const val=(id,i,m=mon)=>{const r=(S.targets||[]).find(x=>x[0]===m&&x[1]===id);const v=r?numOf(r[3+i]):0;return v?(i===5?+(v/1e5).toFixed(2):v):""};
+    const grp=(title,list,ix)=>list.length?`<h3 style="margin:14px 0 6px">${title}</h3><div class="tw"><table class="tg"><tr><th>Name</th>${ix.map(i=>`<th>${i===5?"Disbursal (₹ lakh)":MET[i]}</th>`).join("")}</tr>
+      ${list.map(e=>`<tr><td><b>${esc(e.name)}</b><div class="small mute">${esc(e.role)}</div></td>${ix.map(i=>`<td><input type="number" min="0" step="${i===5?"0.5":"1"}" inputmode="decimal" data-tg="${esc(e.id)}" data-ti="${i}" value="${val(e.id,i)}" placeholder="—" style="width:100%;min-width:80px"></td>`).join("")}</tr>`).join("")}</table></div>`:"";
+    $("#modal").innerHTML=`<div class="mh"><div class="av">🎯</div><div><div style="font-weight:700">Monthly targets</div><div class="mute small">Leave a box empty for no target. Progress shows on each person's Today page and in Performance.</div></div><button class="x" id="mx">×</button></div>
+     <div class="mb"><div class="row"><label class="small mute" style="display:flex;gap:8px;align-items:center">Month <select id="tgMon">${[-2,-1,0,1,2].map(n=>monAdd(curMon(),n)).map(m=>`<option value="${m}" ${m===mon?"selected":""}>${monLong(m)}</option>`).join("")}</select></label>
+      ${hasPrev?`<button class="btn sm" id="tgCopy">Copy ${esc(monLong(prev))}'s targets</button>`:""}</div>
+      ${grp("Team Leads & Managers",people.filter(e=>!isCaller(e.role)),[2,3,4,5])}${grp("Telecallers",people.filter(e=>isCaller(e.role)),[0,1])}
+      ${people.length?"":`<div class="empty">No active employees.</div>`}</div>
+     <div class="mf"><button class="btn" id="mc">Cancel</button><button class="btn pri" id="tgSave">Save targets</button></div>`;
+    $("#modal").style.maxWidth="820px";const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#mc").onclick=close;
+    $("#tgMon").onchange=e=>{mon=e.target.value;view.tgMon=mon;draw()};
+    const cp=$("#tgCopy");if(cp)cp.onclick=()=>{document.querySelectorAll("[data-tg]").forEach(x=>{const v=val(x.dataset.tg,+x.dataset.ti,prev);if(v!=="")x.value=v});toast("Copied – check and press Save targets")};
+    $("#tgSave").onclick=async()=>{const map={};document.querySelectorAll("[data-tg]").forEach(x=>{const o=map[x.dataset.tg]=map[x.dataset.tg]||{id:x.dataset.tg};const i=+x.dataset.ti,v=numOf(x.value);o[["calls","leads","cases","logins","disb","amt"][i]]=i===5?Math.round(v*1e5):v});
+      const list=Object.values(map),n=list.filter(o=>["calls","leads","cases","logins","disb","amt"].some(k=>o[k]>0)).length;
+      if(!await askOk({title:"Save targets for "+monLong(mon)+"?",ok:"Yes, save",body:`${n} ${n===1?"person has":"people have"} a target. This replaces any targets already saved for ${esc(monLong(mon))}.`})){$("#mbg").classList.add("show");return}
+      $("#mbg").classList.add("show");const b=$("#tgSave");b.disabled=true;b.innerHTML=`<span class="spin"></span> Saving…`;
+      if(await write(api=>api.saveTargets(mon,list),"Targets saved for "+monLong(mon),"Saving targets…"))close();else{b.disabled=false;b.textContent="Save targets"}}};
+  draw();$("#mbg").classList.add("show");
+}
+
+/* ---------- MONTHLY REPORT: Excel workbook + printable PDF ---------- */
+function monthlySheets(p){
+  const D=perfData(p),lbl=periodLabel(p),tAll=D.tat.map(x=>x.d),act=CASES().filter(caseActive);
+  const lbRows=(rows,ix)=>[["Rank","Name","Role",...ix.flatMap(i=>[MET[i]+(i===5?" (₹)":""),MET[i]+" target"+(i===5?" (₹)":"")]),"Overall % of target"],
+    ...rows.map((e,n)=>[n+1,e.name,e.role,...ix.flatMap(i=>[Math.round(e.a[i]),e.t[i]||""]),e.score==null?"":Math.round(e.score*100)])];
+  const fRows=(rows,label)=>[[label,"Cases","Login","Sanction","Disbursed","Disbursed amount (₹)","Case → disbursed %"],...rows.map(r=>[r.k,r.n,r.l,r.s,r.d,Math.round(r.amt),r.n?Math.round(r.d/r.n*100):0])];
+  const tRows=(rows,label)=>[[label,"Disbursed cases","Average days","Median days","Fastest","Slowest"],...rows.map(r=>[r.k,r.n,Math.round(r.avg),Math.round(r.med),r.min,r.max])];
+  const summary=[["SN Financial Services – monthly report"],["Period",lbl],["Prepared",new Date().toLocaleString("en-IN")],[],
+    ["Lead cases",D.f.n],["Logged in at a bank",D.f.l,pctS(D.f.l,D.f.n)],["Sanctioned",D.f.s,pctS(D.f.s,D.f.n)],["Disbursed (of these cases)",D.f.d,pctS(D.f.d,D.f.n)],
+    ["Disbursed in the period (any lead date)",D.disb.length],["Disbursed amount in the period (₹)",Math.round(D.disb.reduce((s,c)=>s+numOf(c["Amount Required"]),0))],
+    ["Average days lead → disbursal",tAll.length?Math.round(tAll.reduce((s,v)=>s+v,0)/tAll.length):""],["Median days lead → disbursal",tAll.length?Math.round(median(tAll)):""],[],
+    ["Follow-ups overdue today",act.filter(c=>fuState(c)==="over").length],["Active cases with no follow-up date",act.filter(c=>fuState(c)==="none").length]];
+  return [["Summary",summary],["Team Leads vs target",lbRows(D.leads,[2,3,4,5])],["Telecallers vs target",lbRows(D.callers,[0,1])],
+    ["Funnel by Team Lead",fRows(funnelRows(D.cases,"tl"),"Team Lead")],["Funnel by product",fRows(funnelRows(D.cases,"prod"),"Product")],["Funnel by lead source",fRows(funnelRows(D.cases,"src"),"Lead source")],
+    ["Funnel by bank",fRows(funnelRows(D.cases,"bank"),"Bank")],
+    ["Connectors",fRows(groupBy(D.cases.filter(c=>c["Connector Name"]),c=>c["Connector Name"]).map(([k,l])=>({k,...funnelOf(l)})).sort((a,b)=>b.d-a.d||b.n-a.n),"Connector")],
+    ["Days to disbursal – bank",tRows(tatRows(D.tat,c=>c["Bank Name"]||"No bank recorded"),"Bank")],["Days to disbursal – product",tRows(tatRows(D.tat,c=>c.Product||"No product recorded"),"Product")],
+    ["Disbursed cases",[["Lead code","Customer","Product","Amount (₹)","Bank","Team Lead","Lead date","Disbursed date","Days"],...D.disb.map(c=>[c.code,c["Customer Name"],c.Product,numOf(c["Amount Required"])||"",c["Bank Name"],c["Team Lead"],c["Lead Date"],c["Disbursed Date"],c.leadD&&c.disbD?Math.round((c.disbD-c.leadD)/DAY):""])]],
+    ["Follow-ups overdue",[["Next follow-up","Lead code","Customer","Number","Status","Team Lead","Latest remark"],...act.filter(c=>fuState(c)==="over").sort((a,b)=>a.fu-b.fu).map(c=>[c["Next follow-up"],c.code,c["Customer Name"],c["Contact Number"],c.Status,c["Team Lead"],lastLine(c)])]]];
+}
+async function monthlyExcel(p){try{toast("Preparing the monthly report…");await loadXLSX();const wb=XLSX.utils.book_new();
+  monthlySheets(p).forEach(([n,rows])=>XLSX.utils.book_append_sheet(wb,sheetFrom(rows),n.slice(0,31)));
+  const name="SN-CRM_Monthly-report_"+periodLabel(p).replace(/[^A-Za-z0-9]+/g,"-")+".xlsx";XLSX.writeFile(wb,name);toast("Downloaded "+name)}catch(e){toast("Download failed: "+e.message)}}
+function printReport(p){
+  const sh=monthlySheets(p),tbl=rows=>{const rs=rows[0].map(x=>/₹/.test(String(x)));return `<table>${rows.map((r,i)=>`<tr>${r.map((v,j)=>i?`<td>${rs[j]&&v!==""&&!isNaN(v)?"₹"+Number(v).toLocaleString("en-IN"):esc(v)}</td>`:`<th>${esc(v)}</th>`).join("")}</tr>`).join("")}</table>`};
+  const sum=sh[0][1];let html=`<div class="pr-h"><div><div class="pr-t">SN Financial Services</div><div>Monthly performance report · <b>${esc(periodLabel(p))}</b></div></div><div class="small">Prepared ${esc(new Date().toLocaleString("en-IN"))}</div></div>
+    <div class="pr-k">${[[4,"Lead cases"],[5,"Logged in"],[6,"Sanctioned"],[7,"Disbursed"],[9,"Disbursed amount"],[10,"Avg days to disburse"]].map(([i,l])=>`<div><span>${l}</span><b>${i===9?fmtL(sum[i][1]):esc(sum[i][1])}</b>${sum[i][2]?`<small>${esc(sum[i][2])} of cases</small>`:""}</div>`).join("")}</div>`;
+  sh.slice(1,10).forEach(([n,rows])=>{if(rows.length>1)html+=`<h2>${esc(n)}</h2>`+tbl(rows.slice(0,31))});
+  let pa=$("#printArea");if(!pa){pa=document.createElement("div");pa.id="printArea";document.body.appendChild(pa)}pa.innerHTML=html;
+  document.body.classList.add("printing");const done=()=>{document.body.classList.remove("printing");window.removeEventListener("afterprint",done)};window.addEventListener("afterprint",done);
+  toast("In the print window, choose “Save as PDF”");setTimeout(()=>{try{window.print()}catch(e){toast("Printing is blocked here – use the Excel report");done()}},300);
+}
+
+/* ---------- LEAD & INQUIRY FORM (filled by the SM) ---------- */
+const holderOf=c=>String(c["Team Lead"]||"").trim();
+const isMine=c=>!!ME&&String(c["Telecaller ID"]||"").trim()===ME.id;
+const heldByMe=c=>{const h=holderOf(c);return !!ME&&(h?normName(h)===normName(ME.name):isMine(c))};
+// same rule as the server: the person it's with; the SM who filled it until they send it on; editors who see the team / everyone
+function canEditCase(c){if(!ME)return false;if(heldByMe(c))return true;return isLead()&&can("caseEdit")&&(ME.role==="Admin"||can("scopeTeam")||can("scopeAll"))}
+const ownerCanSend=c=>isMine(c)&&heldByMe(c);
+const canTransferCase=c=>(can("caseTransfer")&&(S.transferTo||[]).length>0)||(ownerCanSend(c)&&(S.handTo||[]).length>0);
+const ROLE_ORDER=["Team Lead","Manager","Telecaller Executive","Sales Manager"];
+function peopleOptions(list,sel=""){const roles=[...new Set(list.map(x=>x.role))].sort((a,b)=>(ROLE_ORDER.indexOf(a)+1||9)-(ROLE_ORDER.indexOf(b)+1||9));
+  const plural=r=>r==="Team Lead"?"Team Leads":r==="Manager"?"Managers":r==="Telecaller Executive"?"Telecallers":r==="Sales Manager"?"Sales Managers":r;
+  return roles.map(r=>`<optgroup label="${esc(plural(r))}">${list.filter(x=>x.role===r).map(x=>`<option value="${esc(x.id)}" ${x.id===sel?"selected":""}>${esc(x.name)}</option>`).join("")}</optgroup>`).join("")}
+function updatesTimeline(c){const parts=String(c.Remarks||"").split(" // ").map(s=>s.trim()).filter(Boolean);
+  if(!parts.length)return`<div class="small mute">No updates yet.</div>`;
+  return `<ol class="tl">${parts.map(p=>{const m=p.match(/^(\d{1,2}-\d{1,2}(?:-\d{2,4})?)\s+(.*)$/);return `<li>${m?`<b class="num">${esc(m[1])}</b> ${esc(m[2])}`:esc(p)}</li>`}).join("")}</ol>`}
+function openNewCase(){
+  const f={...(view.nf||{})},opt=h=>(caseOpts(h)||[]).filter(Boolean),people=(S.handTo||[]),full=can("cases");   /* no Lead Cases access → basics only, must send it on */
+  const chips=(h,req=true)=>{const o=opt(h);if(!o.length)return`<input id="nf_${h.replace(/\W/g,"")}" value="${esc(f[h]||"")}" style="width:100%">`;
+    if(o.length>8)return`<select id="nf_${h.replace(/\W/g,"")}" style="width:100%"><option value="">— Choose —</option>${o.map(x=>`<option ${f[h]===x?"selected":""}>${esc(x)}</option>`).join("")}</select>`;
+    return`<div class="chips" data-nfh="${esc(h)}">${o.map(x=>`<button type="button" class="chip ${f[h]===x?"on":""}" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div>`};
+  const sel=h=>`<select id="nf_${h.replace(/\W/g,"")}" style="width:100%"><option value="">— Choose —</option>${opt(h).map(x=>`<option ${f[h]===x?"selected":""}>${esc(x)}</option>`).join("")}</select>`;
+  const lab=(h,req=true,hint="")=>`<label class="f">${esc(h)}${req?' <span style="color:#c0392b">*</span>':""}${hint?` <span class="mute" style="font-weight:400">${hint}</span>`:""}</label>`;
+  $("#modal").innerHTML=`<div class="mh"><div class="av">📝</div><div><div style="font-weight:700">Lead &amp; Inquiry form</div><div class="mute small">Choose from the lists – nothing to type except the customer's details. <span style="color:#c0392b">*</span> = required</div></div><button class="x" id="mx">×</button></div>
+   <div class="mb nf">
+    <div class="row" style="gap:10px;margin-bottom:4px"><span class="pill" style="background:var(--brand-soft);color:var(--brand)">Lead Date: ${esc(new Date().toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}))} (automatic)</span></div>
+    ${lab("Lead Type")}${chips("Lead Type")}
+    <div class="cgrid2">
+     <div>${lab("Customer Name")}<input id="nf_CustomerName" value="${esc(f["Customer Name"]||"")}" maxlength="80" style="width:100%" placeholder="Full name" autocomplete="off"></div>
+     <div>${lab("Contact Number")}<input id="nf_ContactNumber" value="${esc(f["Contact Number"]||"")}" inputmode="tel" maxlength="14" style="width:100%" placeholder="10-digit mobile" autocomplete="off"><div id="nf_dup" class="small" style="margin-top:4px"></div></div>
+     <div>${lab("SM Name",true,"– who called the customer")}${sel("SM Name")}</div>
+     <div>${lab("Product")}${sel("Product")}</div>
+     ${full?`<div>${lab("Amount Required",true,"(₹)")}<input id="nf_AmountRequired" value="${esc(f["Amount Required"]||"")}" inputmode="numeric" style="width:100%" placeholder="e.g. 500000"><div id="nf_amt" class="small mute" style="margin-top:4px"></div></div>
+     <div>${lab("Lead Source")}${sel("Lead Source")}</div>`:""}
+    </div>
+    ${lab("Lead Shared by")}${chips("Lead Shared by")}
+    ${full?`<details ${f["Connector Name"]||f["Connector Contact No"]?"open":""} style="margin-top:12px"><summary class="small"><b>Connector details</b> <span class="mute">– if a connector gave this lead</span></summary>
+     <div class="cgrid3" style="margin-top:6px"><div>${lab("Connector Name",false)}<input id="nf_ConnectorName" value="${esc(f["Connector Name"]||"")}" style="width:100%"></div>
+      <div>${lab("Connector Contact No",false)}<input id="nf_ConnectorContactNo" value="${esc(f["Connector Contact No"]||"")}" inputmode="tel" style="width:100%"></div>
+      <div>${lab("Connector Location",false)}<input id="nf_ConnectorLocation" value="${esc(f["Connector Location"]||"")}" style="width:100%"></div></div></details>`:""}
+    ${lab("Remarks",false,"– optional")}<textarea id="nf_Remarks" maxlength="300" style="width:100%;min-height:56px" placeholder="e.g. Salaried, wants loan in 2 weeks">${esc(f.Remarks||"")}</textarea>
+    <div class="fubox" style="margin-top:12px;grid-template-columns:1fr"><div>${lab("Send this case to",!full)}<select id="nf_to" style="width:100%"><option value="">${full?"Keep it with me for now – I can transfer it later":"— Choose who will take this case —"}</option>${peopleOptions(people,f.to||"")}</select>
+     <div class="small mute" style="margin-top:6px">${full?"After you send it, you can still see every update on this case, but only the person it's with (or Admin) can change it.":"They fill in the amount, lead source and connector details. You can see every update on this case in <b>My cases</b>."}</div></div></div>
+   </div>
+   <div class="mf"><button class="btn" id="nfClear" style="margin-right:auto">Clear form</button><button class="btn" id="mc">Cancel</button><button class="btn pri" id="nfGo">Submit lead</button></div>`;
+  $("#modal").style.maxWidth="760px";$("#mbg").classList.add("show");
+  const keep=()=>{const o=readNF();view.nf=o};const close=()=>{keep();$("#mbg").classList.remove("show")};$("#mx").onclick=close;$("#mc").onclick=close;
+  $("#nfClear").onclick=()=>{view.nf={};openNewCase()};
+  document.querySelectorAll("[data-nfh] .chip").forEach(b=>b.onclick=()=>{b.parentNode.querySelectorAll(".chip").forEach(x=>x.classList.remove("on"));b.classList.add("on")});
+  const ph=$("#nf_ContactNumber"),dupBox=$("#nf_dup"),amt=$("#nf_AmountRequired")||{value:""},amtBox=$("#nf_amt")||{};
+  const chkPh=()=>{const d=String(ph.value).replace(/\D/g,"").replace(/^(91|0)(?=\d{10}$)/,"");if(d.length<10){dupBox.innerHTML="";return}
+    if(!/^[6-9]\d{9}$/.test(d)){dupBox.innerHTML='<span style="color:#c0392b">Should be a 10-digit mobile number</span>';return}
+    const hit=CASES().filter(c=>String(c["Contact Number"]).replace(/\D/g,"").slice(-10)===d);
+    dupBox.innerHTML=hit.length?`<span style="color:#b26a00">⚠ Already a case: ${hit.slice(0,3).map(c=>`<b>${esc(c.code)}</b> (${esc(c.Status)}${holderOf(c)?", with "+esc(holderOf(c)):""})`).join(", ")}</span>`:'<span style="color:var(--green)">✓ Looks good</span>'};
+  const chkAmt=()=>{const n=numOf(amt.value);amtBox.textContent=n?"= "+fmtL(n):""};ph.oninput=chkPh;if(full)amt.oninput=chkAmt;chkPh();chkAmt();
+  $("#nfGo").onclick=async()=>{const o=readNF(),miss=["Lead Type","Customer Name","Contact Number","SM Name","Product","Lead Shared by",...(full?["Amount Required","Lead Source"]:["Send this case to"])].filter(h=>!(h==="Send this case to"?o.to:o[h]));
+    if(miss.length)return toast("Fill in: "+miss.join(", "));
+    const d=o["Contact Number"].replace(/\D/g,"").replace(/^(91|0)(?=\d{10}$)/,"");if(!/^[6-9]\d{9}$/.test(d))return toast("Contact Number should be a 10-digit mobile number");
+    if(full&&!(numOf(o["Amount Required"])>0))return toast("Amount Required should be a number, e.g. 500000");
+    const to=o.to,who=to?(people.find(x=>x.id===to)||{}).name:"";
+    const row=(k,v)=>v?`<tr><td class="mute" style="padding:2px 12px 2px 0">${esc(k)}</td><td><b>${esc(v)}</b></td></tr>`:"";
+    if(!await askOk({title:"Submit this lead?",ok:"Yes, submit",body:`<table class="small">${row("Customer",o["Customer Name"]+" · "+o["Contact Number"])}${row("Lead Type",o["Lead Type"])}${row("SM Name",o["SM Name"])}${row("Product",o.Product+(full?" · "+fmtL(numOf(o["Amount Required"])):""))}${row("Lead Source",o["Lead Source"])}${row("Lead Shared by",o["Lead Shared by"])}${row("Connector",[o["Connector Name"],o["Connector Contact No"],o["Connector Location"]].filter(Boolean).join(" · "))}</table>
+      <div class="small" style="margin-top:8px">${who?`It will go to <b>${esc(who)}</b> straight away.`:"It stays with you until you transfer it."}</div>`})){$("#mbg").classList.add("show");return}
+    $("#mbg").classList.add("show");const b=$("#nfGo");b.disabled=true;b.innerHTML='<span class="spin"></span> Submitting…';
+    const fin=()=>{b.disabled=false;b.textContent="Submit lead"};
+    let r;showProc("Submitting lead…");try{r=await API().newCase(o,false,to)}catch(e){hideProc();fin();if(e&&e.auth)return showLogin(e.message);return toast("Not saved: "+explain(e).slice(0,140))}hideProc();
+    if(r&&r.duplicate){const go=await askOk({title:"This number already has a case",ok:"Submit anyway",body:`<ul>${r.duplicate.map(x=>`<li><b>${esc(x.code)}</b> · ${esc(x.name)} · ${esc(x.status||"")}${x.with?" · with "+esc(x.with):""}${x.date?" · "+esc(x.date):""}</li>`).join("")}</ul><div class="small">Submit only if this is a new, separate loan for the customer.</div>`});
+      $("#mbg").classList.add("show");if(!go)return fin();
+      if(await write(api=>api.newCase(o,true,to).then(x=>{r=x}),"Lead submitted","Submitting lead…")){view.nf={};$("#mbg").classList.remove("show");toast("Case "+r.code+" created"+(r.to?" and sent to "+r.to:""))}else fin();return}
+    if(await write(async()=>{},"Case "+r.code+" created"+(r.to?" and sent to "+r.to:""),"Updating…")){view.nf={};$("#mbg").classList.remove("show")}else fin()};
+}
+function readNF(){const v=id=>{const e=$("#nf_"+id);return e?String(e.value).trim():""};const o={};
+  document.querySelectorAll("[data-nfh]").forEach(g=>{const on=g.querySelector(".chip.on");o[g.dataset.nfh]=on?on.dataset.v:""});
+  [["Lead Type","LeadType"],["Lead Shared by","LeadSharedby"]].forEach(([h,id])=>{if(o[h]===undefined)o[h]=v(id)});
+  o["Customer Name"]=v("CustomerName");o["Contact Number"]=v("ContactNumber");o["SM Name"]=v("SMName");o.Product=v("Product");o["Amount Required"]=v("AmountRequired");o["Lead Source"]=v("LeadSource");
+  o["Connector Name"]=v("ConnectorName");o["Connector Contact No"]=v("ConnectorContactNo");o["Connector Location"]=v("ConnectorLocation");o.Remarks=v("Remarks");o.to=v("to");return o}
 
 /* ---------- LEAD MODAL (log call / remark) ---------- */
 let M={};
