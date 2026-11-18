@@ -228,11 +228,19 @@ function logCall_(me, b) {
   if (me.role === "Team Lead" && !teamIds_(me, emps_()).has(String(lead[4]).trim())) throw new Error("This contact isn't in your team");
   const open = caseRows_().find(x => String(x[C_["Contact ID"]]).trim() === String(lead[0]).trim());
   if (open && rank_(me.role) > rank_("Team Lead")) throw new Error("This customer is now with your Team Lead – you can view the updates only");
+  let prep = null;
+  if (b.outcome === "Interested" && !open && b.form) {             // lead form filled in the call window – check it before saving anything
+    const lc = leads.getRange(r, 1, 1, 12).getDisplayValues()[0];
+    prep = prepareCase_(me, Object.assign({}, b.form, { Remarks: b.remark || b.form.Remarks || "" }), !!b.force, String(b.form.to || ""),
+      { contactId: lead[0], phone: lead[2], name: lead[1], source: String(lc[10]).trim() === "Website" ? "Website" : "Telecalling" });
+    if (prep.duplicate) return prep;                                // nothing saved yet – the caller decides
+  }
   const at = now_();
   sheet_("CallLogs").appendRow(["C" + Date.now().toString(36).toUpperCase(), at, lead[0], lead[1], text_(lead[2]),
     me.id, me.name, b.outcome || "", b.remark || "", b.followUp || ""]);
   leads.getRange(r, 6, 1, 4).setValues([[b.outcome || "", b.followUp || "", b.remark || "", at]]);
-  if (b.outcome === "Interested" && !open) {                      // hand the customer to the Team Lead as a lead case
+  if (prep) return writeCase_(prep);
+  if (b.outcome === "Interested" && !open) {                      // older website without the form: hand the customer to the Team Lead
     const lc = leads.getRange(r, 1, 1, 12).getDisplayValues()[0];
     const code = createCase_(me, lc, b.remark || "");
     return { saved: true, caseCode: code };
@@ -570,8 +578,8 @@ function canEditCase_(me, row, emps) {
   if (!holder && mine) return true;
   return perms_(me).has("caseEdit") && scope_(me) !== "own" && canSeeCase_(me, row, emps, teamFor_(me, emps));
 }
-// Who a case can be handed to: active people with Lead Cases access (they fill in the rest), never Admin
-const handTargets_ = (me, emps) => emps.filter(x => x.active && x.id !== me.id && x.role !== "Admin" && perms_(x).has("cases"));
+// Who a case can be handed to for further process: any active person (executives, telecallers, Team Leads, Managers) – never Admin
+const handTargets_ = (me, emps) => emps.filter(x => x.active && x.id !== me.id && x.role !== "Admin");
 const teamFor_ = (me, emps) => scope_(me) === "team" ? teamOf_(me, emps) : new Set();
 function cases_(me, emps) {
   const team = teamFor_(me, emps);
@@ -603,18 +611,21 @@ function createCaseFor_(me, leadId) {                                  // open a
   return { saved: true, caseCode: createCase_(me, lc, String(lc[7] || "")) };
 }
 // Lead & Inquiry form inside the CRM: the SM fills it, Lead Date is today. Every choice must come from the Lists tab.
-// People without Lead Cases access (telecaller executives) fill only the basics and must send the case to someone.
-function newCase_(me, c, force, to) {
+// Lead & Inquiry form. Lead Date is today; every choice must come from the Lists tab.
+// It opens when a caller marks a customer Interested (logCall_), or from Lead Cases for people with Lead Cases access.
+// People without Lead Cases access fill only the basics and must send the case to someone for further process.
+function prepareCase_(me, c, force, to, src) {
+  src = src || {};
   const L = lists_(), emps = emps_(), now = new Date(), full = perms_(me).has("cases");
   if (!full && !to) throw new Error("Choose who to send this case to");
   const cl = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "").replace(/\s+/g, " ").trim().slice(0, 300);
   const need = (h, label) => { const v = cl(c[h]); if (!v) throw new Error("Fill in " + (label || h)); return v; };
   const choose = h => { const v = need(h); const list = L.lists[h] || []; if (!list.length) return properName_(v);
     const hit = list.find(x => x.toLowerCase() === v.toLowerCase()); if (!hit) throw new Error("Choose " + h + " from the list"); return hit; };
-  const ph = digits_(need("Contact Number")).replace(/^(91|0)(?=\d{10}$)/, "");
+  const ph = digits_(src.phone || need("Contact Number")).replace(/^(91|0)(?=\d{10}$)/, "");
   if (!/^[6-9]\d{9}$/.test(ph)) throw new Error("Contact Number should be a 10-digit mobile number");
-  const amt = full ? Math.round(num_(need("Amount Required"))) : "";
-  if (full && !(amt > 0)) throw new Error("Amount Required should be a number, e.g. 500000");
+  const amt = full ? Math.round(num_(c["Amount Required"])) : "";
+  if (full && !src.contactId && !(amt > 0)) throw new Error("Amount Required should be a number, e.g. 500000");
   let cph = full ? digits_(cl(c["Connector Contact No"])).replace(/^(91|0)(?=\d{10}$)/, "") : "";
   if (cph && !/^\d{10}$/.test(cph)) throw new Error("Connector Contact No should have 10 digits");
   const rows = caseRows_();
@@ -626,24 +637,33 @@ function newCase_(me, c, force, to) {
   if (to) { t = handTargets_(me, emps).find(x => x.id === to); if (!t) throw new Error("Choose who to send the case to from the list"); }
   const row = new Array(CASE_COLS).fill(""), today = Utilities.formatDate(now, "Asia/Kolkata", "yyyy-MM-dd"), d = Utilities.formatDate(now, "Asia/Kolkata", "d-MM");
   row[C_["Timestamp"]] = now_(); row[C_["Lead Date"]] = today; row[C_["Monthly"]] = Utilities.formatDate(now, "Asia/Kolkata", "MMM-yyyy");
-  row[C_["Lead Type"]] = choose("Lead Type"); row[C_["Customer Name"]] = properName_(need("Customer Name"));
+  row[C_["Lead Type"]] = choose("Lead Type"); row[C_["Customer Name"]] = properName_(cl(c["Customer Name"]) || src.name || need("Customer Name"));
   row[C_["Contact Number"]] = ph.slice(0, 5) + " " + ph.slice(5); row[C_["SM Name"]] = choose("SM Name"); row[C_["Product"]] = choose("Product");
   row[C_["Lead Shared by"]] = choose("Lead Shared by");
+  row[C_["Lead Source"]] = full && cl(c["Lead Source"]) ? choose("Lead Source") : src.source || "";
   if (full) {                                                          // the rest only from people with Lead Cases access
-    row[C_["Amount Required"]] = amt; row[C_["Lead Source"]] = choose("Lead Source");
+    row[C_["Amount Required"]] = amt || "";
     row[C_["Connector Name"]] = properName_(cl(c["Connector Name"])); row[C_["Connector Contact No"]] = cph ? cph.slice(0, 5) + " " + cph.slice(5) : "";
     row[C_["Connector Location"]] = properName_(cl(c["Connector Location"]));
   }
-  const code = nextCode_(rows); row[C_["Unique Lead Code"]] = code;
-  row[C_["Status"]] = "New"; row[C_["Telecaller ID"]] = me.id; row[C_["Next follow-up"]] = today;
+  row[C_["Status"]] = "New"; row[C_["Telecaller ID"]] = me.id; row[C_["Contact ID"]] = src.contactId || ""; row[C_["Next follow-up"]] = today;
   const note = tidyText_(cl(c.Remarks)), lines = [];
   if (t) lines.push(d + " Transferred from " + me.name + " to " + t.name + " by " + me.name);
   if (note) lines.push(d + " " + note);
   row[C_["Remarks"]] = lines.join(" // ");
   row[C_["Team Lead"]] = t ? t.name : "";
   row[C_["Last updated"]] = now_(); row[C_["Updated by"]] = me.name;
-  const sh = caseSheet_(); sh.getRange(sh.getLastRow() + 1, 1, 1, CASE_COLS).setValues([row]);
-  return { saved: true, code, to: t ? t.name : "" };
+  return { row, code: nextCode_(rows), to: t ? t.name : "" };
+}
+function writeCase_(p) {
+  p.row[C_["Unique Lead Code"]] = p.code;
+  const sh = caseSheet_(); sh.getRange(sh.getLastRow() + 1, 1, 1, CASE_COLS).setValues([p.row]);
+  return { saved: true, code: p.code, caseCode: p.code, to: p.to };
+}
+function newCase_(me, c, force, to) {
+  if (!perms_(me).has("cases")) throw new Error("Mark the customer Interested in your calling list – the lead form opens there");
+  const p = prepareCase_(me, c, force, to, {});
+  return p.duplicate ? p : writeCase_(p);
 }
 // Admin only: take a case out of Lead Cases (e.g. opened by mistake). The row is kept in the "Removed Cases" tab
 // with who removed it and when, so nothing is lost. The contact stays in the Calling List and can get a new case later.

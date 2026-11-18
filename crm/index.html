@@ -395,7 +395,7 @@ const Script={
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
   async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
-  async logCall(leadId,out,remark,fu){await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu)})},
+  async logCall(leadId,out,remark,fu,by,form,force){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
   async addLeads(list){await this.req("addLeads",{leads:list.map(x=>({...x,phone:normPhone(x.phone)}))})},
   async addEmp(o){await this.req("addEmp",{...o,phone:o.phone?normPhone(o.phone):""})},
@@ -1296,7 +1296,7 @@ function renderEmp(){
   if(ctab==="today"){
     const od=cbAll.filter(l=>l.followUp<t0),td=cbAll.filter(l=>l.followUp>=t0),fresh=mine.filter(l=>l.status==="new");
     const casesMine=CASES().filter(c=>c["Telecaller ID"]===me.id),moved=casesMine.filter(c=>c.upd&&c.upd>=Date.now()-3*DAY).sort((a,b)=>b.upd-a.upd);
-    if(own)h+=`<div class="card pad" style="margin-bottom:14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:#f7f9ff;border-color:#c9d6f6"><div style="flex:1;min-width:220px"><b>Got a new lead or enquiry?</b><div class="small mute">Fill the lead form – it becomes a case with its own SNFS code.</div></div><button class="btn pri" data-newcase>📝 Fill lead form</button></div>`;
+    if(own&&can("cases"))h+=`<div class="card pad" style="margin-bottom:14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:#f7f9ff;border-color:#c9d6f6"><div style="flex:1;min-width:220px"><b>Got a new lead or enquiry?</b><div class="small mute">Fill the lead form – it becomes a case with its own SNFS code.</div></div><button class="btn pri" data-newcase>📝 Fill lead form</button></div>`;
     h+=progressCard(me.id,me.role,{title:(own?"My target":me.name.split(" ")[0]+"'s target")+" – "+monLong(curMon())});
     const withMe=CASES().filter(c=>caseActive(c)&&(normName(c["Team Lead"])===normName(me.name)||(!c["Team Lead"]&&c["Telecaller ID"]===me.id))&&["over","today","none"].includes(fuState(c)));
     if(withMe.length)h+=`<h3 style="margin:6px 0 8px">📂 Cases with ${own?"me":"them"} to follow up (${withMe.length})</h3>`+fuTable(withMe.sort((a,b)=>(a.fu||0)-(b.fu||0)),{tl:false})+'<div style="height:14px"></div>';
@@ -1308,8 +1308,8 @@ function renderEmp(){
     if(moved.length)h+=`<h3 style="margin:18px 0 8px">🤝 Updates on ${own?"my":"their"} customers with the Team Lead</h3>`+casesTable(moved.slice(0,10));
   }else if(ctab==="cases"){
     const sent=CASES().filter(c=>c["Telecaller ID"]===me.id).sort((a,b)=>(b.at||0)-(a.at||0)),got=CASES().filter(c=>c["Telecaller ID"]!==me.id&&normName(c["Team Lead"])===normName(me.name));
-    h+=`<div class="card pad" style="margin-bottom:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><b>${own?"Cases I filled":"Cases they filled"} (${sent.length})</b><div class="small mute">“With” shows who has the case now. Open one to see its updates${own?" or to transfer it while it's still with you":""}.</div></div>${own?`<button class="btn pri" data-newcase>📝 Fill lead form</button>`:""}</div>`;
-    h+=casesTable(sent,{empty:own?"No cases yet – press Fill lead form when you get a lead.":"No cases yet."});
+    h+=`<div class="card pad" style="margin-bottom:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><b>${own?"Cases I filled":"Cases they filled"} (${sent.length})</b><div class="small mute">A case opens when ${own?"you mark":"they mark"} a customer <b>Interested</b> and fill the lead form. “With” shows who has the case now – open one to see its updates.</div></div>${own&&can("cases")?`<button class="btn pri" data-newcase>📝 Fill lead form</button>`:""}</div>`;
+    h+=casesTable(sent,{empty:own?"No cases yet – when a customer is interested, mark the call Interested and fill the lead form.":"No cases yet."});
     if(got.length)h+=`<h3 style="margin:18px 0 8px">Cases sent to ${own?"me":"them"} (${got.length})</h3>`+casesTable(got);
   }else if(ctab==="int"){
     const list=myLeads.slice().sort((a,b)=>(leadAt(b)||0)-(leadAt(a)||0));
@@ -1317,7 +1317,7 @@ function renderEmp(){
     const noCase=list.filter(l=>!caseOf(l.id));
     if(!S.srv2){h+=`<div class="small mute" style="margin-bottom:10px">Customers ${own?"you":"they"}'ve marked <b>Interested</b> (or Converted), newest first – all dates.</div>`;
       h+=`<div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No leads yet – customers marked Interested on a call show up here.</div>`}</div>`;}else{
-    h+=`<div class="small mute" style="margin-bottom:10px">When ${own?"you mark":"they mark"} a customer <b>Interested</b>, a lead case goes to ${own?"your":"their"} Team Lead, who follows up. ${own&&!isLead()?"You can see every update here.":""}</div>`;
+    h+=`<div class="small mute" style="margin-bottom:10px">When ${own?"you mark":"they mark"} a customer <b>Interested</b>, the lead form opens in the call window and the case goes to the person ${own?"you choose":"they choose"} for further process. ${own&&!isLead()?"You can see every update here.":""}</div>`;
     h+=casesTable(myCases,{empty:"No lead cases yet – mark a customer Interested on a call to hand them to your Team Lead."});
     if(noCase.length)h+=`<h3 style="margin:18px 0 8px">Interested, no case yet</h3><div class="card">${noCase.map(l=>leadRow(l)).join("")}</div>`;}
   }else if(ctab==="calls"){
@@ -1537,7 +1537,7 @@ function aToday(){
   const over=by("over").sort((a,b)=>a.fu-b.fu),today=by("today"),week=by("week").sort((a,b)=>a.fu-b.fu),none=by("none").sort((a,b)=>(a.at||0)-(b.at||0));
   const cbs=S.leads.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<=endT),myCbs=ME?cbs.filter(l=>l.assignedTo===ME.id).sort((a,b)=>a.followUp-b.followUp):[];
   const wide=!isTL()&&teamLeads().length>0,showTL=!isTL();
-  let h=`<div style="margin-bottom:14px"><div class="mute small">${new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div><div class="row" style="justify-content:space-between"><div style="font-size:20px;font-weight:700">Good day${ME?", "+esc(ME.name.split(" ")[0]):""} – here's what needs you today</div><button class="btn pri sm" data-newcase>📝 Fill lead form</button></div></div>`;
+  let h=`<div style="margin-bottom:14px"><div class="mute small">${new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</div><div class="row" style="justify-content:space-between"><div style="font-size:20px;font-weight:700">Good day${ME?", "+esc(ME.name.split(" ")[0]):""} – here's what needs you today</div>${can("cases")?`<button class="btn pri sm" data-newcase>📝 Fill lead form</button>`:""}</div></div>`;
   h+=`<div class="stats sm"><div class="card stat"><span>Overdue follow-ups</span><b style="color:#c0392b">${over.length}</b><div class="small mute">lead cases past their date</div></div>
     <div class="card stat"><span>Due today</span><b style="color:var(--amber)">${today.length}</b><div class="small mute">lead cases to call today</div></div>
     <div class="card stat"><span>Callbacks due</span><b>${cbs.length}</b><div class="small mute">calling list, today or earlier</div></div>
@@ -1724,58 +1724,68 @@ function peopleOptions(list,sel=""){const roles=[...new Set(list.map(x=>x.role))
 function updatesTimeline(c){const parts=String(c.Remarks||"").split(" // ").map(s=>s.trim()).filter(Boolean);
   if(!parts.length)return`<div class="small mute">No updates yet.</div>`;
   return `<ol class="tl">${parts.map(p=>{const m=p.match(/^(\d{1,2}-\d{1,2}(?:-\d{2,4})?)\s+(.*)$/);return `<li>${m?`<b class="num">${esc(m[1])}</b> ${esc(m[2])}`:esc(p)}</li>`}).join("")}</ol>`}
-function openNewCase(){
-  const f={...(view.nf||{})},opt=h=>(caseOpts(h)||[]).filter(Boolean),people=(S.handTo||[]),full=can("cases");   /* no Lead Cases access → basics only, must send it on */
-  const chips=(h,req=true)=>{const o=opt(h);if(!o.length)return`<input id="nf_${h.replace(/\W/g,"")}" value="${esc(f[h]||"")}" style="width:100%">`;
-    if(o.length>8)return`<select id="nf_${h.replace(/\W/g,"")}" style="width:100%"><option value="">— Choose —</option>${o.map(x=>`<option ${f[h]===x?"selected":""}>${esc(x)}</option>`).join("")}</select>`;
-    return`<div class="chips" data-nfh="${esc(h)}">${o.map(x=>`<button type="button" class="chip ${f[h]===x?"on":""}" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div>`};
+// the form's fields – used in the call window (customer marked Interested) and in Lead Cases (people with Lead Cases access)
+function nfHTML(f,full,o={}){
+  const opt=h=>(caseOpts(h)||[]).filter(Boolean),people=(S.handTo||[]);
+  const chips=h=>{const v=opt(h);if(!v.length)return`<input id="nf_${h.replace(/\W/g,"")}" value="${esc(f[h]||"")}" style="width:100%">`;
+    if(v.length>9)return`<select id="nf_${h.replace(/\W/g,"")}" style="width:100%"><option value="">— Choose —</option>${v.map(x=>`<option ${f[h]===x?"selected":""}>${esc(x)}</option>`).join("")}</select>`;
+    return`<div class="chips" data-nfh="${esc(h)}">${v.map(x=>`<button type="button" class="chip ${f[h]===x?"on":""}" data-v="${esc(x)}">${esc(x)}</button>`).join("")}</div>`};
   const sel=h=>`<select id="nf_${h.replace(/\W/g,"")}" style="width:100%"><option value="">— Choose —</option>${opt(h).map(x=>`<option ${f[h]===x?"selected":""}>${esc(x)}</option>`).join("")}</select>`;
   const lab=(h,req=true,hint="")=>`<label class="f">${esc(h)}${req?' <span style="color:#c0392b">*</span>':""}${hint?` <span class="mute" style="font-weight:400">${hint}</span>`:""}</label>`;
-  $("#modal").innerHTML=`<div class="mh"><div class="av">📝</div><div><div style="font-weight:700">Lead &amp; Inquiry form</div><div class="mute small">Choose from the lists – nothing to type except the customer's details. <span style="color:#c0392b">*</span> = required</div></div><button class="x" id="mx">×</button></div>
-   <div class="mb nf">
-    <div class="row" style="gap:10px;margin-bottom:4px"><span class="pill" style="background:var(--brand-soft);color:var(--brand)">Lead Date: ${esc(new Date().toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}))} (automatic)</span></div>
+  const need=!full;   /* without Lead Cases access the case must be sent to someone */
+  return `<div class="row" style="gap:10px;margin:2px 0 4px"><span class="pill" style="background:var(--brand-soft);color:var(--brand)">Lead Date: ${esc(new Date().toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}))} (automatic)</span></div>
     ${lab("Lead Type")}${chips("Lead Type")}
     <div class="cgrid2">
-     <div>${lab("Customer Name")}<input id="nf_CustomerName" value="${esc(f["Customer Name"]||"")}" maxlength="80" style="width:100%" placeholder="Full name" autocomplete="off"></div>
-     <div>${lab("Contact Number")}<input id="nf_ContactNumber" value="${esc(f["Contact Number"]||"")}" inputmode="tel" maxlength="14" style="width:100%" placeholder="10-digit mobile" autocomplete="off"><div id="nf_dup" class="small" style="margin-top:4px"></div></div>
+     <div>${lab("Customer Name")}<input id="nf_CustomerName" value="${esc(f["Customer Name"]||o.name||"")}" maxlength="80" style="width:100%" placeholder="Full name" autocomplete="off"></div>
+     <div>${lab("Contact Number")}<input id="nf_ContactNumber" value="${esc(f["Contact Number"]||o.phone||"")}" inputmode="tel" maxlength="14" style="width:100%" placeholder="10-digit mobile" autocomplete="off" ${o.phone?'readonly style="width:100%;background:#f4f5f7"':""}><div id="nf_dup" class="small" style="margin-top:4px"></div></div>
      <div>${lab("SM Name",true,"– who called the customer")}${sel("SM Name")}</div>
      <div>${lab("Product")}${sel("Product")}</div>
-     ${full?`<div>${lab("Amount Required",true,"(₹)")}<input id="nf_AmountRequired" value="${esc(f["Amount Required"]||"")}" inputmode="numeric" style="width:100%" placeholder="e.g. 500000"><div id="nf_amt" class="small mute" style="margin-top:4px"></div></div>
-     <div>${lab("Lead Source")}${sel("Lead Source")}</div>`:""}
+     ${full?`<div>${lab("Amount Required",!o.inCall,"(₹)")}<input id="nf_AmountRequired" value="${esc(f["Amount Required"]||"")}" inputmode="numeric" style="width:100%" placeholder="e.g. 500000"><div id="nf_amt" class="small mute" style="margin-top:4px"></div></div>
+     <div>${lab("Lead Source",!o.inCall)}${sel("Lead Source")}</div>`:""}
     </div>
     ${lab("Lead Shared by")}${chips("Lead Shared by")}
     ${full?`<details ${f["Connector Name"]||f["Connector Contact No"]?"open":""} style="margin-top:12px"><summary class="small"><b>Connector details</b> <span class="mute">– if a connector gave this lead</span></summary>
      <div class="cgrid3" style="margin-top:6px"><div>${lab("Connector Name",false)}<input id="nf_ConnectorName" value="${esc(f["Connector Name"]||"")}" style="width:100%"></div>
       <div>${lab("Connector Contact No",false)}<input id="nf_ConnectorContactNo" value="${esc(f["Connector Contact No"]||"")}" inputmode="tel" style="width:100%"></div>
       <div>${lab("Connector Location",false)}<input id="nf_ConnectorLocation" value="${esc(f["Connector Location"]||"")}" style="width:100%"></div></div></details>`:""}
-    ${lab("Remarks",false,"– optional")}<textarea id="nf_Remarks" maxlength="300" style="width:100%;min-height:56px" placeholder="e.g. Salaried, wants loan in 2 weeks">${esc(f.Remarks||"")}</textarea>
-    <div class="fubox" style="margin-top:12px;grid-template-columns:1fr"><div>${lab("Send this case to",!full)}<select id="nf_to" style="width:100%"><option value="">${full?"Keep it with me for now – I can transfer it later":"— Choose who will take this case —"}</option>${peopleOptions(people,f.to||"")}</select>
-     <div class="small mute" style="margin-top:6px">${full?"After you send it, you can still see every update on this case, but only the person it's with (or Admin) can change it.":"They fill in the amount, lead source and connector details. You can see every update on this case in <b>My cases</b>."}</div></div></div>
-   </div>
-   <div class="mf"><button class="btn" id="nfClear" style="margin-right:auto">Clear form</button><button class="btn" id="mc">Cancel</button><button class="btn pri" id="nfGo">Submit lead</button></div>`;
-  $("#modal").style.maxWidth="760px";$("#mbg").classList.add("show");
-  const keep=()=>{const o=readNF();view.nf=o};const close=()=>{keep();$("#mbg").classList.remove("show")};$("#mx").onclick=close;$("#mc").onclick=close;
-  $("#nfClear").onclick=()=>{view.nf={};openNewCase()};
+    ${o.inCall?"":`${lab("Remarks",false,"– optional")}<textarea id="nf_Remarks" maxlength="300" style="width:100%;min-height:56px" placeholder="e.g. Salaried, wants loan in 2 weeks">${esc(f.Remarks||"")}</textarea>`}
+    <div class="fubox" style="margin-top:12px;grid-template-columns:1fr"><div>${lab("Send this case to",need,need?"– for further process":"")}<select id="nf_to" style="width:100%"><option value="">${need?"— Choose who will take this case —":"Keep it with me for now – I can transfer it later"}</option>${peopleOptions(people,f.to||"")}</select>
+     <div class="small mute" style="margin-top:6px">${need?"They take the case forward. You can see every update on it in <b>My cases</b>, but you can't change it.":"After you send it, you can still see every update on this case, but only the person it's with (or Admin) can change it."}</div></div></div>`}
+function bindNF(full){
   document.querySelectorAll("[data-nfh] .chip").forEach(b=>b.onclick=()=>{b.parentNode.querySelectorAll(".chip").forEach(x=>x.classList.remove("on"));b.classList.add("on")});
-  const ph=$("#nf_ContactNumber"),dupBox=$("#nf_dup"),amt=$("#nf_AmountRequired")||{value:""},amtBox=$("#nf_amt")||{};
-  const chkPh=()=>{const d=String(ph.value).replace(/\D/g,"").replace(/^(91|0)(?=\d{10}$)/,"");if(d.length<10){dupBox.innerHTML="";return}
+  const ph=$("#nf_ContactNumber"),dupBox=$("#nf_dup"),amt=$("#nf_AmountRequired"),amtBox=$("#nf_amt");
+  const chkPh=()=>{if(!ph)return;const d=String(ph.value).replace(/\D/g,"").replace(/^(91|0)(?=\d{10}$)/,"");if(d.length<10){dupBox.innerHTML="";return}
     if(!/^[6-9]\d{9}$/.test(d)){dupBox.innerHTML='<span style="color:#c0392b">Should be a 10-digit mobile number</span>';return}
     const hit=CASES().filter(c=>String(c["Contact Number"]).replace(/\D/g,"").slice(-10)===d);
     dupBox.innerHTML=hit.length?`<span style="color:#b26a00">⚠ Already a case: ${hit.slice(0,3).map(c=>`<b>${esc(c.code)}</b> (${esc(c.Status)}${holderOf(c)?", with "+esc(holderOf(c)):""})`).join(", ")}</span>`:'<span style="color:var(--green)">✓ Looks good</span>'};
-  const chkAmt=()=>{const n=numOf(amt.value);amtBox.textContent=n?"= "+fmtL(n):""};ph.oninput=chkPh;if(full)amt.oninput=chkAmt;chkPh();chkAmt();
-  $("#nfGo").onclick=async()=>{const o=readNF(),miss=["Lead Type","Customer Name","Contact Number","SM Name","Product","Lead Shared by",...(full?["Amount Required","Lead Source"]:["Send this case to"])].filter(h=>!(h==="Send this case to"?o.to:o[h]));
+  if(ph){ph.oninput=chkPh;chkPh()}
+  if(amt){const chk=()=>{const n=numOf(amt.value);amtBox.textContent=n?"= "+fmtL(n):""};amt.oninput=chk;chk()}}
+// what's missing before the form can be saved (Remarks and connector are optional)
+function nfMissing(o,full,inCall){return["Lead Type","Customer Name","Contact Number","SM Name","Product","Lead Shared by",...(full&&!inCall?["Amount Required","Lead Source"]:[]),...(!full?["Send this case to"]:[])].filter(h=>!(h==="Send this case to"?o.to:o[h]))}
+function nfSummary(o,full,who){const row=(k,v)=>v?`<tr><td class="mute" style="padding:2px 12px 2px 0">${esc(k)}</td><td><b>${esc(v)}</b></td></tr>`:"";
+  return `<table class="small">${row("Customer",o["Customer Name"]+" · "+o["Contact Number"])}${row("Lead Type",o["Lead Type"])}${row("SM Name",o["SM Name"])}${row("Product",o.Product+(full&&numOf(o["Amount Required"])?" · "+fmtL(numOf(o["Amount Required"])):""))}${row("Lead Source",o["Lead Source"])}${row("Lead Shared by",o["Lead Shared by"])}${row("Connector",[o["Connector Name"],o["Connector Contact No"],o["Connector Location"]].filter(Boolean).join(" · "))}</table>
+   <div class="small" style="margin-top:8px">${who?`The case goes to <b>${esc(who)}</b> straight away. You'll still see every update.`:"It stays with you until you transfer it."}</div>`}
+const dupAsk=list=>askOk({title:"This number already has a case",ok:"Save anyway",body:`<ul>${list.map(x=>`<li><b>${esc(x.code)}</b> · ${esc(x.name)} · ${esc(x.status||"")}${x.with?" · with "+esc(x.with):""}${x.date?" · "+esc(x.date):""}</li>`).join("")}</ul><div class="small">Save only if this is a new, separate loan for the customer.</div>`});
+// Lead Cases → New lead case (people with Lead Cases access only; callers get the form by marking a customer Interested)
+function openNewCase(){
+  if(!can("cases"))return toast("Mark the customer Interested in your calling list – the lead form opens there");
+  const f={...(view.nf||{})},people=(S.handTo||[]),full=true;
+  $("#modal").innerHTML=`<div class="mh"><div class="av">📝</div><div><div style="font-weight:700">Lead &amp; Inquiry form</div><div class="mute small">Choose from the lists – nothing to type except the customer's details. <span style="color:#c0392b">*</span> = required</div></div><button class="x" id="mx">×</button></div>
+   <div class="mb nf">${nfHTML(f,full)}</div>
+   <div class="mf"><button class="btn" id="nfClear" style="margin-right:auto">Clear form</button><button class="btn" id="mc">Cancel</button><button class="btn pri" id="nfGo">Submit lead</button></div>`;
+  $("#modal").style.maxWidth="760px";$("#mbg").classList.add("show");
+  const close=()=>{view.nf=readNF();$("#mbg").classList.remove("show")};$("#mx").onclick=close;$("#mc").onclick=close;
+  $("#nfClear").onclick=()=>{view.nf={};openNewCase()};bindNF(full);
+  $("#nfGo").onclick=async()=>{const o=readNF(),miss=nfMissing(o,full,false);
     if(miss.length)return toast("Fill in: "+miss.join(", "));
     const d=o["Contact Number"].replace(/\D/g,"").replace(/^(91|0)(?=\d{10}$)/,"");if(!/^[6-9]\d{9}$/.test(d))return toast("Contact Number should be a 10-digit mobile number");
-    if(full&&!(numOf(o["Amount Required"])>0))return toast("Amount Required should be a number, e.g. 500000");
+    if(!(numOf(o["Amount Required"])>0))return toast("Amount Required should be a number, e.g. 500000");
     const to=o.to,who=to?(people.find(x=>x.id===to)||{}).name:"";
-    const row=(k,v)=>v?`<tr><td class="mute" style="padding:2px 12px 2px 0">${esc(k)}</td><td><b>${esc(v)}</b></td></tr>`:"";
-    if(!await askOk({title:"Submit this lead?",ok:"Yes, submit",body:`<table class="small">${row("Customer",o["Customer Name"]+" · "+o["Contact Number"])}${row("Lead Type",o["Lead Type"])}${row("SM Name",o["SM Name"])}${row("Product",o.Product+(full?" · "+fmtL(numOf(o["Amount Required"])):""))}${row("Lead Source",o["Lead Source"])}${row("Lead Shared by",o["Lead Shared by"])}${row("Connector",[o["Connector Name"],o["Connector Contact No"],o["Connector Location"]].filter(Boolean).join(" · "))}</table>
-      <div class="small" style="margin-top:8px">${who?`It will go to <b>${esc(who)}</b> straight away.`:"It stays with you until you transfer it."}</div>`})){$("#mbg").classList.add("show");return}
+    if(!await askOk({title:"Submit this lead?",ok:"Yes, submit",body:nfSummary(o,full,who)})){$("#mbg").classList.add("show");return}
     $("#mbg").classList.add("show");const b=$("#nfGo");b.disabled=true;b.innerHTML='<span class="spin"></span> Submitting…';
     const fin=()=>{b.disabled=false;b.textContent="Submit lead"};
     let r;showProc("Submitting lead…");try{r=await API().newCase(o,false,to)}catch(e){hideProc();fin();if(e&&e.auth)return showLogin(e.message);return toast("Not saved: "+explain(e).slice(0,140))}hideProc();
-    if(r&&r.duplicate){const go=await askOk({title:"This number already has a case",ok:"Submit anyway",body:`<ul>${r.duplicate.map(x=>`<li><b>${esc(x.code)}</b> · ${esc(x.name)} · ${esc(x.status||"")}${x.with?" · with "+esc(x.with):""}${x.date?" · "+esc(x.date):""}</li>`).join("")}</ul><div class="small">Submit only if this is a new, separate loan for the customer.</div>`});
-      $("#mbg").classList.add("show");if(!go)return fin();
+    if(r&&r.duplicate){const go=await dupAsk(r.duplicate);$("#mbg").classList.add("show");if(!go)return fin();
       if(await write(api=>api.newCase(o,true,to).then(x=>{r=x}),"Lead submitted","Submitting lead…")){view.nf={};$("#mbg").classList.remove("show");toast("Case "+r.code+" created"+(r.to?" and sent to "+r.to:""))}else fin();return}
     if(await write(async()=>{},"Case "+r.code+" created"+(r.to?" and sent to "+r.to:""),"Updating…")){view.nf={};$("#mbg").classList.remove("show")}else fin()};
 }
@@ -1789,6 +1799,7 @@ function readNF(){const v=id=>{const e=$("#nf_"+id);return e?String(e.value).tri
 let M={};
 function openLead(id,fromCall){
   const l=S.leads.find(x=>x.id===id);if(!l)return;M={id,out:null};$("#modal").style.maxWidth="";
+  const withForm=S.srv2&&!caseOf(l.id)&&!!S.handTo&&S.lists&&S.lists["Lead Shared by"],fullF=can("cases");   /* the new server sends the lists the form needs */
   $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(l.name)}</div><div><div style="font-weight:700">${esc(l.name)}</div><div class="num mute small">${esc(l.phone)} · ${esc(l.city)}</div></div><button class="x" id="mx">×</button></div>
   <div class="mb">
    ${fromCall?`<div class="card pad" style="background:var(--green-soft);border-color:#c7e8d2;margin-bottom:6px"><b style="color:var(--green)">📞 Dialing ${esc(l.phone)}…</b><div class="small mute" style="margin-top:3px">Your phone's dialer should open. After the call, record the outcome below.</div></div>`:""}
@@ -1796,6 +1807,7 @@ function openLead(id,fromCall){
    <label class="f">Call outcome</label>
    <div class="outs">${Object.entries(OUTCOMES).map(([k,o])=>`<button class="out" data-out="${k}"><span class="pill ${o.cls}">${o.label}</span></button>`).join("")}</div>
    <div id="fuWrap" style="display:none"><label class="f">Call back on</label><input type="datetime-local" id="fu" style="width:100%"></div>
+   ${withForm?`<div id="lfWrap" class="nf" style="display:none;margin-top:12px;border:1px solid #c9d6f6;background:#f7f9ff;border-radius:12px;padding:12px 14px"><div style="font-weight:700">📝 Lead &amp; Inquiry form <span class="small mute" style="font-weight:400">– the customer is interested, fill this to open their case</span></div>${nfHTML({},can("cases"),{inCall:true,name:l.name,phone:l.phone})}</div>`:""}
    <label class="f">Remark</label><textarea id="rem" placeholder="What did the customer say? e.g. wants quote by Friday, prefers WhatsApp…"></textarea>
    <div class="hist"><b class="small">Call history (${l.logs.length})</b>${l.logs.map(g=>`<div class="hi">${pill(g.outcome)} <span class="mute small">${fmt(g.at)} · ${esc(empName(g.by))}</span><div style="margin-top:4px">${esc(g.remark)||'<span class="mute">No remark</span>'}</div>${g.followUp?`<div class="small" style="color:var(--amber)">Follow-up: ${fmt(g.followUp)}</div>`:""}</div>`).join("")||`<div class="mute small" style="padding:8px 0">No calls yet</div>`}</div>
   </div>
@@ -1810,8 +1822,21 @@ function openLead(id,fromCall){
     if(ok){close();return}ma.value=l.assignedTo||"";ma.disabled=false};
   document.querySelectorAll("[data-out]").forEach(b=>b.onclick=()=>{M.out=b.dataset.out;document.querySelectorAll("[data-out]").forEach(x=>x.classList.toggle("on",x===b));
     $("#fuWrap").style.display=M.out==="cb"?"block":"none";
+    const lf=$("#lfWrap");if(lf){lf.style.display=M.out==="int"?"block":"none";$("#ms").textContent=M.out==="int"?(fullF?"Save call & open case":"Save call & send case"):"Save call log";if(M.out==="int")$("#modal").style.maxWidth="760px"}
     if(M.out==="cb"&&!$("#fu").value){const d=new Date(Date.now()+864e5);$("#fu").value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T11:00`}});
+  if(withForm)bindNF(fullF);
   $("#ms").onclick=async()=>{if(!M.out)return toast("Select a call outcome");
+    if(M.out==="int"&&withForm){const o=readNF(),miss=nfMissing(o,fullF,true);
+      if(miss.length)return toast("Lead form – fill in: "+miss.join(", "));
+      if(fullF&&o["Amount Required"]&&!(numOf(o["Amount Required"])>0))return toast("Amount Required should be a number, e.g. 500000");
+      const who=o.to?((S.handTo||[]).find(x=>x.id===o.to)||{}).name:"";
+      if(!await askOk({title:"Save the call and "+(who?"send":"open")+" the case?",ok:who?"Yes, send case":"Yes, open case",body:nfSummary(o,fullF,who)})){$("#mbg").classList.add("show");return}
+      $("#mbg").classList.add("show");const btn=$("#ms"),lbl=btn.textContent;btn.disabled=true;btn.innerHTML=`<span class="spin"></span> Saving…`;const fin=()=>{btn.disabled=false;btn.textContent=lbl};
+      const rem=$("#rem").value.trim();let r;showProc("Saving call and opening the case…");
+      try{r=await API().logCall(l.id,"int",rem,null,null,o,false)}catch(e){hideProc();fin();if(e&&e.auth)return showLogin(e.message);return toast("Not saved: "+explain(e).slice(0,140))}hideProc();
+      if(r&&r.duplicate){const go=await dupAsk(r.duplicate);$("#mbg").classList.add("show");if(!go)return fin();
+        if(await write(api=>api.logCall(l.id,"int",rem,null,null,o,true).then(x=>{r=x}),"Call saved","Saving call and opening the case…")){close();toast("Call saved · case "+r.code+(r.to?" sent to "+r.to:" opened"))}else fin();return}
+      if(await write(async()=>{},"Call saved · case "+(r&&r.code||"")+(r&&r.to?" sent to "+r.to:" opened"),"Updating…"))close();else fin();return}
     if(M.out==="int"&&!caseOf(l.id)&&S.srv2){const tl=tlOf(l.assignedTo);
       if(!await askOk({title:"Mark as Interested?",ok:"Yes, open case",body:`This opens a lead case for <b>${esc(l.name)}</b>${tl?` and sends it to <b>${esc(tl)}</b>`:" for the Team Lead"} to follow up. After that the telecaller can only view updates.`}))return}
     const btn=$("#ms");btn.disabled=true;btn.innerHTML=`<span class="spin"></span> Saving…`;
