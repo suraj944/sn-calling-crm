@@ -34,11 +34,11 @@ const ROLES = ["Admin", "Manager", "Team Lead", "Sales Manager", "Telecaller Exe
 // ---- Permission levels: each role starts with its defaults; Admin can tick/untick extras per person
 // (saved in Employees column K as e.g. "+reports, -doAssign"). Admin always has everything.
 const PERM_KEYS = ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "reports",
-  "doAssign", "caseEdit", "caseTL", "caseRemove", "empEdit", "pinReset", "sheet", "viewAs", "scopeTeam", "scopeAll"];
+  "doAssign", "caseEdit", "caseTL", "caseRemove", "empEdit", "pinReset", "sheet", "viewAs", "caseTransfer", "scopeTeam", "scopeAll"];
 const TAB_KEYS = PERM_KEYS.slice(0, 10);
 const ROLE_PERMS = {
-  "Manager":   ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "reports", "doAssign", "caseEdit", "caseTL", "empEdit", "pinReset", "scopeAll"],
-  "Team Lead": ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "doAssign", "caseEdit", "pinReset", "scopeTeam"],
+  "Manager":   ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "reports", "doAssign", "caseEdit", "caseTL", "empEdit", "pinReset", "caseTransfer", "scopeAll"],
+  "Team Lead": ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "doAssign", "caseEdit", "pinReset", "caseTransfer", "scopeTeam"],
   "Sales Manager": [],            // own field work page – Admin can add tabs / actions / wider data
   "Telecaller Executive": []      // own calling page – Admin can add tabs / actions / wider data
 };
@@ -125,6 +125,7 @@ function doPost(e) {
         case "saveCase":   can_(me, "caseEdit"); return saveCase_(me, b.c || {});
         case "createCase": can_(me, "caseEdit"); return createCaseFor_(me, b.leadId);
         case "removeCase": can_(me, "caseRemove"); return removeCase_(me, b.code);
+        case "transferCase": can_(me, "caseTransfer"); return transferCase_(me, b.code, b.to, b.note);
         case "setPerms":   need_(me, "Admin"); return setPerms_(me, b.id, b.perms || []);
         default: throw new Error("Unknown action: " + b.action);
       }
@@ -206,6 +207,7 @@ function load_(me) {
     ...meetings_(me, rank_(me.role) <= rank_("Team Lead") || scope_(me) !== "own"),
     cases: (fillCodesSafe_(), cases_(me, emps)),
     ...listsOut_(),
+    transferTo: perms_(me).has("caseTransfer") ? transferTargets_(me, emps).map(x => [x.id, x.name, x.role]) : [],
     serverTime: now_()
   };
 }
@@ -511,6 +513,31 @@ function setPerms_(me, id, list) {
   sh.getRange(e.row, 11).setValues([[diff.join(", ")]]);
   audit_(me.name, me, "Permissions for " + e.name + ": " + (diff.join(", ") || "role default"));
   return { saved: true };
+}
+// Case transfer: to someone at the same or a higher level (Team Lead / Manager) – never to an Admin
+function transferTargets_(me, emps) {
+  return emps.filter(x => x.active && x.id !== me.id && (x.role === "Team Lead" || x.role === "Manager") &&
+    (me.role === "Admin" || rank_(x.role) <= rank_(me.role)));
+}
+function transferCase_(me, code, to, note) {
+  const sh = caseSheet_(), rows = caseRows_(), emps = emps_();
+  const i = rows.findIndex(r => String(r[C_["Unique Lead Code"]]).trim() === String(code || "").trim());
+  if (i < 0) throw new Error("Case " + code + " not found");
+  const row = rows[i].slice();
+  if (!canSeeCase_(me, row, emps, teamFor_(me, emps))) throw new Error("This case isn't in your team");
+  const t = transferTargets_(me, emps).find(x => x.id === to);
+  if (!t) throw new Error("You can only transfer a case to a Team Lead or Manager at your level or above");
+  if (tlMatch_(row[C_["Team Lead"]], t)) throw new Error("This case is already with " + t.name);
+  const from = String(row[C_["Team Lead"]] || "").trim() || "no Team Lead";
+  note = String(note || "").replace(/[<>]/g, "").replace(/^[=+\-@]/, "").replace(/\s+/g, " ").trim().slice(0, 200);
+  const d = Utilities.formatDate(new Date(), "Asia/Kolkata", "d-MM");
+  const line = d + " Transferred from " + from + " to " + t.name + " by " + me.name + (note ? ": " + note : "");
+  const old = String(row[C_["Remarks"]] || "").trim();
+  row[C_["Team Lead"]] = t.name;
+  row[C_["Remarks"]] = (line + (old ? " // " + old : "")).slice(0, 2000);
+  row[C_["Last updated"]] = now_(); row[C_["Updated by"]] = me.name;
+  sh.getRange(i + 2, 1, 1, CASE_COLS).setValues([row]);
+  return { saved: true, to: t.name };
 }
 function removeCase_(me, code) {
   const sh = caseSheet_(), rows = caseRows_();

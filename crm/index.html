@@ -241,7 +241,7 @@ function askOk({title,body="",ok="Yes",danger=false}){return new Promise(res=>{c
   $("#cfmT").textContent=title;$("#cfmB").innerHTML=body;y.textContent=ok;y.className="btn "+(danger?"danger":"pri");
   const done=v=>{bg.classList.remove("show");document.removeEventListener("keydown",key);res(v)};
   const key=e=>{if(e.key==="Escape")done(false)};document.addEventListener("keydown",key);
-  y.onclick=()=>done(true);n.onclick=()=>done(false);bg.onclick=e=>{if(e.target===bg)done(false)};bg.classList.add("show");setTimeout(()=>n.focus(),30)})}
+  y.disabled=false;y.onclick=()=>done(true);n.onclick=()=>done(false);bg.onclick=e=>{if(e.target===bg)done(false)};bg.classList.add("show");setTimeout(()=>n.focus(),30)})}
 const tlOf=eid=>{const e=(S.allEmps||[]).find(x=>x.id===eid);if(!e)return"";return e.role==="Team Lead"?e.name:e.tl?empName(e.tl):""};
 const toast=m=>{const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2800)};
 const rank=r=>{const i=ROLES.indexOf(r);return i<0?99:i};
@@ -258,11 +258,11 @@ const isLead=()=>!ME||rank(ME.role)<=rank("Team Lead")||TAB_KEYS.some(k=>can(k))
 /* ---- Permission levels (same lists as the server). Role defaults + per-person ticks set by Admin. ---- */
 const SCOPE_OPTS=[["own","Only their own","their own contacts, calls & cases"],["team","Their team","everyone under the same Team Lead"],["all","Everyone","the whole company"]];
 const PERM_DEF=[["Tabs they can see",[["dash","Dashboard"],["lead","Leads"],["cases","Lead Cases"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],["team","Employees / My Team"],["logs","Call Logs"],["meet","Field Work"],["reports","Reports & downloads"]]],
-  ["What they can do",[["doAssign","Assign contacts & share out"],["caseEdit","Open & edit lead cases"],["caseTL","Move a case to another Team Lead"],["caseRemove","Remove lead cases"],["empEdit","Add, edit & remove employees"],["pinReset","Reset PINs"],["sheet","Open the Google Sheet"],["viewAs","Open anyone's page (Viewing as)"]]]];
+  ["What they can do",[["doAssign","Assign contacts & share out"],["caseEdit","Open & edit lead cases"],["caseTL","Move a case to another Team Lead"],["caseTransfer","Transfer a case (same / higher level)"],["caseRemove","Remove lead cases"],["empEdit","Add, edit & remove employees"],["pinReset","Reset PINs"],["sheet","Open the Google Sheet"],["viewAs","Open anyone's page (Viewing as)"]]]];
 const PERM_KEYS=[...PERM_DEF.flatMap(g=>g[1].map(x=>x[0])),"scopeTeam","scopeAll"];
 const TAB_KEYS=PERM_DEF[0][1].map(x=>x[0]);
-const ROLE_PERMS={"Manager":["dash","lead","cases","byemp","assign","import","team","logs","meet","reports","doAssign","caseEdit","caseTL","empEdit","pinReset","scopeAll"],
-  "Team Lead":["dash","lead","cases","byemp","assign","import","team","logs","meet","doAssign","caseEdit","pinReset","scopeTeam"],"Sales Manager":[],"Telecaller Executive":[]};
+const ROLE_PERMS={"Manager":["dash","lead","cases","byemp","assign","import","team","logs","meet","reports","doAssign","caseEdit","caseTL","empEdit","pinReset","caseTransfer","scopeAll"],
+  "Team Lead":["dash","lead","cases","byemp","assign","import","team","logs","meet","doAssign","caseEdit","pinReset","caseTransfer","scopeTeam"],"Sales Manager":[],"Telecaller Executive":[]};
 const NOT_EMP=PERM_KEYS.filter(k=>k!=="empEdit");
 const PERM_ALLOWED={"Manager":PERM_KEYS,"Team Lead":NOT_EMP,"Sales Manager":NOT_EMP,"Telecaller Executive":NOT_EMP.filter(k=>k!=="pinReset")};
 const basePerms=r=>ROLE_PERMS[r]||[],allowedPerms=r=>PERM_ALLOWED[r]||PERM_ALLOWED["Telecaller Executive"];
@@ -349,6 +349,7 @@ const Live={
   async saveCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async createCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async removeCase(){throw new Error("Open the website version of the CRM for lead cases")},
+  async transferCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async setPerms(){throw new Error("Open the website version of the CRM to change permissions")},
   async deleteMeeting(){throw new Error("Open the website version of the CRM to delete meetings")}
 };
@@ -369,7 +370,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.srv2=Array.isArray(j.cases);S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu){await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu)})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -383,6 +384,7 @@ const Script={
   async saveCase(c){await this.req("saveCase",{c})},
   async createCase(leadId){await this.req("createCase",{leadId})},
   async removeCase(code){await this.req("removeCase",{code})},
+  async transferCase(code,to,note){await this.req("transferCase",{code,to,note})},
   async setPerms(id,perms){await this.req("setPerms",{id,perms})},
   async deleteMeeting(id){await this.req("deleteMeeting",{id})}
 };
@@ -1363,8 +1365,20 @@ function openCase(code){
     ${canEd?`<label class="f" for="cf_Remarks">Remarks</label><textarea id="cf_Remarks" style="width:100%;min-height:70px">${esc(c.Remarks)}</textarea>`:`<div style="margin-top:10px">${ro("Remarks",esc(c.Remarks))}</div>`}
     <div class="small mute" style="margin-top:8px">Monthly: ${esc(c.Monthly)} · Last update ${c.upd?fmt(c.upd):"—"} by ${esc(c["Updated by"])}</div>
    </div>
-   <div class="mf">${isLead()&&can("caseRemove")?`<button class="btn" id="crm" style="margin-right:auto;color:var(--red)">🗑 Remove case</button>`:""}<button class="btn" id="mc">${canEd?"Cancel":"Close"}</button>${canEd?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
+   <div class="mf">${isLead()&&can("caseRemove")?`<button class="btn" id="crm" style="margin-right:auto;color:var(--red)">🗑 Remove case</button>`:""}${canEd&&can("caseTransfer")&&(S.transferTo||[]).length?`<button class="btn" id="ctr">⇄ Transfer case</button>`:""}<button class="btn" id="mc">${canEd?"Cancel":"Close"}</button>${canEd?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
   $("#modal").style.maxWidth="880px";$("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#mc").onclick=close;
+  const trb=$("#ctr");if(trb)trb.onclick=async()=>{
+    const cur=c["Team Lead"]||"",list=(S.transferTo||[]).filter(x=>normName(x.name)!==normName(cur)),grp=r=>list.filter(x=>x.role===r);
+    const myLevel=ME&&ME.role==="Manager"?"Manager":"Team Lead",lvl=x=>ME&&ME.role!=="Admin"&&x.role===ME.role?"same level":"higher level";
+    if(!list.length)return toast("There's no other Team Lead or Manager to transfer to");
+    const pr=askOk({title:"Transfer case "+c.code+"?",ok:"Yes, transfer",body:`<b>${esc(c["Customer Name"])}</b> · ${esc(c["Contact Number"])}<div class="small mute" style="margin:2px 0 10px">Now with: <b>${esc(cur||"no Team Lead")}</b></div>
+      <label class="f" for="trTo">Transfer to</label><select id="trTo" style="width:100%"><option value="">— Choose a person —</option>
+      ${["Team Lead","Manager"].filter(r=>grp(r).length).map(r=>`<optgroup label="${r==="Manager"?"Managers":"Team Leads"}">${grp(r).map(x=>`<option value="${esc(x.id)}">${esc(x.name)} · ${r}${ME&&ME.role!=="Admin"?" ("+lvl(x)+")":""}</option>`).join("")}</optgroup>`).join("")}</select>
+      <label class="f" for="trNote" style="margin-top:10px">Reason (optional)</label><textarea id="trNote" maxlength="200" style="width:100%;min-height:60px" placeholder="e.g. Customer is in Thane – Amit's area"></textarea>
+      <div class="small mute" style="margin-top:8px">The case moves to their list and a line is added to Remarks. ${ME&&ME.role!=="Admin"?"You may stop seeing it if the telecaller isn't in your team.":""}</div>`});
+    $("#cfmYes").disabled=true;$("#trTo").onchange=()=>$("#cfmYes").disabled=!$("#trTo").value;
+    if(!await pr)return;const to=$("#trTo").value,note=$("#trNote").value.trim(),who=(list.find(x=>x.id===to)||{}).name||"";if(!to)return;
+    const done=btnBusy(trb,"Transferring…");if(await write(api=>api.transferCase(c.code,to,note),"Case "+c.code+" transferred to "+who,"Transferring case "+c.code+" to "+who+"…"))close();else done()};
   const rmb=$("#crm");if(rmb)rmb.onclick=async()=>{
     if(!await askOk({title:"Remove case "+c.code+"?",ok:"Yes, remove",danger:true,body:`<b>${esc(c["Customer Name"])}</b> · ${esc(c["Contact Number"])}<br>The case leaves Lead Cases for everyone. A copy is kept in the <b>Removed Cases</b> tab of the sheet with your name and the time. The contact stays in the Calling List and can get a new case later.`}))return;
     const done=btnBusy(rmb,"Removing…");if(await write(api=>api.removeCase(c.code),"Case "+c.code+" removed","Removing case "+c.code+"…"))close();else done()};
