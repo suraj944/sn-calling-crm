@@ -114,6 +114,11 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .cfm-f{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--line)}
 .perm{display:flex;gap:8px;align-items:center;padding:6px 9px;font-size:13px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
 .perm em{margin-left:auto;font-style:normal;font-size:11px;color:var(--mute)}.perm.off{opacity:.55;cursor:not-allowed}
+/* permissions window: title and buttons stay put, only the list scrolls */
+.pmw{display:flex;flex-direction:column;max-height:92vh}.pmw>.mb{overflow:auto;flex:1;min-height:0}
+.pmf{flex-wrap:wrap;align-items:center}.pmf .sp{flex:1}
+@media(max-width:520px){.pmf .btn{flex:1}.pmf .sp{display:none}#pdef{flex-basis:100%}}
+.pgrid.pgrid3{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:560px){.pgrid.pgrid3{grid-template-columns:1fr}}
 .pgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}@media(max-width:560px){.pgrid{grid-template-columns:1fr}}.pgrp+.pgrp{margin-top:16px}
 .btn.danger{background:var(--red);border-color:var(--red);color:#fff}
 @media(min-width:640px){.modal-bg{align-items:center}}
@@ -1076,12 +1081,13 @@ function accessLabel(e){if(e.role==="Admin")return'<span class="pill" style="bac
   if(n)return `<span class="pill" style="background:#fff4e0;color:#b26a00">Custom · ${n} change${n===1?"":"s"}</span>`;
   return rank(e.role)>rank("Team Lead")?`<span class="mute">${e.role==="Sales Manager"?"Own field work page":"Own calling page"}</span>`:'<span class="mute">Role default</span>'}
 function openPerms(id){const e=emp(id);if(!e||!PERM_ALLOWED[e.role])return;const base=new Set(ROLE_PERMS[e.role]||[]),cur=permsOf(e);
-  const box=(k,l)=>{const allowed=PERM_ALLOWED[e.role].includes(k);return `<label class="perm ${allowed?"":"off"}"><input type="checkbox" data-pk="${k}" ${cur.has(k)?"checked":""} ${allowed?"":"disabled"}> <span>${esc(l)}</span>${!allowed?'<em>Admin / Manager only</em>':base.has(k)?'<em>default</em>':""}</label>`};
-  $("#modal").innerHTML=`<div class="mh"><div><b>Permissions – ${esc(e.name)}</b><div class="small mute">${esc(e.role)} · ticks marked <i>default</i> come with the role</div></div><button class="x" id="mc">✕</button></div>
+  const box=(k,l)=>{const allowed=PERM_ALLOWED[e.role].includes(k);return `<label class="perm ${allowed?"":"off"}"><input type="checkbox" data-pk="${k}" ${cur.has(k)?"checked":""} ${allowed?"":"disabled"}> <span>${esc(l)}</span>${!allowed?`<em>${k==="empEdit"?"Admin / Manager only":"Not for this role"}</em>`:base.has(k)?'<em>default</em>':""}</label>`};
+  $("#modal").style.maxWidth="780px";
+  $("#modal").innerHTML=`<div class="pmw"><div class="mh"><div><b>Permissions – ${esc(e.name)}</b><div class="small mute">${esc(e.role)} · ticks marked <i>default</i> come with the role</div></div><button class="x" id="mc">✕</button></div>
    <div class="mb">${PERM_DEF.map(([g,items])=>`<div class="pgrp"><div class="small" style="font-weight:700;margin-bottom:6px">${g}</div><div class="pgrid">${items.map(([k,l])=>box(k,l)).join("")}</div></div>`).join("")}
-    <div class="pgrp"><div class="small" style="font-weight:700;margin-bottom:6px">Whose data they see</div><div class="pgrid" style="grid-template-columns:repeat(3,minmax(0,1fr))">${SCOPE_OPTS.map(([v,l,d])=>`<label class="perm"><input type="radio" name="pscope" value="${v}" ${scopeOf(cur)===v?"checked":""}> <span><b>${l}</b><div class="small mute">${d}</div></span>${scopeOf(base)===v?"<em>default</em>":""}</label>`).join("")}</div>
+    <div class="pgrp"><div class="small" style="font-weight:700;margin-bottom:6px">Whose data they see</div><div class="pgrid pgrid3">${SCOPE_OPTS.map(([v,l,d])=>`<label class="perm"><input type="radio" name="pscope" value="${v}" ${scopeOf(cur)===v?"checked":""}> <span><b>${l}</b><div class="small mute">${d}</div></span>${scopeOf(base)===v?"<em>default</em>":""}</label>`).join("")}</div>
     ${rank(e.role)>rank("Team Lead")?`<div class="small mute" style="margin-top:10px">Tick any tab above and ${esc(e.name.split(" ")[0])} gets the full CRM layout with those tabs, plus a <b>My ${e.role==="Sales Manager"?"page":"calls"}</b> tab for their usual page.</div>`:""}</div></div>
-   <div class="mf"><button class="btn" id="pdef" style="margin-right:auto">Reset to ${esc(e.role)} default</button><button class="btn" id="mc2">Cancel</button><button class="btn pri" id="psave">Save permissions</button></div>`;
+   <div class="mf pmf"><button class="btn" id="pdef" title="Put back the usual access for a ${esc(e.role)}">↺ Reset to default</button><span class="sp"></span><button class="btn" id="mc2">Cancel</button><button class="btn pri" id="psave">Save permissions</button></div></div>`;
   $("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mc").onclick=close;$("#mc2").onclick=close;
   $("#pdef").onclick=()=>{document.querySelectorAll("[data-pk]").forEach(x=>{if(!x.disabled)x.checked=base.has(x.dataset.pk)});document.querySelectorAll("[name=pscope]").forEach(x=>x.checked=x.value===scopeOf(base))};
   $("#psave").onclick=async()=>{const sc=(document.querySelector("[name=pscope]:checked")||{}).value||"own";
