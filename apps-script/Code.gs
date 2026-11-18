@@ -701,7 +701,7 @@ function transferCase_(me, code, to, note) {
   if (!t) throw new Error(admin ? "You can only transfer a case to a Team Lead or Manager at your level or above" : "Choose someone from the list");
   if (tlMatch_(row[C_["Team Lead"]], t)) throw new Error("This case is already with " + t.name);
   const filler = emps.find(x => x.id === String(row[C_["Telecaller ID"]]).trim());
-  const from = holder || (filler ? filler.name : "no Team Lead");
+  const from = holder || (filler ? filler.name : "Not assigned");
   note = String(note || "").replace(/[<>]/g, "").replace(/^[=+\-@]/, "").replace(/\s+/g, " ").trim().slice(0, 200);
   const d = Utilities.formatDate(new Date(), "Asia/Kolkata", "d-MM");
   const line = d + " Transferred from " + from + " to " + t.name + " by " + me.name + (note ? ": " + note : "");

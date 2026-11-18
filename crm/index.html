@@ -176,7 +176,7 @@ body.working .topbar{opacity:1}
 @keyframes fadein{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.topbar::before,.spin,#refresh.spinning .ri,.boot .bl,.skel div{animation:none}}
 .fub{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap}
-.fub.over{background:#fdecec;color:#c0392b}.fub.today{background:#fff4e0;color:#b26a00}.fub.later{background:#eef0f3;color:#3d4350}.fub.none{color:#8a919c;border:1px dashed #cfd4da}
+.fub.over{background:#fdecec;color:#c0392b}.fub.today{background:#fff4e0;color:#b26a00}.fub.later{background:#eef0f3;color:#3d4350}.fub.na{color:#9a5b00;background:#fff8ec;border:1px dashed #f0c27a}.fub.none{color:#8a919c;border:1px dashed #cfd4da}
 .fubox{background:#f5f8fc;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:4px 0 12px;display:grid;grid-template-columns:1.5fr 1fr;gap:14px}
 .qb{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.qb .btn{padding:3px 9px;font-size:12px}
 .bar{height:6px;background:#eceef2;border-radius:3px;overflow:hidden;margin-top:5px}.bar>i{display:block;height:100%;background:var(--brand);border-radius:3px}
@@ -1413,7 +1413,7 @@ function casesTable(list,{empty="No lead cases yet."}={}){
    ${list.map(c=>`<tr><td class="num" style="white-space:nowrap"><b>${esc(c.code)}</b></td><td class="small num" style="white-space:nowrap">${esc(c["Lead Date"])}</td>
      <td><b>${esc(c["Customer Name"])}</b><div class="small mute num" style="white-space:nowrap">${isLead()?`<a class="lnk" href="${telHref(c["Contact Number"])}">${esc(c["Contact Number"])}</a>`:esc(c["Contact Number"])}</div></td>
      <td class="small">${esc(c.Product)||'<span class="mute">—</span>'}</td><td class="num" style="white-space:nowrap">${inr(c["Amount Required"])||'<span class="mute">—</span>'}</td>
-     <td class="small">${esc(c["Lead Shared by"])}</td><td class="small" style="white-space:nowrap">${esc(c["Team Lead"])||(c["Telecaller ID"]&&!/^L\d/.test(c["Contact ID"]||"")?`<span style="color:var(--amber)" title="Filled by ${esc(empName(c["Telecaller ID"])||"")} – not sent to anyone yet">Not sent yet</span>`:'<span style="color:var(--amber)">No Team Lead</span>')}</td><td class="small">${esc(c["Bank Name"])||'<span class="mute">—</span>'}</td>
+     <td class="small">${esc(c["Lead Shared by"])}</td><td class="small" style="white-space:nowrap">${esc(c["Team Lead"])||NA}</td><td class="small">${esc(c["Bank Name"])||'<span class="mute">—</span>'}</td>
      <td>${casePill(c)}</td><td>${fuBadge(c)}</td><td class="small" style="min-width:200px;max-width:280px">${c.upd?fmt(c.upd):""}<div class="mute clip" title="${esc(c.Remarks)}">${esc(c.Remarks)}</div></td>
      <td><button class="btn sm" data-case="${esc(c.code)}">${canEditCase(c)?"Open":"View"}</button></td></tr>`).join("")||`<tr><td colspan="12"><div class="empty">${empty}</div></td></tr>`}</table></div>`;
 }
@@ -1430,7 +1430,7 @@ function openCase(code){
       return `<div><label class="f" for="${id}">${h}</label><select id="${id}" style="width:100%"><option value="">${h==="Bank Name"?"— Choose bank —":"— Choose —"}</option>${all.map(o=>`<option ${o===v?"selected":""}>${esc(o)}</option>`).join("")}</select></div>`}
     const list=CASE_OPTS[h]||(h==="SM Name"?(S.allEmps||[]).filter(e=>e.role==="Sales Manager"&&e.active).map(e=>e.name):null);
     return `<div><label class="f" for="${id}">${h}</label><input id="${id}" type="${type}" value="${esc(v)}" style="width:100%" ${list?`list="${id}_l"`:""} ${h==="Amount Required"?'inputmode="numeric" placeholder="e.g. 500000"':""}>${list?`<datalist id="${id}_l">${list.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>`:""}</div>`};
-  const tlSel=canEd&&can("caseTL")?`<div><label class="f">Team Lead</label><select id="cf_TL" style="width:100%"><option value="">— None —</option>${(S.allEmps||[]).filter(e=>e.role==="Team Lead"&&e.active).map(e=>`<option value="${esc(e.id)}" ${c.tlId===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select></div>`:ro("With",esc(c["Team Lead"])||(c["Telecaller ID"]?esc(empName(c["Telecaller ID"])||"")+' <span class="small mute" style="font-weight:400">(not sent yet)</span>':""));
+  const tlSel=canEd&&can("caseTL")?`<div><label class="f">Team Lead</label><select id="cf_TL" style="width:100%"><option value="">Not assigned</option>${(S.allEmps||[]).filter(e=>e.role==="Team Lead"&&e.active).map(e=>`<option value="${esc(e.id)}" ${c.tlId===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select></div>`:ro("With",esc(c["Team Lead"])||(c["Telecaller ID"]?esc(empName(c["Telecaller ID"])||"")+' <span class="small mute" style="font-weight:400">(not sent yet)</span>':""));
   $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(c["Customer Name"])}</div><div><div style="font-weight:700">${esc(c["Customer Name"])} · <span class="num">${esc(c.code)}</span></div>
      <div class="num mute small">${esc(c["Contact Number"])} · lead date ${esc(c["Lead Date"])} · shared by ${esc(c["Lead Shared by"])}</div></div><button class="x" id="mx">×</button></div>
    <div class="mb">
@@ -1459,7 +1459,7 @@ function openCase(code){
   const trb=$("#ctr");if(trb)trb.onclick=async()=>{
     const adm=can("caseTransfer")&&(S.transferTo||[]).length>0,cur=c["Team Lead"]||"",list=(adm?S.transferTo:S.handTo||[]).filter(x=>normName(x.name)!==normName(cur));
     if(!list.length)return toast("There's nobody else to transfer to");
-    const pr=askOk({title:"Transfer case "+c.code+"?",ok:"Yes, transfer",body:`<b>${esc(c["Customer Name"])}</b> · ${esc(c["Contact Number"])}<div class="small mute" style="margin:2px 0 10px">Now with: <b>${esc(cur||"no Team Lead")}</b></div>
+    const pr=askOk({title:"Transfer case "+c.code+"?",ok:"Yes, transfer",body:`<b>${esc(c["Customer Name"])}</b> · ${esc(c["Contact Number"])}<div class="small mute" style="margin:2px 0 10px">Now with: <b>${esc(cur||"nobody – not assigned yet")}</b></div>
       <label class="f" for="trTo">Transfer to</label><select id="trTo" style="width:100%"><option value="">— Choose a person —</option>${peopleOptions(list)}</select>
       <label class="f" for="trNote" style="margin-top:10px">Reason (optional)</label><textarea id="trNote" maxlength="200" style="width:100%;min-height:60px" placeholder="e.g. Customer is in Thane – Amit's area"></textarea>
       <div class="small mute" style="margin-top:8px">The case moves to their list and a line is added to Remarks. ${!adm?"<b>After this you can still see every update, but you can't change the case.</b>":ME&&ME.role!=="Admin"?"You may stop seeing it if the telecaller isn't in your team.":""}</div>`});
@@ -1477,7 +1477,7 @@ function openCase(code){
     const willClose=["disb","closed"].includes(stType(o.Status||c.Status));if(willClose)o["Next follow-up"]="";
     const tl=$("#cf_TL");if(tl)o["Team Lead"]=tl.value;
     const ch=Object.keys(o).filter(h=>h!=="code"&&h!=="Team Lead"&&(h==="Next follow-up"?(o[h]||"")!==(c.fu?ymd(c.fu):""):String(o[h])!==String(c[h]||""))).map(h=>[h,h==="Next follow-up"?(c.fu?dShort(c.fu):""):c[h]||"",h==="Next follow-up"&&o[h]?dShort(dayOf(o[h])):o[h]]);
-    if(tl&&tl.value!==c.tlId)ch.push(["Team Lead",c["Team Lead"]||"",empName(tl.value)||"None"]);
+    if(tl&&tl.value!==c.tlId)ch.push(["Team Lead",c["Team Lead"]||"Not assigned",empName(tl.value)||"Not assigned"]);
     if(!ch.length)return toast("Nothing changed");
     const cut=v=>esc(String(v).length>60?String(v).slice(0,60)+"…":v)||'<span class="mute">empty</span>';
     const noFu=!willClose&&!o["Next follow-up"]?`<div class="small" style="margin-top:8px;padding:8px 10px;background:#fff4e0;border-radius:8px;color:#8a5300">⚠ No next follow-up date – this case won't show in anyone's <b>Today</b> list.</div>`:"";
@@ -1529,11 +1529,11 @@ function fuBadge(c){const s=fuState(c);if(s==="done")return'<span class="mute sm
 const FU_F=[["all","All"],["over","Overdue"],["today","Due today"],["week","Next 7 days"],["none","No date set"]];
 const lastLine=c=>String(c.Remarks||"").split(" // ")[0];
 function fuTable(list,{tl=true,empty="Nothing here."}={}){
-  return `<div class="card tw"><table class="ctab"><tr><th style="width:120px">Follow-up</th><th>Customer</th><th>Product · amount</th><th>Status</th><th>Latest remark</th>${tl?"<th>Team Lead</th>":""}<th></th></tr>
+  return `<div class="card tw"><table class="ctab"><tr><th style="width:120px">Follow-up</th><th>Customer</th><th>Product · amount</th><th>Status</th><th>Latest remark</th>${tl?"<th>With</th>":""}<th></th></tr>
    ${list.map(c=>`<tr><td>${fuBadge(c)}</td><td><b>${esc(c["Customer Name"])}</b> <span class="small mute num">${esc(c.code)}</span><div class="small num"><a class="lnk" href="${telHref(c["Contact Number"])}">📞 ${esc(c["Contact Number"])}</a></div></td>
      <td class="small">${esc(c.Product)||'<span class="mute">—</span>'}<div class="num">${inr(c["Amount Required"])}</div></td><td>${casePill(c)}${c["Bank Name"]?`<div class="small mute">${esc(c["Bank Name"])}</div>`:""}</td>
      <td class="small" style="max-width:300px"><div class="clip" title="${esc(c.Remarks)}">${esc(lastLine(c))||'<span class="mute">No remark yet</span>'}</div></td>
-     ${tl?`<td class="small">${esc(c["Team Lead"])||'<span style="color:var(--amber)">No Team Lead</span>'}</td>`:""}<td><button class="btn sm" data-case="${esc(c.code)}">Open</button></td></tr>`).join("")||`<tr><td colspan="7"><div class="empty">${empty}</div></td></tr>`}</table></div>`}
+     ${tl?`<td class="small">${esc(c["Team Lead"])||NA}</td>`:""}<td><button class="btn sm" data-case="${esc(c.code)}">Open</button></td></tr>`).join("")||`<tr><td colspan="7"><div class="empty">${empty}</div></td></tr>`}</table></div>`}
 
 /* ---------- MONTHS, TARGETS & PROGRESS ---------- */
 const MONS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -1573,13 +1573,13 @@ function aToday(){
     <div class="card stat"><span>Callbacks due</span><b>${cbs.length}</b><div class="small mute">calling list, today or earlier</div></div>
     <div class="card stat"><span>No follow-up date</span><b style="color:var(--mute)">${none.length}</b><div class="small mute">active cases nobody will be reminded about</div></div></div>`;
   if(ME&&S.board&&(S.targets||[]).some(r=>r[1]===ME.id&&r[0]===curMon()))h+=progressCard(ME.id,ME.role);
-  if(wide){const tls=[...teamLeads().map(e=>({id:e.id,name:e.name})),{id:"none",name:"No Team Lead"}];
+  if(wide){const tls=[...teamLeads().map(e=>({id:e.id,name:e.name})),{id:"none",name:"Not assigned"}];
     const cnt=(id,s)=>act.filter(c=>fuState(c)===s&&(id==="none"?!c["Team Lead"]:c.tlId===id)).length;
     const rows=tls.map(t=>({...t,o:cnt(t.id,"over"),d:cnt(t.id,"today"),w:cnt(t.id,"week"),n:cnt(t.id,"none")})).filter(r=>r.o+r.d+r.w+r.n);
-    if(rows.length)h+=`<div class="card tw" style="margin-bottom:14px"><table><tr><th>Team Lead</th><th>Overdue</th><th>Due today</th><th>Next 7 days</th><th>No date set</th><th></th></tr>
+    if(rows.length)h+=`<div class="card tw" style="margin-bottom:14px"><table><tr><th>With</th><th>Overdue</th><th>Due today</th><th>Next 7 days</th><th>No date set</th><th></th></tr>
       ${rows.map(r=>`<tr ${tlF===r.id?'style="background:var(--brand-soft)"':""}><td><b>${esc(r.name)}</b></td><td class="num" style="${r.o?"color:#c0392b;font-weight:700":""}">${r.o}</td><td class="num" style="${r.d?"color:var(--amber);font-weight:700":""}">${r.d}</td><td class="num">${r.w}</td><td class="num mute">${r.n}</td>
       <td><button class="btn sm" data-tdtl="${tlF===r.id?"all":esc(r.id)}">${tlF===r.id?"Show all":"Show only"}</button></td></tr>`).join("")}</table></div>`;
-    if(tlF!=="all")h+=`<div class="small" style="margin:-6px 0 12px">Showing <b>${esc(tlF==="none"?"cases without a Team Lead":empName(tlF)+"'s cases")}</b> · <a class="lnk" href="#" data-tdtl="all">show everyone</a></div>`}
+    if(tlF!=="all")h+=`<div class="small" style="margin:-6px 0 12px">Showing <b>${esc(tlF==="none"?"cases not assigned to anyone":empName(tlF)+"'s cases")}</b> · <a class="lnk" href="#" data-tdtl="all">show everyone</a></div>`}
   h+=`<h3 style="margin:6px 0 8px;color:#c0392b">⚠ Overdue (${over.length})</h3>`+fuTable(over,{tl:showTL,empty:"Nothing overdue – well done."});
   h+=`<h3 style="margin:18px 0 8px;color:var(--amber)">📅 Due today (${today.length})</h3>`+fuTable(today,{tl:showTL,empty:"No lead case follow-ups for today."});
   if(myCbs.length)h+=`<h3 style="margin:18px 0 8px">📞 My calling-list callbacks (${myCbs.length})</h3><div class="card">${myCbs.map(l=>leadRow(l)).join("")}</div>`;
@@ -1609,7 +1609,7 @@ function stageOf(c){if(stType(c.Status)==="disb")return 3;const s=String(c.Statu
 const pctS=(a,b)=>b?Math.round(a/b*100)+"%":"—";
 function funnelOf(list){const r={n:list.length,l:0,s:0,d:0,amt:0};list.forEach(c=>{const g=stageOf(c);if(g>=1)r.l++;if(g>=2)r.s++;if(g>=3){r.d++;r.amt+=numOf(c["Amount Required"])}});return r}
 function groupBy(list,key){const m=new Map();list.forEach(c=>{const k=String(key(c)||"").trim()||"Not recorded";if(!m.has(k))m.set(k,[]);m.get(k).push(c)});return[...m.entries()]}
-const DIMS=[["tl","Team Lead",c=>c["Team Lead"]||"No Team Lead"],["shared","Lead shared by",c=>c["Lead Shared by"]],["sm","SM Name",c=>c["SM Name"]],["prod","Product",c=>c.Product],["src","Lead source",c=>c["Lead Source"]],["bank","Bank",c=>c["Bank Name"]||"No bank yet"]];
+const DIMS=[["tl","Team Lead",c=>c["Team Lead"]||"Not assigned"],["shared","Lead shared by",c=>c["Lead Shared by"]],["sm","SM Name",c=>c["SM Name"]],["prod","Product",c=>c.Product],["src","Lead source",c=>c["Lead Source"]],["bank","Bank",c=>c["Bank Name"]||"No bank yet"]];
 const dd=n=>{n=Math.round(n);return n+(n===1?" day":" days")};
 const median=a=>{if(!a.length)return 0;const s=a.slice().sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
 function tatOf(list){return list.filter(c=>stType(c.Status)==="disb"&&c.leadD&&c.disbD).map(c=>({c,d:Math.round((c.disbD-c.leadD)/DAY)})).filter(x=>x.d>=0&&x.d<=1000)}
@@ -1741,6 +1741,7 @@ function printReport(p){
 
 /* ---------- LEAD & INQUIRY FORM (filled by the SM) ---------- */
 const holderOf=c=>String(c["Team Lead"]||"").trim();
+const NA='<span class="fub na" title="Not assigned to anyone yet – open the case and use Transfer to assign it">Not assigned</span>';
 const isMine=c=>!!ME&&String(c["Telecaller ID"]||"").trim()===ME.id;
 const heldByMe=c=>{const h=holderOf(c);return !!ME&&(h?normName(h)===normName(ME.name):isMine(c))};
 // same rule as the server: the person it's with; the SM who filled it until they send it on; editors who see the team / everyone
