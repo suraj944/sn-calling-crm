@@ -54,10 +54,25 @@ function teamOf_(e, emps) {
 }
 // null = can see everyone; otherwise the set of employee IDs this person may see / work with
 function limit_(me, emps) { const sc = scope_(me); return sc === "all" ? null : sc === "team" ? teamOf_(me, emps) : new Set([me.id]); }
+// Designations typed by Admin (e.g. "Operations Executive") work like a Telecaller: own page, then Admin adds access with Permissions
+const basePerms_ = role => ROLE_PERMS[role] || [];
+const allowedPerms_ = role => PERM_ALLOWED[role] || PERM_ALLOWED["Telecaller Executive"];
+const isCustomRole_ = role => ROLES.indexOf(role) < 0;
+function roleOf_(raw) {                       // what's in the sheet → role
+  const v = String(raw || "").trim();
+  if (!v || /^employee$/i.test(v)) return "Telecaller Executive";
+  return ROLES.find(x => x.toLowerCase() === v.toLowerCase()) || v;
+}
+function cleanRole_(raw) {                    // what Admin typed / picked → role to save
+  const v = String(raw || "").replace(/[<>"]/g, "").replace(/^[=+\-@']+/, "").replace(/\s+/g, " ").trim().slice(0, 40);
+  if (!v) return "";
+  if (v.length < 2) throw new Error("Type a designation (at least 2 letters)");
+  return ROLES.find(x => x.toLowerCase() === v.toLowerCase()) || v;
+}
 function perms_(e) {
   if (!e) return new Set();
   if (e.role === "Admin") return new Set(PERM_KEYS);
-  const set = new Set(ROLE_PERMS[e.role] || []), ok = new Set(PERM_ALLOWED[e.role] || []);
+  const set = new Set(basePerms_(e.role)), ok = new Set(allowedPerms_(e.role));
   String(e.permRaw || "").split(/[,\s]+/).forEach(t => { const k = t.slice(1); if (!ok.has(k)) return; if (t[0] === "+") set.add(k); else if (t[0] === "-") set.delete(k); });
   return set;
 }
@@ -248,7 +263,7 @@ function addLeads_(list, me) {
 }
 
 function addEmp_(me, b) {
-  const role = ROLES.includes(b.role) ? b.role : "Telecaller Executive";
+  const role = cleanRole_(b.role) || "Telecaller Executive";
   canManage_(me, role);
   checkName_(b.name);
   checkPhone_(b.phone);
@@ -265,7 +280,7 @@ function updateEmp_(me, b) {
   const e = emps_().find(x => x.id === b.id);
   if (!e) throw new Error("Team member not found");
   canManage_(me, e.role);
-  const role = ROLES.includes(b.role) ? b.role : e.role;
+  const role = b.role ? cleanRole_(b.role) || e.role : e.role;
   canManage_(me, role);
   if (e.id === me.id && role !== me.role) throw new Error("You can't change your own role");
   if (b.name) checkName_(b.name, e.id);
@@ -487,9 +502,9 @@ function createCaseFor_(me, leadId) {                                  // open a
 function setPerms_(me, id, list) {
   const e = emps_().find(x => x.id === id);
   if (!e) throw new Error("Employee not found");
-  if (!PERM_ALLOWED[e.role]) throw new Error(e.role + " permissions can't be changed here");
-  const want = new Set(list.filter(k => PERM_ALLOWED[e.role].indexOf(k) >= 0)), base = new Set(ROLE_PERMS[e.role] || []);
-  const diff = PERM_ALLOWED[e.role].filter(k => want.has(k) !== base.has(k)).map(k => (want.has(k) ? "+" : "-") + k);
+  if (e.role === "Admin") throw new Error("Admin always has full access");
+  const ok = allowedPerms_(e.role), want = new Set(list.filter(k => ok.indexOf(k) >= 0)), base = new Set(basePerms_(e.role));
+  const diff = ok.filter(k => want.has(k) !== base.has(k)).map(k => (want.has(k) ? "+" : "-") + k);
   const sh = sheet_("Employees");
   if (sh.getMaxColumns() < 11) sh.insertColumnsAfter(sh.getMaxColumns(), 11 - sh.getMaxColumns());
   if (!String(sh.getRange(1, 11).getDisplayValues()[0][0]).trim()) sh.getRange(1, 11).setValues([["Permissions (set in CRM)"]]);
@@ -576,7 +591,7 @@ function emps_() {
   const list = sh.getRange(2, 1, n, nc).getDisplayValues().map((r, i) => ({
     id: String(r[0]).trim(), name: String(r[1]).trim(), phone: String(r[2]).trim(),
     active: String(r[3] || "Yes").trim().toLowerCase() !== "no",
-    role: ROLES.find(x => x.toLowerCase() === String(r[4] || "").trim().toLowerCase()) || "Telecaller Executive",
+    role: roleOf_(r[4]),
     pin: String(r[5] || "").trim(), hash: String(r[6] || "").trim(), tlRaw: String(r[9] || "").trim(),
     last: String(r[7] || "").trim(), permRaw: String(r[10] || "").trim(), row: i + 2
   })).filter(x => x.id && x.name);
