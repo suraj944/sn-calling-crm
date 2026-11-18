@@ -245,14 +245,19 @@ let ME=null, SHEET_URL="";              // ME is set only for personal logins (w
 let view={who:"admin",tab:"dash",filter:"all",q:"",sel:new Set(),assignFilter:"all",logEmp:"all",logOut:"all"};
 const emp=id=>S.allEmps.find(e=>e.id===id);
 const empName=id=>id==="ADMIN_LOG"?"Admin":(emp(id)?.name||id||"—");
-const isLead=()=>!ME||rank(ME.role)<=rank("Team Lead");
+/* "Desk" view (tabs): Admin, Manager, Team Lead – or anyone Admin has given at least one tab */
+const isLead=()=>!ME||rank(ME.role)<=rank("Team Lead")||TAB_KEYS.some(k=>can(k));
 /* ---- Permission levels (same lists as the server). Role defaults + per-person ticks set by Admin. ---- */
+const SCOPE_OPTS=[["own","Only their own","their own contacts, calls & cases"],["team","Their team","everyone under the same Team Lead"],["all","Everyone","the whole company"]];
 const PERM_DEF=[["Tabs they can see",[["dash","Dashboard"],["lead","Leads"],["cases","Lead Cases"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],["team","Employees / My Team"],["logs","Call Logs"],["meet","Field Work"],["reports","Reports & downloads"]]],
   ["What they can do",[["doAssign","Assign contacts & share out"],["caseEdit","Open & edit lead cases"],["caseTL","Move a case to another Team Lead"],["caseRemove","Remove lead cases"],["empEdit","Add, edit & remove employees"],["pinReset","Reset PINs"],["sheet","Open the Google Sheet"],["viewAs","Open anyone's page (Viewing as)"]]]];
-const PERM_KEYS=PERM_DEF.flatMap(g=>g[1].map(x=>x[0]));
-const ROLE_PERMS={"Manager":["dash","lead","cases","byemp","assign","import","team","logs","meet","reports","doAssign","caseEdit","caseTL","empEdit","pinReset"],
-  "Team Lead":["dash","lead","cases","byemp","assign","import","team","logs","meet","doAssign","caseEdit","pinReset"]};
-const PERM_ALLOWED={"Manager":PERM_KEYS,"Team Lead":PERM_KEYS.filter(k=>k!=="empEdit")};
+const PERM_KEYS=[...PERM_DEF.flatMap(g=>g[1].map(x=>x[0])),"scopeTeam","scopeAll"];
+const TAB_KEYS=PERM_DEF[0][1].map(x=>x[0]);
+const ROLE_PERMS={"Manager":["dash","lead","cases","byemp","assign","import","team","logs","meet","reports","doAssign","caseEdit","caseTL","empEdit","pinReset","scopeAll"],
+  "Team Lead":["dash","lead","cases","byemp","assign","import","team","logs","meet","doAssign","caseEdit","pinReset","scopeTeam"],"Sales Manager":[],"Telecaller Executive":[]};
+const NOT_EMP=PERM_KEYS.filter(k=>k!=="empEdit");
+const PERM_ALLOWED={"Manager":PERM_KEYS,"Team Lead":NOT_EMP,"Sales Manager":NOT_EMP,"Telecaller Executive":NOT_EMP.filter(k=>k!=="pinReset")};
+const scopeOf=set=>set.has("scopeAll")?"all":set.has("scopeTeam")?"team":"own";
 function permsOf(e){if(!e)return new Set();if(e.role==="Admin")return new Set(PERM_KEYS);const set=new Set(ROLE_PERMS[e.role]||[]),ok=new Set(PERM_ALLOWED[e.role]||[]);
   String(e.permRaw||"").split(/[,\s]+/).forEach(t=>{const k=t.slice(1);if(!ok.has(k))return;if(t[0]==="+")set.add(k);else if(t[0]==="-")set.delete(k)});return set}
 const can=k=>!ME||ME.role==="Admin"||(Array.isArray(ME.perms)?ME.perms.includes(k):permsOf(ME).has(k));
@@ -525,7 +530,7 @@ function render(){
 /* ---------- ADMIN / MANAGER / TEAM LEAD ---------- */
 function renderAdmin(){
   if(!S.srv2&&(view.tab==="cases"||view.tab==="myteam"))view.tab="dash";
-  const tabs=[["dash","Dashboard"],["lead","Leads"],...(S.srv2?[["cases","Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine","My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],["reports","⬇ Reports"]]
+  const tabs=[["dash","Dashboard"],["lead","Leads"],...(S.srv2?[["cases","Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine",ME.role==="Sales Manager"?"My page":"My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],["reports","⬇ Reports"]]
     .filter(([k])=>k==="mine"||can(k==="myteam"?"team":k));   /* tabs this person is allowed to see */
   if(!tabs.length)tabs.push(["mine","My calls"]);
   if(!tabs.some(t=>t[0]===view.tab))view.tab=tabs[0][0];
@@ -534,7 +539,7 @@ function renderAdmin(){
   if(isMgr()&&!isTL()&&TLs.length&&SCOPED_TABS.has(view.tab))h+=`<div class="row" style="margin:-4px 0 12px"><label class="small mute" style="display:flex;gap:8px;align-items:center">Team
       <select id="teamSel"><option value="all">All teams</option>${TLs.map(e=>`<option value="${esc(e.id)}" ${view.team===e.id?"selected":""}>${esc(e.name)}'s team</option>`).join("")}<option value="none" ${view.team==="none"?"selected":""}>No team</option></select></label>
       ${view.team&&view.team!=="all"?`<span class="small mute">Showing only ${esc(teamName(view.team))}${view.team!=="none"?" ("+RAW.allEmps.filter(e=>e.active&&teamOf(e)===view.team).length+" people)":""}</span>`:""}</div>`;
-  else if(isTL())h+=`<div class="small mute" style="margin:-4px 0 12px">Showing your team: ${esc(S.employees.map(e=>e.name).join(", "))}</div>`;
+  else if(isTL()||(ME&&rank(ME.role)>rank("Team Lead")))h+=`<div class="small mute" style="margin:-4px 0 12px">${S.employees.length>1?"Showing your team: "+esc(S.employees.map(e=>e.name).join(", ")):"Showing only your own contacts, calls and cases"}</div>`;
   h+=({dash:aDash,lead:aLeadsTab,cases:aCases,byemp:aByEmp,myteam:aMyTeam,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings})[view.tab]();
   $("#app").innerHTML=h;
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{if(b.dataset.tab==="mine"){view.who=ME.id;view.etab="leads";render();return}view.tab=b.dataset.tab;render()});
@@ -1067,21 +1072,25 @@ function aImport(){
 const roleOpts=sel=>ROLES.filter(r=>canManageRole(r)).map(r=>`<option ${r===sel?"selected":""}>${r}</option>`).join("");
 /* "Access" column: Full / Role default / Custom (n changes) / Own page */
 function accessLabel(e){if(e.role==="Admin")return'<span class="pill" style="background:#e8f0fe;color:var(--brand)">Full access</span>';
-  if(!PERM_ALLOWED[e.role])return'<span class="mute">Own calling page</span>';
-  const n=String(e.permRaw||"").split(/[,\s]+/).filter(t=>/^[+-]/.test(t)&&PERM_ALLOWED[e.role].includes(t.slice(1))).length;
-  return n?`<span class="pill" style="background:#fff4e0;color:#b26a00">Custom · ${n} change${n===1?"":"s"}</span>`:'<span class="mute">Role default</span>'}
+  const n=String(e.permRaw||"").split(/[,\s]+/).filter(t=>/^[+-]/.test(t)&&(PERM_ALLOWED[e.role]||[]).includes(t.slice(1))).length;
+  if(n)return `<span class="pill" style="background:#fff4e0;color:#b26a00">Custom · ${n} change${n===1?"":"s"}</span>`;
+  return rank(e.role)>rank("Team Lead")?`<span class="mute">${e.role==="Sales Manager"?"Own field work page":"Own calling page"}</span>`:'<span class="mute">Role default</span>'}
 function openPerms(id){const e=emp(id);if(!e||!PERM_ALLOWED[e.role])return;const base=new Set(ROLE_PERMS[e.role]||[]),cur=permsOf(e);
   const box=(k,l)=>{const allowed=PERM_ALLOWED[e.role].includes(k);return `<label class="perm ${allowed?"":"off"}"><input type="checkbox" data-pk="${k}" ${cur.has(k)?"checked":""} ${allowed?"":"disabled"}> <span>${esc(l)}</span>${!allowed?'<em>Admin / Manager only</em>':base.has(k)?'<em>default</em>':""}</label>`};
   $("#modal").innerHTML=`<div class="mh"><div><b>Permissions – ${esc(e.name)}</b><div class="small mute">${esc(e.role)} · ticks marked <i>default</i> come with the role</div></div><button class="x" id="mc">✕</button></div>
-   <div class="mb">${PERM_DEF.map(([g,items])=>`<div class="pgrp"><div class="small" style="font-weight:700;margin-bottom:6px">${g}</div><div class="pgrid">${items.map(([k,l])=>box(k,l)).join("")}</div></div>`).join("")}</div>
+   <div class="mb">${PERM_DEF.map(([g,items])=>`<div class="pgrp"><div class="small" style="font-weight:700;margin-bottom:6px">${g}</div><div class="pgrid">${items.map(([k,l])=>box(k,l)).join("")}</div></div>`).join("")}
+    <div class="pgrp"><div class="small" style="font-weight:700;margin-bottom:6px">Whose data they see</div><div class="pgrid" style="grid-template-columns:repeat(3,minmax(0,1fr))">${SCOPE_OPTS.map(([v,l,d])=>`<label class="perm"><input type="radio" name="pscope" value="${v}" ${scopeOf(cur)===v?"checked":""}> <span><b>${l}</b><div class="small mute">${d}</div></span>${scopeOf(base)===v?"<em>default</em>":""}</label>`).join("")}</div>
+    ${rank(e.role)>rank("Team Lead")?`<div class="small mute" style="margin-top:10px">Tick any tab above and ${esc(e.name.split(" ")[0])} gets the full CRM layout with those tabs, plus a <b>My ${e.role==="Sales Manager"?"page":"calls"}</b> tab for their usual page.</div>`:""}</div></div>
    <div class="mf"><button class="btn" id="pdef" style="margin-right:auto">Reset to ${esc(e.role)} default</button><button class="btn" id="mc2">Cancel</button><button class="btn pri" id="psave">Save permissions</button></div>`;
   $("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mc").onclick=close;$("#mc2").onclick=close;
-  $("#pdef").onclick=()=>document.querySelectorAll("[data-pk]").forEach(x=>{if(!x.disabled)x.checked=base.has(x.dataset.pk)});
-  $("#psave").onclick=async()=>{const want=[...document.querySelectorAll("[data-pk]:checked")].map(x=>x.dataset.pk);
-    const name=k=>PERM_DEF.flatMap(g=>g[1]).find(x=>x[0]===k)[1];
-    const on=want.filter(k=>!cur.has(k)),off=[...cur].filter(k=>!want.includes(k)&&PERM_ALLOWED[e.role].includes(k));
-    if(!on.length&&!off.length)return toast("Nothing changed");
-    if(!await askOk({title:"Change "+e.name+"'s permissions?",ok:"Yes, save",body:`<ul>${on.map(k=>`<li>✅ <b>Allow</b>: ${esc(name(k))}</li>`).join("")}${off.map(k=>`<li>⛔ <b>Remove</b>: ${esc(name(k))}</li>`).join("")}</ul><div class="small mute">${esc(e.name.split(" ")[0])} sees the change the next time their CRM refreshes.</div>`}))return;
+  $("#pdef").onclick=()=>{document.querySelectorAll("[data-pk]").forEach(x=>{if(!x.disabled)x.checked=base.has(x.dataset.pk)});document.querySelectorAll("[name=pscope]").forEach(x=>x.checked=x.value===scopeOf(base))};
+  $("#psave").onclick=async()=>{const sc=(document.querySelector("[name=pscope]:checked")||{}).value||"own";
+    const want=[...document.querySelectorAll("[data-pk]:checked")].map(x=>x.dataset.pk).concat(sc==="all"?["scopeAll"]:sc==="team"?["scopeTeam"]:[]);
+    const name=k=>(PERM_DEF.flatMap(g=>g[1]).find(x=>x[0]===k)||[])[1];
+    const on=want.filter(k=>!cur.has(k)&&name(k)),off=[...cur].filter(k=>!want.includes(k)&&PERM_ALLOWED[e.role].includes(k)&&name(k));
+    const scCh=sc!==scopeOf(cur),scName=v=>SCOPE_OPTS.find(x=>x[0]===v)[1];
+    if(!on.length&&!off.length&&!scCh)return toast("Nothing changed");
+    if(!await askOk({title:"Change "+e.name+"'s permissions?",ok:"Yes, save",body:`<ul>${on.map(k=>`<li>✅ <b>Allow</b>: ${esc(name(k))}</li>`).join("")}${off.map(k=>`<li>⛔ <b>Remove</b>: ${esc(name(k))}</li>`).join("")}${scCh?`<li>👁 <b>Data they see</b>: ${scName(scopeOf(cur))} → <b>${scName(sc)}</b></li>`:""}</ul><div class="small mute">${esc(e.name.split(" ")[0])} sees the change the next time their CRM refreshes.</div>`}))return;
     const done=btnBusy($("#psave"),"Saving…");if(await write(api=>api.setPerms(e.id,want),"Permissions saved for "+e.name,"Saving permissions for "+e.name+"…"))close();else done()}}
 function aTeam(){
   let h=can("empEdit")?`<div class="card pad" style="margin-bottom:12px"><h3>Add a team member</h3><div class="row">
@@ -1092,7 +1101,7 @@ function aTeam(){
    <input id="ePin" inputmode="numeric" maxlength="4" placeholder="First PIN (4 digits)" style="flex:1;min-width:140px">
    <button class="btn pri" id="addEmp">Add</button></div>
    <p class="small mute" style="margin:8px 0 0">They log in with this <b>name</b> and PIN (names must be unique), and can change the PIN later. Pick a <b>Team Lead</b> for telecallers – each Team Lead sees and assigns only their own team. Admin and Manager see everyone.</p></div>`:"";
-  if(ME&&ME.role==="Admin")h+=`<div class="small" style="margin:0 0 12px;padding:10px 12px;background:var(--brand-soft);border-radius:10px">🛡 <b>Permissions:</b> each role starts with its usual access. Click <b>Permissions</b> on a Manager or Team Lead to switch tabs and actions on or off for that one person. Admin always has full access.</div>`;
+  if(ME&&ME.role==="Admin")h+=`<div class="small" style="margin:0 0 12px;padding:10px 12px;background:var(--brand-soft);border-radius:10px">🛡 <b>Permissions:</b> each role starts with its usual access. Click <b>Permissions</b> on anyone to switch tabs, actions and whose data they see on or off for that one person. Admin always has full access.</div>`;
   h+=`<div class="card tw"><table><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Role</th><th>Team Lead</th><th>Contacts</th><th>Access</th><th>Login</th><th></th></tr>`;
   h+=S.employees.map(e=>{const m=S.leads.filter(l=>l.assignedTo===e.id),cm=canManageRole(e.role)||(ME&&e.id===ME.id),self=ME&&e.id===ME.id;
     return `<tr><td class="mute">${esc(e.id)}</td><td><b>${esc(e.name)}</b>${self?' <span class="small mute">(you)</span>':""}</td><td class="num">${esc(e.phone)||'<span class="mute">—</span>'}</td><td>${esc(e.role)}</td><td>${e.role==="Team Lead"?'<span class="small mute">leads a team</span>':e.tl?esc(empName(e.tl)):'<span class="mute">—</span>'}</td><td class="num">${m.length}</td><td class="small">${accessLabel(e)}</td>

@@ -34,12 +34,26 @@ const ROLES = ["Admin", "Manager", "Team Lead", "Sales Manager", "Telecaller Exe
 // ---- Permission levels: each role starts with its defaults; Admin can tick/untick extras per person
 // (saved in Employees column K as e.g. "+reports, -doAssign"). Admin always has everything.
 const PERM_KEYS = ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "reports",
-  "doAssign", "caseEdit", "caseTL", "caseRemove", "empEdit", "pinReset", "sheet", "viewAs"];
+  "doAssign", "caseEdit", "caseTL", "caseRemove", "empEdit", "pinReset", "sheet", "viewAs", "scopeTeam", "scopeAll"];
+const TAB_KEYS = PERM_KEYS.slice(0, 10);
 const ROLE_PERMS = {
-  "Manager":   ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "reports", "doAssign", "caseEdit", "caseTL", "empEdit", "pinReset"],
-  "Team Lead": ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "doAssign", "caseEdit", "pinReset"]
+  "Manager":   ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "reports", "doAssign", "caseEdit", "caseTL", "empEdit", "pinReset", "scopeAll"],
+  "Team Lead": ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "doAssign", "caseEdit", "pinReset", "scopeTeam"],
+  "Sales Manager": [],            // own field work page – Admin can add tabs / actions / wider data
+  "Telecaller Executive": []      // own calling page – Admin can add tabs / actions / wider data
 };
-const PERM_ALLOWED = { "Manager": PERM_KEYS, "Team Lead": PERM_KEYS.filter(k => k !== "empEdit") };   // what Admin may tick per role
+const NOT_EMP = PERM_KEYS.filter(k => k !== "empEdit");     // only Managers can be allowed to add / edit / remove employees
+const PERM_ALLOWED = { "Manager": PERM_KEYS, "Team Lead": NOT_EMP, "Sales Manager": NOT_EMP, "Telecaller Executive": NOT_EMP.filter(k => k !== "pinReset") };   // what Admin may tick per role
+// Whose data someone sees: "all", "team" (their Team Lead's team) or "own"
+function scope_(e) { const p = perms_(e); return p.has("scopeAll") ? "all" : p.has("scopeTeam") ? "team" : "own"; }
+function hasDesk_(e) { const p = perms_(e); return rank_(e.role) <= rank_("Team Lead") || TAB_KEYS.some(k => p.has(k)); }
+function teamOf_(e, emps) {
+  if (e.role === "Team Lead") return teamIds_(e, emps);
+  const tl = e.tl && emps.find(x => x.id === e.tl);
+  return tl ? teamIds_(tl, emps) : new Set([e.id]);
+}
+// null = can see everyone; otherwise the set of employee IDs this person may see / work with
+function limit_(me, emps) { const sc = scope_(me); return sc === "all" ? null : sc === "team" ? teamOf_(me, emps) : new Set([me.id]); }
 function perms_(e) {
   if (!e) return new Set();
   if (e.role === "Admin") return new Set(PERM_KEYS);
@@ -84,18 +98,18 @@ function doPost(e) {
     try {
       switch (b.action) {
         case "logCall":   return logCall_(me, b);
-        case "assign":    need_(me, "Team Lead"); can_(me, "doAssign"); if (!b.to) throw new Error("Choose a telecaller"); return assign_(b.ids || [], b.to, me);
-        case "addLeads":  need_(me, "Team Lead"); can_(me, "import"); return addLeads_(b.leads || [], me);
+        case "assign":    can_(me, "doAssign"); if (!b.to) throw new Error("Choose a telecaller"); return assign_(b.ids || [], b.to, me);
+        case "addLeads":  can_(me, "import"); return addLeads_(b.leads || [], me);
         case "addEmp":    need_(me, "Manager"); can_(me, "empEdit"); return addEmp_(me, b);
         case "updateEmp": need_(me, "Manager"); can_(me, "empEdit"); return updateEmp_(me, b);
-        case "resetPin":  need_(me, "Team Lead"); can_(me, "pinReset"); return resetPin_(me, b.id, b.pin);
+        case "resetPin":  can_(me, "pinReset"); return resetPin_(me, b.id, b.pin);
         case "removeEmp": need_(me, "Manager"); can_(me, "empEdit"); return removeEmp_(me, b.id);
         case "changePin": return changePin_(me, b.oldPin, b.newPin);
         case "saveMeeting":   return saveMeeting_(me, b.m || {});
         case "deleteMeeting": need_(me, "Manager"); return deleteMeeting_(b.id);
-        case "saveCase":   need_(me, "Team Lead"); can_(me, "caseEdit"); return saveCase_(me, b.c || {});
-        case "createCase": need_(me, "Team Lead"); can_(me, "caseEdit"); return createCaseFor_(me, b.leadId);
-        case "removeCase": need_(me, "Team Lead"); can_(me, "caseRemove"); return removeCase_(me, b.code);
+        case "saveCase":   can_(me, "caseEdit"); return saveCase_(me, b.c || {});
+        case "createCase": can_(me, "caseEdit"); return createCaseFor_(me, b.leadId);
+        case "removeCase": can_(me, "caseRemove"); return removeCase_(me, b.code);
         case "setPerms":   need_(me, "Admin"); return setPerms_(me, b.id, b.perms || []);
         default: throw new Error("Unknown action: " + b.action);
       }
@@ -161,13 +175,11 @@ function canManage_(me, targetRole) { // Managers can't create/edit Admins or ot
 
 /* ---------------- data ---------------- */
 function load_(me) {
-  const isLead = rank_(me.role) <= rank_("Team Lead");
-  const emps = emps_();
+  const emps = emps_(), isLead = hasDesk_(me), lim = limit_(me, emps);
   let leads = rows_("Leads", 12), logs = rows_("CallLogs", 10), people = isLead ? emps : [me];
-  if (!isLead || me.role === "Team Lead") {           // telecallers: own contacts; Team Leads: their team's contacts
-    const team = !isLead ? new Set([me.id]) : teamIds_(me, emps);
-    if (isLead) people = emps.filter(x => team.has(x.id));
-    leads = leads.filter(r => team.has(String(r[4]).trim()));
+  if (lim) {                                           // own contacts, or their team's – Admin can widen this per person
+    if (isLead) people = emps.filter(x => lim.has(x.id));
+    leads = leads.filter(r => lim.has(String(r[4]).trim()));
     const ids = new Set(leads.map(r => String(r[0]).trim()));
     logs = logs.filter(r => ids.has(String(r[2]).trim()));
   }
@@ -176,7 +188,7 @@ function load_(me) {
     employees: people.map(x => [x.id, x.name, x.phone, x.active ? "Yes" : "No", x.role, x.hash || x.pin ? "set" : "", x.tl || "", isLead ? x.last : "", me.role === "Admin" ? x.permRaw : ""]),
     leads, logs,
     sheetUrl: perms_(me).has("sheet") ? sheetUrlFor_(me) : "",   // Google Sheet link only for people allowed to open it
-    ...meetings_(me, isLead),
+    ...meetings_(me, rank_(me.role) <= rank_("Team Lead") || scope_(me) !== "own"),
     cases: (fillCodesSafe_(), cases_(me, emps)),
     ...listsOut_(),
     serverTime: now_()
@@ -208,7 +220,7 @@ function assign_(ids, to, me) {
   const sh = sheet_("Leads"), n = sh.getLastRow() - 1;
   if (n < 1) return { updated: 0 };
   const idCol = sh.getRange(2, 1, n, 1).getDisplayValues(), asg = sh.getRange(2, 5, n, 1).getValues();
-  const team = me && me.role === "Team Lead" ? teamIds_(me, emps_()) : null;   // Team Leads only move contacts inside their team
+  const team = me ? limit_(me, emps_()) : null;   // people who see only their team (or own) can only move contacts inside it
   if (team && !team.has(to)) throw new Error("You can only assign to people in your team");
   if (to && !emps_().some(x => x.id === to && x.active)) throw new Error("That person isn't an active team member");
   if (to && emps_().some(x => x.id === to && x.role === "Admin")) throw new Error("Cases can't be assigned to an Admin");
@@ -221,8 +233,9 @@ function assign_(ids, to, me) {
 }
 
 function addLeads_(list, me) {
-  if (me && me.role === "Team Lead") {   // Team Leads add contacts straight to their own team
-    const team = teamIds_(me, emps_());
+  const team = me ? limit_(me, emps_()) : null;
+  if (team) {   // people who see only their team (or own) add contacts straight into it
+
     if (list.some(x => x && !team.has(String(x.assignedTo || "")))) throw new Error("Assign the new contacts to someone in your team");
   }
   const sh = sheet_("Leads"); let max = 1000;
@@ -270,9 +283,10 @@ function resetPin_(me, id, pin) {
   const e = emps_().find(x => x.id === id);
   if (!e) throw new Error("Team member not found");
   if (e.id !== me.id) canManage_(me, e.role);
-  if (me.role === "Team Lead") {                    // Team Leads: only for people in their own team
+  const lim = limit_(me, emps_());
+  if (lim) {                    // people who see only their team: only for people in it
     if (e.id === me.id) throw new Error("Use the 🔑 PIN button to change your own PIN");
-    if (!teamIds_(me, emps_()).has(e.id)) throw new Error("You can only reset PINs for your own team");
+    if (!lim.has(e.id)) throw new Error("You can only reset PINs for your own team");
   }
   checkPin_(pin);
   // New PIN goes into the sheet's PIN column (visible to admins); the old PIN stops working right away.
@@ -432,12 +446,15 @@ function caseTL_(emps, assigneeId, me) {
 }
 const tlMatch_ = (val, e) => !!e && (String(val).trim() === e.id || norm_(val) === norm_(e.name));
 function canSeeCase_(me, row, emps, team) {
-  if (rank_(me.role) <= rank_("Manager")) return true;
-  if (me.role === "Team Lead") return tlMatch_(row[C_["Team Lead"]], me) || team.has(String(row[C_["Telecaller ID"]]).trim());
-  return String(row[C_["Telecaller ID"]]).trim() === me.id;            // telecallers: their own cases, view only
+  const sc = scope_(me);
+  if (sc === "all") return true;
+  if (tlMatch_(row[C_["Team Lead"]], me)) return true;                  // cases sent to them as Team Lead
+  const tel = String(row[C_["Telecaller ID"]]).trim();
+  return sc === "team" ? team.has(tel) : tel === me.id;                 // their team's cases / their own cases
 }
+const teamFor_ = (me, emps) => scope_(me) === "team" ? teamOf_(me, emps) : new Set();
 function cases_(me, emps) {
-  const team = me.role === "Team Lead" ? teamIds_(me, emps) : new Set();
+  const team = teamFor_(me, emps);
   return caseRows_().filter(r => r[C_["Unique Lead Code"]] && canSeeCase_(me, r, emps, team));
 }
 function createCase_(me, lc, remark) {
@@ -460,7 +477,8 @@ function createCaseFor_(me, leadId) {                                  // open a
   if (!r) throw new Error("Contact " + leadId + " not found");
   const lc = leads.getRange(r, 1, 1, 12).getDisplayValues()[0];
   if (caseRows_().some(x => String(x[C_["Contact ID"]]).trim() === String(lc[0]).trim())) throw new Error("This customer already has a case");
-  if (me.role === "Team Lead" && !teamIds_(me, emps_()).has(String(lc[4]).trim())) throw new Error("This contact isn't in your team");
+  const lim = limit_(me, emps_());
+  if (lim && !lim.has(String(lc[4]).trim())) throw new Error("This contact isn't in your team");
   return { saved: true, caseCode: createCase_(me, lc, String(lc[7] || "")) };
 }
 // Admin only: take a case out of Lead Cases (e.g. opened by mistake). The row is kept in the "Removed Cases" tab
@@ -484,7 +502,7 @@ function removeCase_(me, code) {
   const i = rows.findIndex(r => String(r[C_["Unique Lead Code"]]).trim() === String(code || "").trim());
   if (i < 0) throw new Error("Case " + code + " not found");
   const emps = emps_();
-  if (!canSeeCase_(me, rows[i], emps, me.role === "Team Lead" ? teamIds_(me, emps) : new Set())) throw new Error("This case isn't in your team");
+  if (!canSeeCase_(me, rows[i], emps, teamFor_(me, emps))) throw new Error("This case isn't in your team");
   const ss = SpreadsheetApp.getActiveSpreadsheet(), nc = sh.getLastColumn();
   const hdr = sh.getRange(1, 1, 1, nc).getDisplayValues()[0], row = sh.getRange(i + 2, 1, 1, nc).getValues()[0];
   let rm = ss.getSheetByName("Removed Cases");
@@ -498,7 +516,7 @@ function saveCase_(me, c) {
   const i = rows.findIndex(r => String(r[C_["Unique Lead Code"]]) === String(c.code || ""));
   if (i < 0) throw new Error("Case " + c.code + " not found");
   const row = rows[i].slice();
-  if (!canSeeCase_(me, row, emps, me.role === "Team Lead" ? teamIds_(me, emps) : new Set())) throw new Error("This case isn't in your team");
+  if (!canSeeCase_(me, row, emps, teamFor_(me, emps))) throw new Error("This case isn't in your team");
   const cl = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "'$&").trim().slice(0, 500);
   const L = lists_();
   CASE_EDIT.forEach(h => { if (c[h] !== undefined) row[C_[h]] = h === "Remarks" ? tidyText_(cl(c[h])) : LIST_COLS.indexOf(h) >= 0 ? pick_(h, cl(c[h]), rows[i][C_[h]], L) : h === "Banker Name" || h === "Connector Name" ? properName_(cl(c[h])) : cl(c[h]); });
