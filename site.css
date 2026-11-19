@@ -199,12 +199,19 @@ footer .cp{margin-left:auto}
 }
 
 /* inner pages */
-.pageHead{background:var(--soft);border-bottom:1px solid #e6e7e3}
-.pageHead .wrap{padding-top:64px;padding-bottom:48px}
-.pageHead h1{font-size:clamp(34px,4.4vw,52px);line-height:1.1;font-weight:700}
-.pageHead p{margin-top:16px;font-size:18px;color:var(--ink2);max-width:680px}
-.crumb{font-size:14px;color:var(--mute);margin-bottom:14px}
-.crumb a{color:var(--mute)}
+.pageHead{background:var(--teal);color:#fff}
+.pageHead .wrap{display:flex;flex-wrap:wrap;gap:40px 64px;align-items:center;justify-content:space-between;padding-top:80px;padding-bottom:72px}
+.phText{flex:1 1 520px;min-width:0;max-width:680px}
+.pageHead h1{font-size:clamp(38px,5vw,60px);line-height:1.08;font-weight:700}
+.pageHead p{margin-top:18px;font-size:19px;color:#d7e0e1;max-width:620px}
+.pageHead .ctas{margin-top:30px}
+.pageHead .phMeta{font-size:15px;margin-top:22px;color:#fff;display:inline-block;border-left:4px solid var(--yel);padding-left:12px}
+.btn.ow{border:1.5px solid #fff;color:#fff;background:transparent}.btn.ow:hover{background:rgba(255,255,255,.08)}
+.pageHead :focus-visible{outline-color:var(--yel)}
+.phFacts{list-style:none;margin:0;padding:0;flex:0 1 380px;min-width:260px;border-top:1px solid rgba(255,255,255,.22)}
+.phFacts li{padding:18px 0;border-bottom:1px solid rgba(255,255,255,.22)}
+.phFacts b{display:block;font:700 28px/1.15 Poppins,sans-serif;color:var(--yel)}
+.phFacts span{display:block;margin-top:4px;color:#d7e0e1;font-size:15px}
 .prose{max-width:760px;padding-top:56px;padding-bottom:88px}
 .prose h2{font-size:24px;margin:40px 0 12px}
 .prose h2:first-child{margin-top:0}
@@ -217,7 +224,7 @@ footer .cp{margin-left:auto}
 .toc b{display:block;margin-bottom:8px}
 .toc ol{margin:0;padding-left:22px;columns:2;column-gap:32px}
 .toc li{font-size:15px;margin:0;padding:3px 0;break-inside:avoid}
-@media (max-width:640px){.toc ol{columns:1}.pageHead .wrap{padding-top:40px;padding-bottom:36px}.prose{padding-top:40px;padding-bottom:64px}}
+@media (max-width:640px){.toc ol{columns:1}.pageHead .wrap{padding-top:48px;padding-bottom:48px}.pageHead p{font-size:17px}.pageHead .ctas .btn{flex:1 1 100%}.prose{padding-top:40px;padding-bottom:64px}}
 .split{display:flex;flex-wrap:wrap;gap:48px;padding-top:72px;padding-bottom:72px}
 .split>div{flex:1 1 380px;min-width:0}
 .split h2{font-size:clamp(26px,3vw,36px);line-height:1.2;margin-bottom:14px}
