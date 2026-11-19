@@ -1311,6 +1311,9 @@ function renderEmp(){
   const ctab=view.ctab||(own?"today":"leads");
   const t0=sod(Date.now()),cbAll=mine.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<t0+DAY).sort((a,b)=>a.followUp-b.followUp);
   const myLeadsP=leadsIn(mine),myLeads=mine.filter(isLeadC);
+  /* Leads tab follows the date chosen above (by lead date) */
+  const intAll=CASES().filter(c=>c["Telecaller ID"]===me.id||(me.role==="Team Lead"&&c.tlId===me.id)),intCases=intAll.filter(c=>inRange(c.leadD||c.at)).sort((a,b)=>(b.leadD||b.at||0)-(a.leadD||a.at||0));
+  const intNoCase=myLeadsP.filter(l=>!caseOf(l.id)),intN=S.srv2?intCases.length+intNoCase.length:myLeadsP.length,intOut=S.srv2?intAll.length-intCases.length:myLeads.length-myLeadsP.length;
   const tlBtn=me.role==="Team Lead"&&isMgr()&&!isTL()&&!own?`<button class="btn sm" id="seeTeam">👥 See ${esc(me.name.split(" ")[0])}'s team view</button>`:"";
   const backBtn=ME&&own&&isLead()&&!canViewAs()?`<button class="btn sm" id="backTeam">← Team overview</button>`:"";
   let h=etabs()+`<div style="margin-bottom:14px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">${backBtn}<div style="flex:1"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>${tlBtn}</div>`;
@@ -1322,7 +1325,7 @@ function renderEmp(){
   <div class="card stat"><span>Converted</span><b style="color:var(--brand)">${oc("conv")}</b><div class="small mute">${oc("cb")} call back later</div></div>
   <div class="card stat"><span>${own?"My calling list":"Calling list"}</span><b>${mine.length}</b><div class="small mute">${mine.filter(l=>l.status==="new").length} not yet called</div></div>
   <div class="card stat"><span>Callbacks due</span><b style="color:var(--amber)">${due.length}</b><div class="small mute">now</div></div></div>`;
-  h+=`<div class="tabs" style="margin-bottom:12px">${[["today",(own?"My day":"Today")+" · "+cbAll.length],["leads",(own?"My calling list":"Calling list")+" · "+mine.length],["int",(own?"My leads":"Leads")+" · "+myLeads.length],["cases",(own?"My cases":"Cases")+" · "+CASES().filter(c=>c["Telecaller ID"]===me.id||normName(c["Team Lead"])===normName(me.name)).length],["calls","Call history · "+calls.length]].map(([k,l])=>`<button class="tab ${ctab===k?"on":""}" data-ctab="${k}">${l}</button>`).join("")}</div>`;
+  h+=`<div class="tabs" style="margin-bottom:12px">${[["today",(own?"My day":"Today")+" · "+cbAll.length],["leads",(own?"My calling list":"Calling list")+" · "+mine.length],["int",(own?"My leads":"Leads")+" · "+intN],["cases",(own?"My cases":"Cases")+" · "+CASES().filter(c=>c["Telecaller ID"]===me.id||normName(c["Team Lead"])===normName(me.name)).length],["calls","Call history · "+calls.length]].map(([k,l])=>`<button class="tab ${ctab===k?"on":""}" data-ctab="${k}">${l}</button>`).join("")}</div>`;
   if(ctab==="today"){
     const od=cbAll.filter(l=>l.followUp<t0),td=cbAll.filter(l=>l.followUp>=t0),fresh=mine.filter(l=>l.status==="new");
     const casesMine=CASES().filter(c=>c["Telecaller ID"]===me.id),moved=casesMine.filter(c=>c.upd&&c.upd>=Date.now()-3*DAY).sort((a,b)=>b.upd-a.upd);
@@ -1342,13 +1345,12 @@ function renderEmp(){
     h+=casesTable(sent,{empty:own?"No cases yet – when a customer is interested, mark the call Interested and fill the lead form.":"No cases yet."});
     if(got.length)h+=`<h3 style="margin:18px 0 8px">Cases sent to ${own?"me":"them"} (${got.length})</h3>`+casesTable(got);
   }else if(ctab==="int"){
-    const list=myLeads.slice().sort((a,b)=>(leadAt(b)||0)-(leadAt(a)||0));
-    const myCases=CASES().filter(c=>c["Telecaller ID"]===me.id||(me.role==="Team Lead"&&c.tlId===me.id)).sort((a,b)=>(b.at||0)-(a.at||0));
-    const noCase=list.filter(l=>!caseOf(l.id));
-    if(!S.srv2){h+=`<div class="small mute" style="margin-bottom:10px">Customers ${own?"you":"they"}'ve marked <b>Interested</b> (or Converted), newest first – all dates.</div>`;
+    const list=myLeadsP.slice().sort((a,b)=>(leadAt(b)||0)-(leadAt(a)||0)),myCases=intCases,noCase=intNoCase;
+    h+=`<div class="small" style="margin-bottom:8px">Showing leads from <b>${esc(rangeLabel())}</b>${intOut?` · <span class="mute">${intOut} more on other dates – pick <b>All time</b> above to see them</span>`:""}</div>`;
+    if(!S.srv2){h+=`<div class="small mute" style="margin-bottom:10px">Customers ${own?"you":"they"}'ve marked <b>Interested</b> (or Converted), newest first.</div>`;
       h+=`<div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No leads yet – customers marked Interested on a call show up here.</div>`}</div>`;}else{
     h+=`<div class="small mute" style="margin-bottom:10px">When ${own?"you mark":"they mark"} a customer <b>Interested</b>, the lead form opens in the call window and the case goes to the person ${own?"you choose":"they choose"} for further process. ${own&&!isLead()?"You can see every update here.":""}</div>`;
-    h+=casesTable(myCases,{empty:"No lead cases yet – mark a customer Interested on a call to hand them to your Team Lead."});
+    h+=casesTable(myCases,{empty:intOut?"No leads on these dates.":"No lead cases yet – mark a customer Interested on a call to open one."});
     if(noCase.length)h+=`<h3 style="margin:18px 0 8px">Interested, no case yet</h3><div class="card">${noCase.map(l=>leadRow(l)).join("")}</div>`;}
   }else if(ctab==="calls"){
     const co=view.cOut||"all";const list=calls.filter(g=>co==="all"||g.outcome===co);
