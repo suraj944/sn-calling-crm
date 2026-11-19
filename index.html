@@ -1,311 +1,271 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SN Financial Services – Every kind of loan, with an advisor who calls you back</title>
-<meta name="description" content="SN Financial Services helps you compare and apply for every kind of loan – personal, business, home, property, car, gold, education and more. Request a callback from an advisor.">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-:root{
-  --ink:#12232A; --teal:#0E3B43; --teal-2:#15535D; --marigold:#F2A900; --marigold-soft:#FFF3D1;
-  --mint:#DCEFE9; --paper:#F6F8F7; --white:#fff; --slate:#56676C; --line:#D9E2E0;
-  --display:"Bricolage Grotesque",system-ui,sans-serif; --body:"Public Sans",system-ui,sans-serif;
-}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
-body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.6}
-a{color:inherit}
-:focus-visible{outline:3px solid var(--marigold);outline-offset:2px;border-radius:4px}
-.wrap{max-width:1160px;margin:0 auto;padding:0 24px}
-h1,h2,h3{font-family:var(--display);line-height:1.08;margin:0;letter-spacing:-.01em}
-h1{font-size:clamp(40px,5.6vw,70px);font-weight:800}
-h2{font-size:clamp(30px,3.6vw,44px);font-weight:700}
-h3{font-size:21px;font-weight:700}
-p{margin:0}
-
-/* header */
-.top{position:sticky;top:0;z-index:20;background:rgba(246,248,247,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-.top .wrap{display:flex;align-items:center;gap:28px;height:68px}
-.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-family:var(--display);font-weight:700;font-size:19px}
-.mark{width:38px;height:38px;border-radius:10px;background:var(--teal);color:var(--marigold);display:grid;place-items:center;font-weight:800;font-size:17px;letter-spacing:-.04em}
-nav.links{display:flex;gap:24px;margin-left:auto}
-nav.links a{text-decoration:none;color:var(--slate);font-weight:500;font-size:15px}
-nav.links a:hover{color:var(--ink)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;padding:13px 22px;font-weight:600;font-size:16px;text-decoration:none;border:2px solid transparent;cursor:pointer;font-family:var(--body)}
-.btn-gold{background:var(--marigold);color:var(--ink)}
-.btn-gold:hover{background:#FFB915}
-.btn-line{border-color:var(--teal);color:var(--teal);background:transparent}
-.btn-line:hover{background:var(--teal);color:#fff}
-.btn-sm{padding:8px 16px;font-size:14px}
-@media(max-width:820px){nav.links{display:none}.top .btn-sm{margin-left:auto}}
-.btn{white-space:nowrap}
-@media(max-width:480px){.brand{font-size:16px;gap:8px;white-space:nowrap}.mark{width:34px;height:34px;font-size:15px}.top .wrap{gap:12px}.top .btn-sm{padding:7px 13px;font-size:13.5px}.hero p.lead{font-size:18px}}
-
-/* hero */
-.hero{padding:72px 0 88px}
-.hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center}
-.hero p.lead{font-size:20px;color:var(--slate);max-width:34ch;margin:24px 0 32px}
-.hero .ctas{display:flex;gap:12px;flex-wrap:wrap}
-.hero .note{margin-top:22px;font-size:14px;color:var(--slate)}
-@media(max-width:900px){.hero .wrap{grid-template-columns:1fr;gap:40px}.hero{padding:48px 0 64px}}
-
-/* EMI calculator: the one loud element */
-.emi{background:var(--teal);color:#EAF4F2;border-radius:28px;padding:30px 30px 26px;box-shadow:0 30px 60px -30px rgba(14,59,67,.55);position:relative;overflow:hidden}
-.emi::after{content:"₹";position:absolute;right:-18px;bottom:-70px;font-family:var(--display);font-weight:800;font-size:260px;line-height:1;color:rgba(242,169,0,.09);pointer-events:none}
-.emi h2{font-size:22px;color:#fff}
-.emi .sub{font-size:14px;color:#A9C6C2;margin-top:4px}
-.fld{margin-top:22px}
-.fld .row{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
-.fld label{font-size:15px;color:#CFE3DF}
-.fld output{font-family:var(--display);font-weight:700;font-size:20px;color:#fff;font-variant-numeric:tabular-nums}
-input[type=range]{width:100%;margin:10px 0 0;accent-color:var(--marigold);height:28px;cursor:pointer}
-.result{margin-top:24px;padding-top:20px;border-top:1px solid rgba(255,255,255,.15);display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;position:relative;z-index:1}
-.result .k{font-size:14px;color:#A9C6C2}
-.result .big{font-family:var(--display);font-weight:800;font-size:46px;color:var(--marigold);line-height:1;font-variant-numeric:tabular-nums;margin-top:4px}
-.result .big small{font-size:18px;color:#CFE3DF;font-weight:600}
-.split{display:flex;gap:20px;font-size:14px;color:#CFE3DF;margin-top:10px;position:relative;z-index:1}
-.split b{color:#fff;font-weight:600}
-.emi .fine{font-size:12.5px;color:#8FB0AB;margin-top:16px;position:relative;z-index:1}
-
-/* services */
-section{padding:88px 0}
-.svc .wrap{display:grid;grid-template-columns:.7fr 1.6fr;gap:56px;align-items:start}
-.svc .intro{position:sticky;top:96px}
-.svc .intro p{color:var(--slate);margin-top:18px;max-width:36ch}
-.svc ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);column-gap:28px;border-top:1px solid var(--line)}
-.svc li{padding:22px 0;border-bottom:1px solid var(--line)}
-.svc li h3{font-size:18.5px}
-.svc li .ic{width:40px;height:40px;border-radius:12px;background:var(--mint);display:grid;place-items:center;margin-bottom:14px}
-.svc li .ic svg{width:24px;height:24px;stroke:var(--teal);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.svc li p{color:var(--slate);font-size:15.5px;margin-top:6px}
-@media(max-width:1000px){.svc .wrap{grid-template-columns:1fr;gap:28px}.svc .intro{position:static}}
-@media(max-width:760px){.svc ul{grid-template-columns:1fr 1fr}}
-@media(max-width:480px){.svc ul{grid-template-columns:1fr}}
-
-/* how it works – a real sequence */
-.how{background:var(--white);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-.how h2{max-width:20ch}
-.steps{list-style:none;margin:48px 0 0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);gap:28px;counter-reset:s;position:relative}
-.steps::before{content:"";position:absolute;top:22px;left:22px;right:12%;height:2px;background:repeating-linear-gradient(90deg,var(--marigold) 0 10px,transparent 10px 18px)}
-.steps li{counter-increment:s;position:relative}
-.steps li::before{content:counter(s);display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--teal);color:var(--marigold);font-family:var(--display);font-weight:800;font-size:20px;margin-bottom:18px;position:relative}
-.steps p{color:var(--slate);font-size:15.5px;margin-top:6px}
-@media(max-width:900px){.steps{grid-template-columns:1fr 1fr}.steps::before{display:none}}
-@media(max-width:560px){.steps{grid-template-columns:1fr}}
-
-/* why */
-.why .wrap{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:start}
-.why dl{margin:0}
-.why dt{font-family:var(--display);font-weight:700;font-size:20px;margin-top:26px}
-.why dt:first-child{margin-top:0}
-.why dd{margin:6px 0 0;color:var(--slate)}
-.quote{background:var(--marigold-soft);border-radius:24px;padding:36px;font-family:var(--display);font-size:clamp(24px,2.6vw,32px);font-weight:600;line-height:1.25;color:var(--teal)}
-.quote span{display:block;font-family:var(--body);font-size:15px;font-weight:500;color:var(--slate);margin-top:18px;line-height:1.5}
-@media(max-width:900px){.why .wrap{grid-template-columns:1fr;gap:36px}}
-
-/* callback */
-.cb{background:var(--teal);color:#EAF4F2}
-.cb .wrap{display:grid;grid-template-columns:.9fr 1.1fr;gap:56px;align-items:start}
-.cb h2{color:#fff}
-.cb .intro p{color:#B9D3CF;margin-top:16px;max-width:38ch}
-.contact{margin-top:32px;display:grid;gap:14px;font-size:16px}
-.contact a{color:#fff;text-decoration:none;font-weight:600}
-.contact a:hover{text-decoration:underline}
-.contact .lbl{display:block;font-size:13.5px;color:#8FB0AB}
-form.card{background:var(--white);color:var(--ink);border-radius:24px;padding:30px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media(max-width:560px){.grid2{grid-template-columns:1fr}}
-form label{display:block;font-size:14.5px;font-weight:600;margin:16px 0 6px}
-form .grid2 label{margin-top:0}
-form input,form select,form textarea{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--paper);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px}
-form input:focus,form select:focus,form textarea:focus{outline:none;border-color:var(--teal-2);box-shadow:0 0 0 3px var(--mint)}
-form textarea{min-height:88px;resize:vertical}
-.consent{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--slate);margin-top:16px}
-.consent input{width:18px;height:18px;margin-top:3px;accent-color:var(--teal)}
-form .btn{width:100%;margin-top:20px}
-.hp{position:absolute;left:-9999px}
-.msg{margin-top:14px;font-size:15px;min-height:1.2em}
-.msg.err{color:#B42318}
-.done{text-align:center;padding:30px 10px}
-.done .tick{width:64px;height:64px;border-radius:50%;background:var(--mint);display:grid;place-items:center;margin:0 auto 18px}
-.done .tick svg{width:30px;height:30px;stroke:var(--teal);stroke-width:2.5;fill:none}
-.done p{color:var(--slate);margin-top:10px}
-@media(max-width:900px){.cb .wrap{grid-template-columns:1fr;gap:36px}}
-
-/* footer */
-footer{background:var(--ink);color:#B4C2C5;padding:48px 0 36px;font-size:14.5px}
-footer .wrap{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:40px}
-footer .brand{color:#fff}
-footer h4{font-family:var(--display);color:#fff;font-size:16px;margin:0 0 12px}
-footer ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
-footer a{text-decoration:none;color:#DCE6E8}
-footer a:hover{color:var(--marigold)}
-footer .disc{grid-column:1/-1;border-top:1px solid rgba(255,255,255,.1);padding-top:22px;font-size:13px;color:#8C9DA1;max-width:none}
-@media(max-width:760px){footer .wrap{grid-template-columns:1fr}}
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-</style>
+<title>SN Financial Services – home, property and business loans in Thane</title>
+<meta name="description" content="SN Financial Services, Thane West. We compare home loans, loan against property, business loans and project funding across banks and NBFCs, and follow your file up until it is disbursed.">
+<meta name="theme-color" content="#17181a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 104'%3E%3Crect x='-21' y='-21' width='42' height='42' rx='13' transform='translate(32 70) rotate(45)' fill='%23FFD93D'/%3E%3Crect x='-21' y='-21' width='42' height='42' rx='3' transform='translate(32 32) rotate(45)' fill='%23FFE352'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="site.css">
 </head>
 <body>
 
-<header class="top"><div class="wrap">
-  <a class="brand" href="#top" aria-label="SN Financial Services – home"><span class="mark">SN</span>SN Financial Services</a>
-  <nav class="links" aria-label="Main">
-    <a href="#services">Loans we offer</a>
-    <a href="#how">How it works</a>
-    <a href="#callback">Contact</a>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="SN Financial Services, home">
+      <svg width="22" height="36" viewBox="0 0 64 104" aria-hidden="true"><rect x="-21" y="-21" width="42" height="42" rx="13" transform="translate(32 70) rotate(45)" fill="#FFD93D"/><rect x="-21" y="-21" width="42" height="42" rx="3" transform="translate(32 32) rotate(45)" fill="#FFE352"/></svg>
+      <span><b>SN Financial</b><small>Services</small></span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#loans">Loans</a><a href="#builders">For builders</a><a href="#lenders">Our lenders</a><a href="#partner">Become a partner</a><a href="about.html">About us</a><a href="#contact">Contact</a>
+    </nav>
+    <a class="btn y" href="#contact">Request a callback</a>
+    <button class="menuBtn" id="menuBtn" type="button" aria-expanded="false" aria-controls="drawer" aria-label="Open menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#17181a" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </div>
+  <nav class="drawer" id="drawer" aria-label="Menu">
+    <a href="#loans">Loans</a><a href="#builders">For builders</a><a href="#lenders">Our lenders</a><a href="#emi">EMI calculator</a><a href="#partner">Become a partner</a><a href="about.html">About us</a><a href="#contact">Contact</a>
   </nav>
-  <a class="btn btn-line btn-sm" href="crm/">Staff login</a>
-</div></header>
+</header>
 
 <main id="top">
-<section class="hero"><div class="wrap">
-  <div>
-    <h1>The right loan, explained over one phone call.</h1>
-    <p class="lead">Personal, business, home, car, gold or education – whatever loan you need, tell us. An SN advisor calls you back, compares offers from banks and NBFCs, and helps you with the paperwork until the money reaches your account.</p>
-    <div class="ctas">
-      <a class="btn btn-gold" href="#callback">Request a callback</a>
-      <a class="btn btn-line" id="callTop" href="#callback">Call us</a>
-    </div>
-    <p class="note">No charges for the call. Your details are used only to contact you about your request.</p>
-  </div>
-
-  <div class="emi" aria-labelledby="emiTitle">
-    <h2 id="emiTitle">What will my EMI be?</h2>
-    <p class="sub">Move the sliders to see your monthly instalment.</p>
-    <div class="fld"><div class="row"><label for="amt">Loan amount</label><output id="amtOut" for="amt"></output></div>
-      <input type="range" id="amt" min="50000" max="5000000" step="10000" value="500000"></div>
-    <div class="fld"><div class="row"><label for="yrs">Tenure</label><output id="yrsOut" for="yrs"></output></div>
-      <input type="range" id="yrs" min="1" max="20" step="1" value="5"></div>
-    <div class="fld"><div class="row"><label for="rate">Interest rate (per year)</label><output id="rateOut" for="rate"></output></div>
-      <input type="range" id="rate" min="7" max="24" step="0.25" value="11"></div>
-    <div class="result">
-      <div><div class="k">Monthly EMI</div><div class="big" id="emiOut" aria-live="polite"></div></div>
-      <a class="btn btn-gold btn-sm" href="#callback" id="emiCta">Get a callback for this loan</a>
-    </div>
-    <div class="split"><span>Total interest <b id="intOut"></b></span><span>Total payable <b id="totOut"></b></span></div>
-    <p class="fine">An estimate only. Your actual rate and EMI depend on the lender and your profile.</p>
-  </div>
-</div></section>
-
-<section class="svc" id="services"><div class="wrap">
-  <div class="intro">
-    <h2>Every kind of loan, one advisor</h2>
-    <p>Salaried, self-employed or running a business – one SN advisor finds the right lender and handles your loan from start to finish.</p>
-    <a class="btn btn-gold" href="#callback" style="margin-top:28px">Ask about a loan</a>
-  </div>
-  <ul>
-    <li><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div><h3>Personal loan</h3><p>For weddings, travel, medical bills or any personal need. No collateral.</p></li>
-    <li><div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/></svg></div><h3>Business loan</h3><p>Funds to start, run or grow a shop, trading firm or small business.</p></li>
-    <li><div class="ic"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10M10 20v-6h4v6"/></svg></div><h3>Home loan</h3><p>Buy a flat or house, build on your plot, or renovate.</p></li>
-    <li><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 21V9l8-5 8 5v12"/><circle cx="12" cy="13" r="3"/><path d="M12 16v5"/></svg></div><h3>Loan against property</h3><p>A larger amount for a longer tenure, against a home or shop you own.</p></li>
-    <li><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></div><h3>Balance transfer & top-up</h3><p>Move an existing loan to a lower rate, and borrow a little more if needed.</p></li>
-    <li><div class="ic"><svg viewBox="0 0 24 24"><path d="M5 16V12l2-5h10l2 5v4"/><path d="M3 16h18v2H3z"/><circle cx="7.5" cy="18.5" r="1.5"/><circle cx="16.5" cy="18.5" r="1.5"/></svg></div><h3>Car loan</h3><p>New or used car, for personal or commercial use.</p></li>
-    <li><div class="ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17l4-7h5l3 7M13 6h3"/></svg></div><h3>Two-wheeler loan</h3><p>Bikes and scooters, with low down payments.</p></li>
-    <li><div class="ic"><svg viewBox="0 0 24 24"><path d="M6 9h12l2 4H4z"/><path d="M4 13l2 6h12l2-6"/></svg></div><h3>Gold loan</h3><p>Quick funds against your gold jewellery, often the same day.</p></li>
-    <li><div class="ic"><svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/></svg></div><h3>Education loan</h3><p>Fees and living costs for studies in India or abroad.</p></li>
-    <li><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 15l4-4 3 3 5-6"/></svg></div><h3>Working capital & MSME</h3><p>Overdraft, cash credit and Mudra-type loans for running costs.</p></li>
-    <li><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></svg></div><h3>Machinery & equipment loan</h3><p>Buy machines, tools or medical equipment and pay in EMIs.</p></li>
-    <li><div class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 3v4h6V3M8 12h8M8 16h5"/></svg></div><h3>Loans for professionals</h3><p>For doctors, CAs, architects and other professionals to set up or expand practice.</p></li>
-  </ul>
-</div></section>
-
-<section class="how" id="how"><div class="wrap">
-  <h2>From request to money in your account</h2>
-  <ol class="steps">
-    <li><h3>Tell us what you need</h3><p>Fill the short form or call us. It takes under a minute.</p></li>
-    <li><h3>An advisor calls you</h3><p>We understand your income, needs and existing loans. No jargon.</p></li>
-    <li><h3>Compare and apply</h3><p>You see the offers that fit you, choose one, and we help collect the documents.</p></li>
-    <li><h3>Get your money</h3><p>We follow up with the lender until the loan is approved and disbursed.</p></li>
-  </ol>
-</div></section>
-
-<section class="why"><div class="wrap">
-  <dl>
-    <dt>A real person on the phone</dt><dd>You speak to the same advisor throughout, not a chatbot or a call-centre queue.</dd>
-    <dt>Several lenders, one conversation</dt><dd>We compare options across banks and NBFCs, so you don't have to apply in five places.</dd>
-    <dt>Clear about costs</dt><dd>Interest, processing fees and charges are explained before you sign anything.</dd>
-    <dt>Help with the paperwork</dt><dd>We tell you exactly which documents are needed and check them before they go to the lender.</dd>
-  </dl>
-  <div class="quote">Most people don't need more loan offers. They need someone to explain which one is right.
-    <span>That's the job of every SN advisor.</span></div>
-</div></section>
-
-<section class="cb" id="callback"><div class="wrap">
-  <div class="intro">
-    <h2>Request a callback</h2>
-    <p>Leave your number and an advisor will call you during working hours, usually the same day.</p>
-    <div class="contact">
-      <div><span class="lbl">Phone</span><a id="cPhone" href="#"></a></div>
-      <div><span class="lbl">Email</span><a id="cEmail" href="#"></a></div>
-      <div><span class="lbl">Office</span><span id="cAddr"></span></div>
-      <div><span class="lbl">Hours</span><span id="cHours"></span></div>
-    </div>
-  </div>
-
-  <form class="card" id="enq" novalidate>
-    <div id="formBody">
-      <div class="grid2">
-        <div><label for="fName">Your name</label><input id="fName" name="name" autocomplete="name" required maxlength="80"></div>
-        <div><label for="fPhone">Mobile number</label><input id="fPhone" name="phone" type="tel" inputmode="numeric" autocomplete="tel-national" placeholder="10-digit mobile" required maxlength="18"></div>
+<section class="hero">
+  <div class="wrap">
+    <div class="txt">
+      <p class="kick">Loan advisory in Thane West, from your first call until the money reaches your account</p>
+      <h1>One call.<br>The right lender for your loan.</h1>
+      <p class="lead">Tell us what you need. We compare home, property and business loans across the banks and NBFCs we work with, collect your documents, log your file in, and follow it up until it is disbursed.</p>
+      <div class="ctas">
+        <a class="btn k" href="#contact">Request a callback</a>
+        <a class="btn o" href="#emi">Work out your EMI</a>
       </div>
-      <div class="grid2" style="margin-top:16px">
-        <div><label for="fCity">City</label><input id="fCity" name="city" autocomplete="address-level2" maxlength="60"></div>
-        <div><label for="fNeed">I'm looking for</label>
-          <select id="fNeed" name="need">
-            <option>Personal loan</option><option>Business loan</option><option>Home loan</option><option>Loan against property</option><option>Balance transfer & top-up</option><option>Car loan</option><option>Two-wheeler loan</option><option>Gold loan</option><option>Education loan</option><option>Working capital & MSME</option><option>Machinery & equipment loan</option><option>Loans for professionals</option><option>Not sure yet</option>
-          </select></div>
-      </div>
-      <label for="fMsg">Anything we should know? <span style="font-weight:400;color:var(--slate)">(optional)</span></label>
-      <textarea id="fMsg" name="msg" maxlength="400" placeholder="e.g. Need ₹5 lakh for 3 years, salaried"></textarea>
-      <input class="hp" tabindex="-1" autocomplete="off" name="website" id="fWeb" aria-hidden="true">
-      <label class="consent"><input type="checkbox" id="fOk" required> <span>I agree to be contacted by SN Financial Services by phone or WhatsApp about this request.</span></label>
-      <button class="btn btn-gold" id="fBtn" type="submit">Request a callback</button>
-      <div class="msg" id="fMsgOut" role="status"></div>
+      <p class="addr">Call <a href="tel:+919833844220">98338 44220</a> or visit us at Unit 161, High Street Mall, Kapurbawdi. Open 11 am to 7 pm.</p>
     </div>
-  </form>
-</div></section>
+    <div class="fileWrap" aria-label="Example of how we track a loan file">
+      <div class="file">
+        <div class="hd"><div><small>Example loan file</small><b>Home loan, ₹45 lakh</b></div><span>Salaried<br>Thane West</span></div>
+        <div class="steps4" aria-label="Progress: call, documents and login done; sanction next">
+          <div><i></i><em>Call</em></div><div><i></i><em>Documents</em></div><div><i></i><em>Login</em></div><div class="off"><i></i><em>Sanction</em></div>
+        </div>
+        <div class="lbl">Lenders we logged this file with</div>
+        <ul>
+          <li>ICICI Bank<span class="pill g">Sanction done</span></li>
+          <li>HDFC Bank<span class="pill b">Login done</span></li>
+          <li>Bank of Baroda<span class="pill n">Compared, not chosen</span></li>
+        </ul>
+        <div class="ft">Your advisor calls you at every step, so you always know where your file stands.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="lenders" id="lenders">
+  <div class="wrap">
+    <div class="lhead">
+      <div>
+        <h2 class="h2">Banks and NBFCs we place files with</h2>
+        <p class="lead">We compare offers across public sector banks, private banks, housing finance companies and NBFCs, and pick the lenders that suit your profile.</p>
+      </div>
+      <div class="lstat"><b id="lenderCount"></b><span>lending partners</span></div>
+    </div>
+    <div class="lgrid" id="lenderGrid"></div>
+  </div>
+</section>
+
+<section id="loans">
+  <div class="wrap sec">
+    <div class="secHead">
+      <h2 class="h2">Loans for homes, families and businesses</h2>
+      <p class="lead">One advisor handles your file from the first call. If one bank says no, we already know which one to try next.</p>
+    </div>
+    <div class="loans">
+      <div><h3>Home loan</h3><p>Buying a flat, a resale home or building your own. We match you to lenders with competitive rates and help you through valuation and legal checks.</p></div>
+      <div><h3>Balance transfer and top-up</h3><p>Paying too much on your current home loan? Move it to a lower rate and take a top-up if you need more.</p></div>
+      <div><h3>Loan against property</h3><p>Flexible funds backed by your home or commercial property, for personal or business needs.</p></div>
+      <div><h3>Business loan</h3><p>Money for expansion, working capital and day-to-day operations, including overdraft limits for traders and professionals.</p></div>
+      <div><h3>Personal loan</h3><p>Quick, low-paperwork loans for travel, education, medical bills or a family occasion.</p></div>
+      <div><h3>Car, education, gold and machinery loans</h3><p>Tell us what you are buying and we will find the lender that funds it best.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="dark" id="builders">
+  <div class="wrap">
+    <div class="l">
+      <p class="tag">For builders and developers</p>
+      <h2 class="h2">Project finance for real-estate developers</h2>
+      <p class="lead">We arrange funding for projects in Thane, Mumbai and beyond, from the first plan to the last unsold flat.</p>
+      <a class="btn y" href="#contact" data-need="Project or construction funding">Talk to us about your project</a>
+    </div>
+    <div class="r">
+      <div class="card"><h3>Funding against unsold inventory</h3><p>Have an occupancy certificate and flats still to sell? Raise funds against that unsold stock to keep your cash flowing, without slowing down sales.</p></div>
+      <div class="card"><h3>Construction funding</h3><p>Finance for residential, commercial and infrastructure projects, released in stages from planning through to completion.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap sec" style="padding-bottom:40px">
+    <h2 class="h2" style="margin-bottom:40px">From your first call to disbursal</h2>
+    <ol class="proc">
+      <li><span class="n">1</span><h3>We call you back</h3><p>An advisor understands your income, the property and the amount you need.</p></li>
+      <li><span class="n">2</span><h3>You share documents</h3><p>You get a checklist for your exact case on WhatsApp, and nothing extra.</p></li>
+      <li><span class="n">3</span><h3>We log in your file</h3><p>With the lenders most likely to approve it, at the best terms we can get.</p></li>
+      <li><span class="n">4</span><h3>Sanction and disbursal</h3><p>We follow up with the bank and keep you updated until the money is in your account.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section id="emi">
+  <div class="wrap" style="padding-top:56px;padding-bottom:88px">
+    <div class="emi">
+      <div class="in">
+        <h2>Work out your EMI</h2>
+        <p class="note">Move the sliders. The rate here is only an example; your actual rate depends on the lender and your profile.</p>
+        <label for="amt"><span>Loan amount</span><span id="amtOut"></span></label>
+        <input id="amt" type="range" min="100000" max="50000000" step="100000" value="3000000">
+        <label for="rate"><span>Interest rate (yearly)</span><span id="rateOut"></span></label>
+        <input id="rate" type="range" min="6" max="20" step="0.05" value="8.5">
+        <label for="yrs"><span>Tenure</span><span id="yrsOut"></span></label>
+        <input id="yrs" type="range" min="1" max="30" step="1" value="20">
+      </div>
+      <div class="out" aria-live="polite">
+        <div class="k">Your monthly EMI</div>
+        <div class="v" id="emiOut"></div>
+        <div class="row"><span>Total interest</span><b id="intOut"></b></div>
+        <div class="row"><span>Total you repay</span><b id="totOut"></b></div>
+        <a class="btn k" href="#contact" id="emiCta">Get the best rate for this loan</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="partner" id="partner">
+  <div class="wrap">
+    <div class="l">
+      <h2 class="h2">Become a loan partner</h2>
+      <p class="lead">Refer customers who need a loan and earn a payout on every rupee disbursed. We do the bank work; you keep your client relationship.</p>
+      <div class="pgrid">
+        <div><h3>Who can join</h3><p>Loan agents, ex-bankers, financial analysts, mutual fund agents, chartered accountants and builders. You must be over 25 and an Indian resident. No degree needed.</p></div>
+        <div><h3>What you get</h3><p>Payouts on the disbursed amount, a wide product range from home loans to credit cards and insurance, and training on loan types and RBI rules.</p></div>
+        <div><h3>How it works</h3><p>Apply here, take a call from our team, meet a manager who explains the process, then sign the partner agreement and start earning.</p></div>
+        <div><h3>Keep ready</h3><p>Your PAN card, and your Aadhaar card, or GST certificate if you are a firm.</p></div>
+      </div>
+    </div>
+    <div class="r" id="pBox">
+      <form class="form" id="pForm" novalidate>
+        <h3>Apply to partner with us</h3>
+        <label class="full">Full name<input id="pName" autocomplete="name" required></label>
+        <label>Mobile number<input id="pPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile" required></label>
+        <label>City<input id="pCity" autocomplete="address-level2" placeholder="e.g. Thane"></label>
+        <label class="full">Email (optional)<input id="pEmail" type="email" autocomplete="email"></label>
+        <label class="full">You are a<select id="pRole"><option>Loan agent</option><option>Ex-banker</option><option>Chartered accountant</option><option>Mutual fund agent</option><option>Financial analyst</option><option>Builder</option><option>Other</option></select></label>
+        <div class="hp" aria-hidden="true"><label>Website<input id="pWeb" tabindex="-1" autocomplete="off"></label></div>
+        <p class="msg" id="pMsg" role="alert"></p>
+        <button class="btn k" id="pBtn" type="submit">Send application</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section class="careers">
+  <div class="wrap">
+    <div style="flex:1 1 520px;min-width:0"><h2>Work with us</h2><p>We are growing our calling and sales team in Thane. Send your CV and the role you want.</p></div>
+    <a class="btn o" href="mailto:sales@snfinancialservices.com?subject=Job%20application">Email your CV</a>
+  </div>
+</section>
+
+<section class="contact" id="contact">
+  <div class="wrap">
+    <div class="l">
+      <h2 class="h2">Request a callback</h2>
+      <p class="lead">Leave your number and an advisor will call you during office hours, 11 am to 7 pm.</p>
+      <div class="info">
+        <div><div class="k">Visit</div><div class="v">Unit 161, 1st Floor, High Street Mall<br>Kapurbawdi, Thane West</div><a href="https://www.google.com/maps/search/?api=1&query=High+Street+Mall+Kapurbawdi+Thane+West" target="_blank" rel="noopener">Get directions</a></div>
+        <div><div class="k">Office hours</div><div class="v" id="cHours"></div></div>
+        <div id="cPhoneRow"><div class="k">Call</div><div class="v"><a id="cPhone"></a></div></div>
+        <div><div class="k">Email</div><div class="v"><a id="cEmail"></a></div></div>
+      </div>
+    </div>
+    <div class="r" id="cbBox">
+      <form class="form" id="enq" novalidate>
+        <label>Your name<input id="fName" autocomplete="name" required></label>
+        <label>Mobile number<input id="fPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile" required></label>
+        <label>Loan you need<select id="fNeed"><option>Home loan</option><option>Balance transfer or top-up</option><option>Loan against property</option><option>Business loan</option><option>Personal loan</option><option>Project or construction funding</option><option>Other</option></select></label>
+        <label>City<input id="fCity" autocomplete="address-level2" placeholder="e.g. Thane"></label>
+        <label class="full">Anything we should know? (optional)<textarea id="fMsg" placeholder="e.g. Need 30 lakh for a flat in Thane, salaried"></textarea></label>
+        <div class="hp" aria-hidden="true"><label>Website<input id="fWeb" tabindex="-1" autocomplete="off"></label></div>
+        <label class="chk full"><input type="checkbox" id="fOk" checked> I agree that SN Financial Services may call or WhatsApp me about this request, as set out in the <a href="privacy.html">privacy policy</a>.</label>
+        <p class="msg" id="fMsgOut" role="alert"></p>
+        <button class="btn y" id="fBtn" type="submit">Request a callback</button>
+      </form>
+    </div>
+  </div>
+</section>
 </main>
 
-<footer><div class="wrap">
-  <div>
-    <a class="brand" href="#top"><span class="mark">SN</span>SN Financial Services</a>
-    <p style="margin-top:14px;max-width:40ch">Every kind of loan, with an advisor who calls you back and stays with you until the money reaches your account.</p>
+<footer>
+  <div class="wrap">
+    <span class="nm">SN Financial Services</span>
+    <a href="#loans">Loans</a><a href="about.html">About us</a><a href="#partner">Become a partner</a><a href="#contact">Contact</a><a href="privacy.html">Privacy policy</a><a href="crm/">Staff login</a>
+    <span class="cp">© <span id="yr"></span> SN Financial Services. All rights reserved.</span>
   </div>
-  <div><h4>Explore</h4><ul><li><a href="#services">Loans we offer</a></li><li><a href="#how">How it works</a></li><li><a href="#callback">Request a callback</a></li></ul></div>
-  <div><h4>For our team</h4><ul><li><a href="crm/">Staff login (Calling CRM)</a></li></ul></div>
-  <p class="disc">SN Financial Services helps customers compare and apply for loans offered by partner banks and NBFCs. Loan approval, interest rates, fees and terms are decided solely by the lender. © <span id="yr"></span> SN Financial Services.</p>
-</div></footer>
+</footer>
+
+<div class="mbar" id="mbar">
+  <a class="btn o" id="mCall" href="#contact">Call us</a>
+  <a class="btn y" href="#contact">Get a callback</a>
+</div>
 
 <script>
 /* ===== Business details – edit these ===== */
 const CONTACT={
-  phone:"+91 98XXX XXXXX",          // shown on the page and used by the "Call us" buttons
-  email:"",                        // e.g. "info@yourdomain.com"
-  address:"Add your office address",
-  hours:"Mon–Sat, 10 am – 7 pm"
+  phone:"+91 98338 44220",                     // when empty, the Call rows are hidden
+  email:"sales@snfinancialservices.com",
+  hours:"Open 11 am to 7 pm"
 };
-// Same Apps Script the CRM uses – enquiries land in the Leads tab as new, unassigned leads.
+const LENDERS=[
+  ["Public sector banks",["State Bank of India","Bank of Baroda","Punjab National Bank","Canara Bank","Union Bank of India","Bank of India","Bank of Maharashtra"]],
+  ["Private and foreign banks",["HDFC Bank","ICICI Bank","Axis Bank","Kotak Mahindra Bank","IDFC First Bank","IndusInd Bank","Yes Bank","Federal Bank","Bandhan Bank","AU Small Finance Bank","DBS Bank","Standard Chartered Bank"]],
+  ["Housing finance companies",["LIC Housing Finance","PNB Housing Finance","Home First Finance","Samman Capital"]],
+  ["NBFCs",["Bajaj Finance","Tata Capital","Aditya Birla Capital","Godrej Capital","L&T Finance","Piramal Finance","Poonawalla Fincorp","Cholamandalam Finance","Shriram Finance","IIFL Finance","InCred Finance","Hero FinCorp","Muthoot Finance","Protium","Lendingkart"]]
+];
+// Same Apps Script the CRM uses – requests land in the Leads tab as new, unassigned leads.
 const API="https://script.google.com/macros/s/AKfycbz9UyLJzPbROL9kSAAmw0R5uG1qQorrEOr24IMOioQVXcIuIBjir9L90cCasmMoGxGn/exec";
 
 const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));
+const telDigits=CONTACT.phone.replace(/[^\d+]/g,"");
 const telOK=/\d{10}/.test(CONTACT.phone.replace(/\D/g,""));
-$("#cPhone").textContent=CONTACT.phone;$("#cPhone").href=telOK?"tel:"+CONTACT.phone.replace(/[^\d+]/g,""):"#callback";
-if(CONTACT.email){$("#cEmail").textContent=CONTACT.email;$("#cEmail").href="mailto:"+CONTACT.email}else{$("#cEmail").replaceWith(Object.assign(document.createElement("span"),{textContent:"Add your email address"}))}
-$("#cAddr").textContent=CONTACT.address;$("#cHours").textContent=CONTACT.hours;
-if(telOK)$("#callTop").href="tel:"+CONTACT.phone.replace(/[^\d+]/g,"");
+if(telOK){$("#cPhone").textContent=CONTACT.phone;$("#cPhone").href="tel:"+telDigits;$("#mCall").href="tel:"+telDigits}
+else{$("#cPhoneRow").remove();$("#mCall").remove()}
+$("#cEmail").textContent=CONTACT.email;$("#cEmail").href="mailto:"+CONTACT.email;
+$("#cHours").textContent=CONTACT.hours;
 $("#yr").textContent=new Date().getFullYear();
+$("#lenderGrid").innerHTML=LENDERS.map(([g,l])=>`<div class="lgroup"><h3>${esc(g)}<span>${l.length} ${l.length===1?"lender":"lenders"}</span></h3><ul>${l.map(n=>"<li>"+esc(n)+"</li>").join("")}</ul></div>`).join("");
+$("#lenderCount").textContent=LENDERS.reduce((a,g)=>a+g[1].length,0);
+
+/* phone menu */
+const mb=$("#menuBtn"),dr=$("#drawer");
+mb.addEventListener("click",()=>{const o=dr.classList.toggle("open");mb.setAttribute("aria-expanded",o);mb.setAttribute("aria-label",o?"Close menu":"Open menu")});
+dr.addEventListener("click",e=>{if(e.target.tagName==="A"){dr.classList.remove("open");mb.setAttribute("aria-expanded","false")}});
+
+/* "Talk to us about your project" pre-selects the loan type */
+document.querySelectorAll("[data-need]").forEach(a=>a.addEventListener("click",()=>{$("#fNeed").value=a.dataset.need;setTimeout(()=>$("#fName").focus({preventScroll:true}),600)}));
 
 /* ===== EMI calculator ===== */
 const inr=n=>"₹"+Math.round(n).toLocaleString("en-IN");
-const short=n=>n>=1e7?"₹"+(n/1e7).toFixed(n%1e7?2:0)+" crore":n>=1e5?"₹"+(n/1e5).toFixed(n%1e5?1:0)+" lakh":inr(n);
+const short=n=>n>=1e7?"₹"+(n/1e7).toFixed(2).replace(/\.?0+$/,"")+" crore":"₹"+(n/1e5).toFixed(1).replace(/\.0$/,"")+" lakh";
 function emi(){
   const P=+$("#amt").value,y=+$("#yrs").value,R=+$("#rate").value,r=R/1200,n=y*12;
   const e=r?P*r*Math.pow(1+r,n)/(Math.pow(1+r,n)-1):P/n;
-  $("#amtOut").textContent=short(P);$("#yrsOut").textContent=y+(y===1?" year":" years");$("#rateOut").textContent=R+"%";
-  $("#emiOut").innerHTML=inr(e)+"<small> /month</small>";$("#intOut").textContent=inr(e*n-P);$("#totOut").textContent=inr(e*n);
+  $("#amtOut").textContent=short(P);$("#yrsOut").textContent=y+(y===1?" year":" years");$("#rateOut").textContent=R.toFixed(2)+"%";
+  $("#emiOut").textContent=inr(e);$("#intOut").textContent=inr(e*n-P);$("#totOut").textContent=inr(e*n);
   return {P,y,R,e};
 }
 ["amt","yrs","rate"].forEach(id=>$("#"+id).addEventListener("input",emi));emi();
@@ -313,24 +273,45 @@ $("#emiCta").addEventListener("click",()=>{const v=emi();
   if(!$("#fMsg").value)$("#fMsg").value=`Need ${short(v.P)} for ${v.y} year${v.y>1?"s":""} (EMI around ${inr(v.e)}/month at ${v.R}%)`;
   setTimeout(()=>$("#fName").focus({preventScroll:true}),600)});
 
-/* ===== Callback form → Google Sheet ===== */
+/* ===== Send to the CRM ===== */
+async function send(body){
+  const r=await fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(Object.assign({action:"enquiry"},body))});
+  const j=await r.json();if(!j.ok)throw new Error(j.error||"Request failed");return j;
+}
+function mobile(v){return v.replace(/\D/g,"").replace(/^(91|0)(?=\d{10}$)/,"")}
+function failMsg(x){return (x.message&&!/fetch|network|json/i.test(x.message)?x.message+". ":"We couldn't send your request. ")+(telOK?"Please try again or call "+CONTACT.phone+".":"Please try again in a minute.")}
+const tick='<div class="tick"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#14532d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></div>';
+
 $("#enq").addEventListener("submit",async e=>{
   e.preventDefault();
   const out=$("#fMsgOut"),btn=$("#fBtn");out.className="msg";out.textContent="";
-  const name=$("#fName").value.trim(),digits=$("#fPhone").value.replace(/\D/g,"").replace(/^(91|0)(?=\d{10}$)/,"");
+  const name=$("#fName").value.trim(),d=mobile($("#fPhone").value);
   const err=(m,el)=>{out.className="msg err";out.textContent=m;el&&el.focus()};
   if(name.length<2)return err("Enter your name so the advisor knows who to ask for.",$("#fName"));
-  if(!/^[6-9]\d{9}$/.test(digits))return err("Enter a 10-digit Indian mobile number, e.g. 98765 43210.",$("#fPhone"));
+  if(!/^[6-9]\d{9}$/.test(d))return err("Enter a 10-digit Indian mobile number, e.g. 98765 43210.",$("#fPhone"));
   if(!$("#fOk").checked)return err("Tick the box to let us call you about this request.",$("#fOk"));
   btn.disabled=true;btn.textContent="Sending…";
   try{
-    const r=await fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"enquiry",
-      name,phone:digits,city:$("#fCity").value.trim(),need:$("#fNeed").value,msg:$("#fMsg").value.trim(),website:$("#fWeb").value})});
-    const j=await r.json();if(!j.ok)throw new Error(j.error||"Request failed");
-    $("#formBody").innerHTML=`<div class="done"><div class="tick"><svg viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></svg></div>
-      <h3>Callback requested</h3><p>Thanks, ${name.split(" ")[0].replace(/[<>&"]/g,"")}. An advisor will call you on ${digits.slice(0,5)} ${digits.slice(5)} during working hours.</p></div>`;
-  }catch(x){btn.disabled=false;btn.textContent="Request a callback";
-    err((x.message&&!/fetch|network/i.test(x.message)?x.message+". ":"We couldn't send your request. ")+(telOK?"Please try again or call "+CONTACT.phone+".":"Please try again in a minute."))}
+    await send({name,phone:d,city:$("#fCity").value.trim(),need:$("#fNeed").value,msg:$("#fMsg").value.trim(),website:$("#fWeb").value});
+    $("#cbBox").innerHTML=`<div class="done" role="status" tabindex="-1">${tick}<h3>Callback requested</h3><p>Thanks, ${esc(name.split(" ")[0])}. An advisor will call you on ${d.slice(0,5)} ${d.slice(5)} during office hours, 11 am to 7 pm.</p></div>`;
+    $("#cbBox .done").focus();
+  }catch(x){btn.disabled=false;btn.textContent="Request a callback";err(failMsg(x))}
+});
+
+$("#pForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const out=$("#pMsg"),btn=$("#pBtn");out.className="msg";out.textContent="";
+  const name=$("#pName").value.trim(),d=mobile($("#pPhone").value),em=$("#pEmail").value.trim();
+  const err=(m,el)=>{out.className="msg err";out.textContent=m;el&&el.focus()};
+  if(name.length<2)return err("Enter your full name.",$("#pName"));
+  if(!/^[6-9]\d{9}$/.test(d))return err("Enter a 10-digit Indian mobile number, e.g. 98765 43210.",$("#pPhone"));
+  if(em&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em))return err("Check the email address, or leave it empty.",$("#pEmail"));
+  btn.disabled=true;btn.textContent="Sending…";
+  try{
+    await send({name,phone:d,city:$("#pCity").value.trim(),need:"Partner application",msg:"Role: "+$("#pRole").value+(em?", email: "+em:""),website:$("#pWeb").value});
+    $("#pBox").innerHTML=`<div class="done" role="status" tabindex="-1">${tick}<h3>Thanks, we have your application</h3><p>Our partner team will call you on ${d.slice(0,5)} ${d.slice(5)} soon.</p></div>`;
+    $("#pBox .done").focus();
+  }catch(x){btn.disabled=false;btn.textContent="Send application";err(failMsg(x))}
 });
 </script>
 </body>
