@@ -188,6 +188,7 @@ h2.ph{font-size:17px;margin:26px 0 8px;padding-top:14px;border-top:1px solid var
 table.lb td,table.lb th{vertical-align:top}table.tg td{padding:6px 8px}
 details>summary{cursor:pointer;list-style-position:outside}
 #printArea{display:none}
+@media(max-width:640px){svg.chart .ax{font-size:20px}svg.chart .val{font-size:22px}}   /* the chart shrinks on phones – keep its text readable */
 ol.tl{list-style:none;margin:6px 0 0;padding:0 0 0 14px;border-left:2px solid var(--line)}ol.tl li{position:relative;padding:4px 0 8px 10px;font-size:13px}ol.tl li:before{content:"";position:absolute;left:-20px;top:9px;width:9px;height:9px;border-radius:50%;background:var(--brand)}ol.tl li+li:before{background:#c5ccd8}
 .lf{display:grid;gap:12px}
 .lf-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:2px 2px 0}
@@ -811,15 +812,20 @@ function dayBuckets(logs){
 function columnChart(buckets,unit){
   if(!buckets.length)return "";
   const W=640,H=200,pl=34,pr=8,pt=14,pb=26,max=Math.max(1,...buckets.map(b=>b.n));
-  const nice=max<=5?5:max<=10?10:Math.ceil(max/5)*5;const iw=W-pl-pr,ih=H-pt-pb,bw=iw/buckets.length,gap=Math.min(6,bw*.25);
-  const y=v=>pt+ih-(v/nice)*ih;const every=Math.ceil(buckets.length/8);
+  const nice=max<=5?5:max<=10?10:max<=50?Math.ceil(max/10)*10:Math.ceil(max/50)*50;   /* round scale, so the middle line is a whole number */const iw=W-pl-pr,ih=H-pt-pb,bw=iw/buckets.length,gap=Math.min(6,bw*.25);
+  const narrow=window.innerWidth<640;   /* phones: bigger text (CSS), so fewer date labels */
+  const y=v=>pt+ih-(v/nice)*ih;const every=Math.ceil(buckets.length/(narrow?4:8));
+  /* date labels: every Nth bar plus the last one – drop the one before the last if they would touch */
+  const lab=new Set();for(let i=0;i<buckets.length;i+=every)lab.add(i);const last=buckets.length-1;
+  if(!lab.has(last)){const prev=Math.floor(last/every)*every;if(last-prev<every&&prev!==0)lab.delete(prev);lab.add(last)}
+  const edge=narrow?36:20,lx=i=>Math.min(Math.max(pl+i*bw+bw/2,pl+edge),W-pr-edge);
   let g=`<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="Calls per ${unit}">`;
   [0,.5,1].forEach(f=>{const v=Math.round(nice*f);g+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" class="grid"/><text x="${pl-6}" y="${y(v)+4}" class="ax" text-anchor="end">${v}</text>`});
   const peak=buckets.reduce((m,b,i)=>b.n>buckets[m].n?i:m,0);
   buckets.forEach((b,i)=>{const x=pl+i*bw+gap/2,w=Math.max(2,bw-gap),h=ih-(y(b.n)-pt);
     if(b.n)g+=`<path d="M${x},${pt+ih} v${-(h-Math.min(4,w/2,h))} q0,${-Math.min(4,w/2,h)} ${Math.min(4,w/2)},${-Math.min(4,w/2,h)} h${w-2*Math.min(4,w/2)} q${Math.min(4,w/2)},0 ${Math.min(4,w/2)},${Math.min(4,w/2,h)} v${h-Math.min(4,w/2,h)} z" class="bar-m"/>`;
     g+=`<rect x="${pl+i*bw}" y="${pt}" width="${bw}" height="${ih}" fill="transparent" data-tip="${esc(b.label)}: ${b.n} call${b.n===1?"":"s"}"/>`;
-    if(i%every===0||i===buckets.length-1)g+=`<text x="${pl+i*bw+bw/2}" y="${H-8}" class="ax" text-anchor="middle">${esc(b.label)}</text>`;
+    if(lab.has(i))g+=`<text x="${lx(i)}" y="${H-8}" class="ax" text-anchor="middle">${esc(b.label)}</text>`;
     if(i===peak&&b.n)g+=`<text x="${pl+i*bw+bw/2}" y="${y(b.n)-5}" class="val" text-anchor="middle">${b.n}</text>`});
   return g+`</svg>`;
 }
