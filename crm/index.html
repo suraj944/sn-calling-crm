@@ -12,6 +12,17 @@
 body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
 button,input,select,textarea{font:inherit;color:inherit}
 header{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.hmenu{display:contents}#menuBtn,.lg-short{display:none}
+@media(max-width:640px){   /* phones: one compact row; the rest sits in the ☰ menu */
+ .hwrap{padding:8px 12px;gap:8px;flex-wrap:nowrap;position:relative}.logo{font-size:15px}.lg-full{display:none}.lg-short{display:inline}
+ #syncTxt{display:none}.rt{display:none}#refresh,#menuBtn{min-width:38px;justify-content:center}#menuBtn{display:inline-flex;font-size:16px}
+ .hmenu{display:none}
+ header.open .hmenu{display:flex;flex-direction:column;align-items:stretch;gap:12px;position:absolute;left:0;right:0;top:100%;background:var(--card);border-bottom:1px solid var(--line);box-shadow:0 10px 24px rgba(16,24,40,.12);padding:14px 16px 16px}
+ header.open .hmenu .role{flex-direction:column;align-items:stretch;gap:4px}header.open .hmenu .role select{width:100%}
+ header.open .hmenu #userBox{flex-wrap:wrap;gap:8px}header.open .hmenu #userBox .userchip{flex:1;min-width:0}
+ header.open .hmenu #openSheet{justify-content:center}
+ header.open #menuBtn{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+}
 .hwrap{max-width:1600px;margin:0 auto;padding:12px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px}
 .logo i{width:30px;height:30px;border-radius:8px;background:var(--brand);display:grid;place-items:center;color:#fff;font-style:normal}
@@ -233,14 +244,17 @@ ol.tl{list-style:none;margin:6px 0 0;padding:0 0 0 14px;border-left:2px solid va
 <div class="topbar" aria-hidden="true"></div>
 <div class="proc-bg" id="proc" role="alertdialog" aria-live="assertive" aria-label="Please wait"><div class="proc"><span class="spin big"></span><div><b id="procT">Saving…</b><div class="small mute" id="procS">Please wait – updating the Google Sheet</div></div></div></div>
 <header><div class="hwrap">
-  <a class="logo" href="../" title="SN Financial Services home" style="text-decoration:none;color:inherit"><i>☎</i>SN Calling CRM</a>
+  <a class="logo" href="../" title="SN Financial Services home" style="text-decoration:none;color:inherit"><i>☎</i><span class="lg-full">SN Calling CRM</span><span class="lg-short">SN CRM</span></a>
   <div class="spacer"></div>
   <div class="sync"><span class="dot" id="dot"></span><span id="syncTxt">Connecting…</span></div>
   <button class="btn sm" id="cfgBtn" style="display:none">⚙ Settings</button>
-  <button class="btn sm" id="refresh" title="Reload from Google Sheet"><span class="ri">⟳</span> Refresh</button>
+  <button class="btn sm" id="refresh" title="Reload from Google Sheet" aria-label="Refresh"><span class="ri">⟳</span><span class="rt"> Refresh</span></button>
+  <button class="btn sm" id="menuBtn" aria-label="Menu" aria-expanded="false" aria-controls="hmenu">☰</button>
+  <div class="hmenu" id="hmenu">
   <a class="btn sm" id="openSheet" style="display:none" href="#" target="_blank" rel="noopener">Open sheet ↗</a>
   <div class="role" id="whoBox">Viewing as <select id="who"></select></div>
   <div id="userBox" class="row" style="gap:6px"></div>
+  </div>
 </div></header>
 <div class="banner" id="banner"></div>
 <main id="app"><div class="boot"><div class="bl">☎</div><h2>SN Calling CRM</h2><div class="bt">Opening…</div></div></main>
@@ -302,6 +316,13 @@ const rank=r=>{const i=ROLES.indexOf(r);return i<0?99:i};
 let S={employees:[],allEmps:[],leads:[]};
 let MODE="loading", BUSY=false, lastSync=null, demoReason="";
 let ME=null, SHEET_URL="";              // ME is set only for personal logins (website). null = full access (claude.ai / demo)
+/* phone menu (☰): open/close; closes after picking something or tapping outside */
+(()=>{const hdr=document.querySelector("header"),btn=document.getElementById("menuBtn"),menu=document.getElementById("hmenu");
+  const set=o=>{hdr.classList.toggle("open",o);btn.setAttribute("aria-expanded",o?"true":"false");btn.textContent=o?"✕":"☰"};
+  btn.onclick=e=>{e.stopPropagation();set(!hdr.classList.contains("open"))};
+  document.addEventListener("click",e=>{if(!hdr.contains(e.target))set(false)});
+  menu.addEventListener("click",e=>{if(e.target.closest("a,button"))setTimeout(()=>set(false),0)});
+  menu.addEventListener("change",()=>set(false));document.addEventListener("keydown",e=>{if(e.key==="Escape")set(false)})})();
 let view={who:"admin",tab:"today",filter:"all",q:"",sel:new Set(),assignFilter:"all",logEmp:"all",logOut:"all"};
 const emp=id=>S.allEmps.find(e=>e.id===id);
 const empName=id=>id==="ADMIN_LOG"?"Admin":(emp(id)?.name||id||"—");
@@ -547,7 +568,7 @@ function setSync(){
   // header controls by role
   const live=MODE==="live";
   const os=$("#openSheet");const showSheet=live&&!!SHEET_URL&&can("sheet");/* Open sheet: the server only sends the link to people allowed to open it */os.style.display=showSheet?"":"none";if(showSheet)os.href=SHEET_URL;
-  $("#refresh").style.display=MODE==="login"?"none":"";
+  $("#refresh").style.display=MODE==="login"?"none":"";$("#menuBtn").style.display=MODE==="login"?"none":"";
   $("#whoBox").style.display=(MODE==="login"||MODE==="loading"||!isLead()||!canViewAs())?"none":"";
   $("#userBox").innerHTML=ME&&MODE!=="login"?`<div class="userchip"><div class="av">${initials(ME.name)}</div><div><b>${esc(ME.name)}</b><div class="small mute">${esc(ME.role)}</div></div></div>
     <button class="btn sm" id="chPin">🔑 PIN</button><button class="btn sm" id="logout">Log out</button>`:"";
