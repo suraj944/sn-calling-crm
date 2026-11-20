@@ -69,6 +69,8 @@ tr:last-child td{border-bottom:0}
 .s-na{background:var(--violet-soft);color:var(--violet)}
 .s-wn{background:#eceff3;color:#374151}
 .s-nc{background:#e3f3f1;color:#0f6b62}
+.wawrap{display:inline-flex;gap:0;align-items:stretch}.wawrap select{border-radius:10px 0 0 10px;border-right:0;max-width:150px}.btn.wa{background:#25D366;color:#073b1c;border-color:#25D366;border-radius:0 10px 10px 0;font-weight:700}.btn.wa:hover{background:#1ebe5a}
+.stat.act span{white-space:nowrap}
 .s-conv{background:var(--brand-soft);color:var(--brand)}
 .mute{color:var(--mute)}
 .small{font-size:12.5px}
@@ -881,6 +883,46 @@ function bindTips(){
   });
 }
 
+/* ---------- WhatsApp quick messages ---------- */
+const WA_T=[["Intro","Hello {name}, this is {me} from SN Financial Services about your loan enquiry. When is a good time to talk?"],
+ ["Tried calling","Hello {name}, I tried calling you today from SN Financial Services. Please reply here or tell me a good time to call back."],
+ ["Documents list","Hello {name}, for your loan please share: PAN card, Aadhaar card, last 3 months' salary slips, 6 months' bank statement and Form 16 / ITR. You can send photos here. – {me}, SN Financial Services"],
+ ["Thank you","Thank you for your time, {name}. I'll keep you updated on your loan. – {me}, SN Financial Services"]];
+function waHref(l,i){let d=String(l.phone).replace(/\D/g,"");if(d.length===10)d="91"+d;const me=(typeof ME!=="undefined"&&ME&&ME.name)||"";return "https://wa.me/"+d+"?text="+encodeURIComponent(WA_T[i][1].replace(/\{name\}/g,String(l.name||"").split(" ")[0]).replace(/\{me\}/g,me))}
+/* ---------- CALL ACTIVITY (Callyzer-style, from CRM call logs) ---------- */
+const hm=ms=>{const m=Math.round(ms/60000);return m<60?m+"m":Math.floor(m/60)+"h "+String(m%60).padStart(2,"0")+"m"};
+const tOf=t=>new Date(t).toLocaleTimeString("en-IN",{hour:"numeric",minute:"2-digit"});
+function activity(logs){
+  const byP=new Map();
+  logs.forEach(g=>{const k=g.by+"|"+ymd(g.at);if(!byP.has(k))byP.set(k,{by:g.by,day:ymd(g.at),a:g.at,b:g.at,n:0});const x=byP.get(k);x.a=Math.min(x.a,g.at);x.b=Math.max(x.b,g.at);x.n++});
+  const people=new Map();
+  [...byP.values()].forEach(d=>{if(!people.has(d.by))people.set(d.by,{by:d.by,days:[],calls:0,span:0});const p=people.get(d.by);p.days.push(d);p.calls+=d.n;p.span+=Math.max(d.b-d.a,d.n>1?0:0)});
+  const out=[...people.values()].map(p=>{const mine=logs.filter(g=>g.by===p.by);
+    const mins=t=>{const d=new Date(t);return d.getHours()*60+d.getMinutes()};const avg=a=>Math.round(a.reduce((s,x)=>s+x,0)/a.length);
+    const fa=avg(p.days.map(d=>mins(d.a))),la=avg(p.days.map(d=>mins(d.b)));const lab=v=>{const d=new Date(2000,0,1,Math.floor(v/60),v%60);return d.toLocaleTimeString("en-IN",{hour:"numeric",minute:"2-digit"})};
+    return {...p,first:lab(fa),last:lab(la),uniq:new Set(mine.map(g=>g.lead.id)).size,np:mine.filter(g=>g.outcome==="na"||g.outcome==="nc").length,wn:mine.filter(g=>g.outcome==="wn").length,con:mine.filter(g=>CONNECTED(g.outcome)).length,
+      perHr:p.span>=15*60000?(p.calls/(p.span/3600000)).toFixed(1):"—"}}).sort((a,b)=>b.calls-a.calls);
+  const hours=[];for(let i=8;i<=21;i++)hours.push({h:i,label:new Date(2000,0,1,i).toLocaleTimeString("en-IN",{hour:"numeric"}),n:0});
+  logs.forEach(g=>{const x=hours.find(b=>b.h===new Date(g.at).getHours());if(x)x.n++});
+  return {people:out,hours,span:out.reduce((s,p)=>s+p.span,0),uniq:new Set(logs.map(g=>g.lead.id)).size,np:logs.filter(g=>g.outcome==="na"||g.outcome==="nc").length,wn:logs.filter(g=>g.outcome==="wn").length}
+}
+function activitySection(m){
+  const A=activity(m.logs),one=(()=>{const[a,b]=rangeBounds();return sod(a)===sod(b)})();
+  const card=(label,val,sub,ic)=>`<div class="card stat act"><span>${ic} ${label}</span><b>${val}</b>${sub?`<div class="small mute">${sub}</div>`:""}</div>`;
+  const peak=A.hours.reduce((m2,b)=>b.n>m2.n?b:m2,{n:0});
+  let h=`<div class="card pad" style="margin-bottom:16px"><div class="row" style="justify-content:space-between;align-items:baseline"><h3 style="margin:0">Call activity</h3><span class="small mute">From calls logged in the CRM · talk time and incoming/missed calls need a phone app</span></div>
+  <div class="stats" style="margin-top:12px">
+    ${card("Unique customers",A.uniq,`different people called`,"👥")}
+    ${card("Not picked up",A.np,`no answer / busy / not connected`,"📵")}
+    ${card("Wrong / switched off",A.wn,`numbers to check`,"⚠️")}
+    ${card("Working time",A.span?hm(A.span):"—",`first to last call, all callers`,"⏱")}
+    ${card("Busiest hour",peak.n?peak.label:"—",peak.n?`${peak.n} calls`:"no calls","🔥")}
+  </div>
+  <div class="grid2 dash" style="margin-top:4px"><div><h3 style="margin:10px 0 6px">Calls by hour of day</h3>${m.logs.length?columnChart(A.hours.map(b=>({label:b.label,n:b.n})),"hour"):`<div class="empty small">No calls in this period</div>`}</div>
+  <div><h3 style="margin:10px 0 6px">Telecaller activity</h3>${A.people.length?`<div class="tw"><table><tr><th>Telecaller</th><th>${one?"First call":"Avg start"}</th><th>${one?"Last call":"Avg end"}</th><th>Working time</th><th>Calls / hour</th><th>Unique</th><th>Not picked up</th></tr>
+    ${A.people.map(p=>`<tr><td style="white-space:nowrap"><b>${esc(empName(p.by))}</b>${one?"":`<div class="small mute">${p.days.length} day${p.days.length===1?"":"s"} active</div>`}</td><td class="num" style="white-space:nowrap">${p.first}</td><td class="num" style="white-space:nowrap">${p.last}</td><td class="num"><b>${hm(p.span)}</b></td><td class="num">${p.perHr}</td><td class="num">${p.uniq}</td><td class="num">${p.np}</td></tr>`).join("")}</table></div>`:`<div class="empty small">No calls in this period</div>`}</div></div></div>`;
+  return h}
+
 /* ================= DASHBOARD ================= */
 function aDash(){
   const m=metrics(),L=S.leads;
@@ -894,6 +936,7 @@ function aDash(){
     ${stat("New contacts",m.newLeads.length,`added to the calling list · ${m.website} from website`)}
     ${stat("Callbacks due",m.due,`${m.unassigned} contact${m.unassigned===1?"":"s"} unassigned`,"Callbacks scheduled for today or earlier (any period)")}
   </div>`;
+  h+=activitySection(m);
   const {buckets,unit}=dayBuckets(m.logs);
   h+=`<div class="grid2 dash">
     <div class="card pad"><h3>Calls per ${unit}</h3>${m.logs.length?columnChart(buckets,unit):`<div class="empty small">No calls in this period</div>`}</div>
@@ -956,10 +999,15 @@ function rSummary(){
     ["Not interested",m.byOutcome.ni],["No answer / Busy",m.byOutcome.na],["Wrong / Switched off",m.byOutcome.wn],["Call back later",m.byOutcome.cb],
     ["New contacts added",m.newLeads.length],["…from website",m.website],["Callbacks due (as of now)",m.due],["Unassigned contacts (as of now)",m.unassigned],["Total contacts (as of now)",S.leads.length]];
 }
+function rActivity(){const logs=metrics().logs,A=activity(logs);
+  const rows=[["Telecaller","Days active","Avg first call","Avg last call","Working time","Calls","Calls per hour","Unique customers","Connected","Not picked up","Wrong / switched off"],
+    ...A.people.map(p=>[empName(p.by),p.days.length,p.first,p.last,hm(p.span),p.calls,p.perHr,p.uniq,p.con,p.np,p.wn])];
+  rows.push([],["Calls by hour of day"],["Hour","Calls"],...A.hours.map(b=>[b.label,b.n]));return rows}
 const REPORTS=[
-  {k:"full",title:"Full report",desc:"One Excel workbook with a summary sheet plus interested customers, telecaller performance, call log, calling list, website enquiries, callbacks and field work.",xlsxOnly:true},
+  {k:"full",title:"Full report",desc:"One Excel workbook with a summary sheet plus interested customers, telecaller performance, call activity, call log, calling list, website enquiries, callbacks and field work.",xlsxOnly:true},
   {k:"int",title:"Interested customers",desc:"Customers marked Interested or Converted in the period, with telecaller, last remark and follow-up.",rows:rInterested},
   {k:"calls",title:"Call log",desc:"Every call in the period with telecaller, outcome, remark and follow-up.",rows:rCallLog,filters:true},
+  {k:"act",title:"Call activity",desc:"Working time, first and last call, calls per hour, unique customers and not picked up for each telecaller, plus calls by hour of day.",rows:rActivity},
   {k:"perf",title:"Telecaller performance",desc:"Calls, connect rate, interested customers, converted and pending work for each telecaller.",rows:rPerformance},
   {k:"leads",title:"Calling list",desc:"All contacts with assigned telecaller, status, last remark and source.",rows:rLeads,leadsToggle:true},
   {k:"enq",title:"Website enquiries",desc:"Callback requests from the home page received in the period, and what happened to them.",rows:rEnquiries},
@@ -969,7 +1017,7 @@ const REPORTS=[
 if(!view.repEmp){view.repEmp="all";view.repOut="all";view.repLeadsAll=false}
 function aReports(){
   let h=rangeBar();
-  h+=`<div class="card pad" style="margin-bottom:12px"><div class="small mute">Reports use the data shown in the CRM right now (last synced ${lastSync?new Date(lastSync).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}):"—"}). Press <b>⟳ Refresh</b> first if your team is calling at the moment. Excel files open in Excel or Google Sheets; CSV works anywhere.</div></div><div class="reports">`;
+  h+=`<div class="card pad" style="margin-bottom:12px"><div class="small mute">Reports use the data shown in the CRM right now (last synced ${lastSync?new Date(lastSync).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}):"—"}). Press <b>⟳ Refresh</b> first if your team is calling at the moment. Excel files open in Excel or Google Sheets; CSV works anywhere.</div></div>${lcSection()}<div class="reports">`;
   h+=`<div class="card pad rep" style="border-color:#c9d6f6;background:#f7f9ff"><div class="rep-h"><div><h3>Monthly owner report</h3><p class="small mute" style="margin:4px 0 0">Targets vs actual, conversion funnel, days to disbursal, lead sources and connectors, disbursed cases and overdue follow-ups – one Excel file or a PDF.</p></div></div>
     <div class="row" style="margin-top:12px"><select id="mrPer">${PERIODS.map(([k,l])=>`<option value="${k}" ${(view.pp||"cur")===k?"selected":""}>${l}${k==="cur"||k==="prev"?" ("+(k==="cur"?curMon():monAdd(curMon(),-1))+")":""}</option>`).join("")}</select>
     <button class="btn pri sm" data-mrep="xlsx">⬇ Excel</button><button class="btn sm" data-mrep="pdf">🖨 Save as PDF</button></div></div>`;
@@ -981,6 +1029,84 @@ function aReports(){
       <div class="row" style="margin-top:14px"><button class="btn pri sm" data-dl="${r.k}" data-fmt="xlsx">⬇ Excel</button>${r.xlsxOnly?"":`<button class="btn sm" data-dl="${r.k}" data-fmt="csv">⬇ CSV</button>`}</div></div>`}).join("");
   return h+`</div>`;
 }
+/* ---------- LEAD CASES REPORT: SM wise – summary, daily, monthly, case list ---------- */
+if(!view.lcv)view.lcv="sum";if(!view.lcSm)view.lcSm="all";if(!view.lcSt)view.lcSt="all";if(!view.lcM)view.lcM="6";if(!view.lcMet)view.lcMet="n";
+const lcSmKey=c=>{const v=String(c["SM Name"]||"").trim().replace(/\s+/g," ");return v||"Not recorded"};
+function lcSmMap(list){const m=new Map();list.forEach(c=>{const k=lcSmKey(c),lk=k.toLowerCase();if(!m.has(lk))m.set(lk,k)});return m}
+const lcSmOf=(c,names)=>names.get(lcSmKey(c).toLowerCase())||lcSmKey(c);
+function lcBounds(){const r=curRange();if(r.key==="all"){const t0=sod(Date.now()),ts=CASES().map(c=>c.leadD).filter(Boolean);return[ts.length?Math.min(...ts):t0,t0+DAY-1]}return rangeBounds()}
+const lcLabel=()=>{const[a,b]=lcBounds();const f=t=>new Date(t).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});return sod(a)===sod(b)?f(a):f(a)+" – "+f(b)};
+function lcBase(){const names=lcSmMap(CASES());return{names,all:CASES().filter(c=>view.lcSm==="all"||lcSmOf(c,names)===view.lcSm)}}
+function lcInRange(list){const[a,b]=lcBounds();return list.filter(c=>c.leadD&&c.leadD>=a&&c.leadD<=b)}
+function lcStat(list){const r={n:list.length,lead:0,inq:0,act:0,l:0,s:0,d:0,lost:0,amt:0,damt:0};
+  list.forEach(c=>{const t=String(c["Lead Type"]||"").toLowerCase();if(t==="lead")r.lead++;else if(t==="inquiry")r.inq++;const st=stType(c.Status),g=stageOf(c);
+    if(st==="closed")r.lost++;else if(st!=="disb")r.act++;if(g>=1)r.l++;if(g>=2)r.s++;if(g>=3){r.d++;r.damt+=numOf(c["Amount Required"])}r.amt+=numOf(c["Amount Required"])});return r}
+function lcSumRows(){const {names,all}=lcBase(),list=lcInRange(all),g=new Map();list.forEach(c=>{const k=lcSmOf(c,names);if(!g.has(k))g.set(k,[]);g.get(k).push(c)});
+  const rows=[...g.entries()].map(([k,l])=>({k,...lcStat(l)})).sort((a,b)=>b.n-a.n||b.d-a.d);return{rows,tot:lcStat(list)}}
+function lcDays(){const[a,b]=lcBounds();const out=[];let t=sod(b);while(t>=sod(a)&&out.length<31){out.unshift(t);t=sod(t-DAY/2)}return out}
+function lcDailyRows(){const {names,all}=lcBase(),days=lcDays(),from=days[0],to=days[days.length-1]+DAY-1,list=all.filter(c=>c.leadD&&c.leadD>=from&&c.leadD<=to),g=new Map();
+  list.forEach(c=>{const k=lcSmOf(c,names);if(!g.has(k))g.set(k,new Map());const m=g.get(k),d=sod(c.leadD);m.set(d,(m.get(d)||0)+1)});
+  const rows=[...g.entries()].map(([k,m])=>({k,v:days.map(d=>m.get(d)||0)})).map(r=>({...r,t:r.v.reduce((s,x)=>s+x,0)})).sort((a,b)=>b.t-a.t);
+  return{days,rows,tot:days.map((_,i)=>rows.reduce((s,r)=>s+r.v[i],0))}}
+function lcMonths(){const n=view.lcM==="fy"?null:+view.lcM;if(n){const out=[];for(let i=n-1;i>=0;i--)out.push(monAdd(curMon(),-i));return out}return periodMonths("fy")}
+function lcMonthlyRows(met){const {names,all}=lcBase(),ms=lcMonths(),g=new Map();
+  all.forEach(c=>{const k=lcSmOf(c,names),m=met==="n"?caseMon(c):(stType(c.Status)==="disb"?disbMon(c):"");if(!ms.includes(m))return;if(!g.has(k))g.set(k,new Map());const x=g.get(k);x.set(m,(x.get(m)||0)+(met==="amt"?numOf(c["Amount Required"]):1))});
+  const rows=[...g.entries()].map(([k,m])=>({k,v:ms.map(x=>m.get(x)||0)})).map(r=>({...r,t:r.v.reduce((s,x)=>s+x,0)})).filter(r=>r.t).sort((a,b)=>b.t-a.t);
+  return{ms,rows,tot:ms.map((_,i)=>rows.reduce((s,r)=>s+r.v[i],0))}}
+function lcCaseList(){const {names,all}=lcBase();return lcInRange(all).filter(c=>view.lcSt==="all"||(c.Status||"New")===view.lcSt).sort((a,b)=>(b.leadD||0)-(a.leadD||0)||String(b.code).localeCompare(String(a.code),undefined,{numeric:true})).map(c=>({c,sm:lcSmOf(c,names)}))}
+const LC_COLS=["Case","Lead date","SM","Customer","Mobile","Product","Amount (₹)","Lead source","Lead type","Lead shared by","With","Status","Customer status","Bank","Latest remark","Next follow-up","Login date","Sanction date","Disbursed date"];
+const lcCaseRow=({c,sm})=>[c.code,c["Lead Date"],sm,c["Customer Name"],c["Contact Number"],c.Product,numOf(c["Amount Required"])||"",c["Lead Source"],c["Lead Type"],c["Lead Shared by"],c["Team Lead"]||"Not assigned",c.Status||"New",c["Customer Status"],c["Bank Name"],String(c.Remarks||"").split(" // ")[0],c["Next follow-up"],c["Login date"],c["Sanction date"],c["Disbursed Date"]];
+const lcDs=t=>new Date(t).toLocaleDateString("en-IN",{day:"numeric",month:"short"});
+const lcVal=(met,v)=>met==="amt"?(v?fmtL(v):"–"):(v||"–");
+function lcSheets(){const S1=lcSumRows(),D=lcDailyRows(),Mn=lcMonthlyRows("n"),Md=lcMonthlyRows("d"),Ma=lcMonthlyRows("amt");
+  const sumHdr=["SM","Cases","Lead","Inquiry","Active","Login","Sanction","Disbursed","Lost / closed","Amount asked (₹)","Disbursed amount (₹)","Case → disbursed %"];
+  const sumRow=(k,r)=>[k,r.n,r.lead,r.inq,r.act,r.l,r.s,r.d,r.lost,Math.round(r.amt),Math.round(r.damt),r.n?Math.round(r.d/r.n*100):0];
+  const mat=(X,hdr,fmt)=>[["SM",...hdr,"Total"],...X.rows.map(r=>[r.k,...r.v.map(fmt),fmt(r.t)]),["Total",...X.tot.map(fmt),fmt(X.tot.reduce((s,x)=>s+x,0))]];
+  const id=v=>v,rs=v=>Math.round(v);
+  return [["SM summary",[["Lead cases by SM – "+lcLabel()+(view.lcSm!=="all"?" – "+view.lcSm:"")],[],sumHdr,...S1.rows.map(r=>sumRow(r.k,r)),sumRow("Total",S1.tot)]],
+    ["Daily cases",mat(D,D.days.map(t=>ymd(t)),id)],
+    ["Monthly cases",mat(Mn,Mn.ms,id)],["Monthly disbursed",mat(Md,Md.ms,id)],["Monthly disbursed amount",mat(Ma,Ma.ms,rs)],
+    ["Case list",[LC_COLS,...lcCaseList().map(lcCaseRow)]]]}
+async function lcDownload(fmt){const base=`SN-CRM_Lead-cases-SM-wise_${(()=>{const[a,b]=lcBounds();return sod(a)===sod(b)?ymd(a):ymd(a)+"_to_"+ymd(b)})()}`;
+  try{const sh=lcSheets();if(fmt==="csv"){const v={sum:0,day:1,mon:view.lcMet==="n"?2:view.lcMet==="d"?3:4,list:5}[view.lcv];downloadBlob(new Blob([toCSV(sh[v][1])],{type:"text/csv;charset=utf-8"}),base+".csv");toast("Downloaded "+base+".csv");return}
+    toast("Preparing Excel file…");await loadXLSX();const wb=XLSX.utils.book_new();sh.forEach(([n,rows])=>XLSX.utils.book_append_sheet(wb,sheetFrom(rows),n.slice(0,31)));XLSX.writeFile(wb,base+".xlsx");toast("Downloaded "+base+".xlsx")}
+  catch(e){toast("Download failed: "+e.message)}}
+function lcSection(){
+  if(!CASES().length)return "";
+  const names=[...new Set([...lcSmMap(CASES()).values()])].sort((a,b)=>a.localeCompare(b));
+  const V=[["sum","SM summary"],["day","Daily"],["mon","Monthly"],["list","Case list"]];
+  let h=`<div class="card pad" style="margin-bottom:12px"><div class="row" style="justify-content:space-between;gap:10px;align-items:flex-start">
+    <div><h3 style="margin:0">Lead cases report – SM wise</h3><p class="small mute" style="margin:4px 0 0">Based on the Lead Cases sheet. SM = the person who filled the lead form. Cases are counted on their lead date${view.lcv==="mon"?"; disbursed on their disbursed month":""}.</p></div>
+    <div class="row"><button class="btn pri sm" id="lcX">⬇ Excel (all views)</button><button class="btn sm" id="lcC">⬇ CSV (this view)</button></div></div>
+    <div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap"><div class="chips" style="margin:0">${V.map(([k,l])=>`<button class="chip ${view.lcv===k?"on":""}" data-lcv="${k}">${l}</button>`).join("")}</div><span class="spacer"></span>
+    <select id="lcSm"><option value="all">All SMs</option>${names.map(n=>`<option ${view.lcSm===n?"selected":""}>${esc(n)}</option>`).join("")}</select>
+    ${view.lcv==="mon"?`<select id="lcMet"><option value="n" ${view.lcMet==="n"?"selected":""}>New cases</option><option value="d" ${view.lcMet==="d"?"selected":""}>Disbursed cases</option><option value="amt" ${view.lcMet==="amt"?"selected":""}>Disbursed amount</option></select>
+      <select id="lcM"><option value="6" ${view.lcM==="6"?"selected":""}>Last 6 months</option><option value="12" ${view.lcM==="12"?"selected":""}>Last 12 months</option><option value="fy" ${view.lcM==="fy"?"selected":""}>This financial year</option></select>`:""}
+    ${view.lcv==="list"?`<select id="lcSt"><option value="all">All statuses</option>${[...new Set(CASES().map(c=>c.Status||"New"))].sort().map(s=>`<option ${view.lcSt===s?"selected":""}>${esc(s)}</option>`).join("")}</select>`:""}
+    <span class="small mute">${view.lcv==="mon"?"":esc(lcLabel())}</span></div>`;
+  if(view.lcv==="sum"){const {rows,tot}=lcSumRows();const mx=Math.max(...rows.map(r=>r.n),1);
+    h+=rows.length?`<div class="tw" style="margin-top:12px"><table><tr><th>SM</th><th style="width:150px">Cases</th><th>Lead</th><th>Inquiry</th><th>Active</th><th>Login</th><th>Sanction</th><th>Disbursed</th><th>Lost / closed</th><th>Disbursed amount</th><th>Case → disbursed</th></tr>
+      ${rows.map(r=>`<tr><td><b>${esc(r.k)}</b></td><td><b class="num">${r.n}</b><div class="bar"><i style="width:${Math.round(r.n/mx*100)}%"></i></div></td><td class="num">${r.lead}</td><td class="num">${r.inq}</td><td class="num">${r.act}</td><td class="num">${r.l}</td><td class="num">${r.s}</td><td class="num"><b style="color:var(--green)">${r.d}</b></td><td class="num">${r.lost}</td><td class="num">${r.damt?fmtL(r.damt):'<span class="mute">—</span>'}</td><td class="num"><b>${pctS(r.d,r.n)}</b></td></tr>`).join("")}
+      <tr style="background:#f7f8fa"><td><b>Total</b></td><td class="num"><b>${tot.n}</b></td><td class="num">${tot.lead}</td><td class="num">${tot.inq}</td><td class="num">${tot.act}</td><td class="num">${tot.l}</td><td class="num">${tot.s}</td><td class="num"><b>${tot.d}</b></td><td class="num">${tot.lost}</td><td class="num">${tot.damt?fmtL(tot.damt):"—"}</td><td class="num"><b>${pctS(tot.d,tot.n)}</b></td></tr></table></div>
+      <div class="small mute" style="margin-top:6px">Active = still being worked (not disbursed, not closed). Login / Sanction = cases that reached that stage or further.</div>`:`<div class="empty">No lead cases with a lead date in this period. Try “Last 30 days” or “All time”.</div>`}
+  else if(view.lcv==="day"){const D=lcDailyRows();
+    h+=D.rows.length?`<div class="tw" style="margin-top:12px"><table class="mat"><tr><th>SM</th>${D.days.map(t=>`<th class="num" style="white-space:nowrap">${lcDs(t)}</th>`).join("")}<th>Total</th></tr>
+      ${D.rows.map(r=>`<tr><td style="white-space:nowrap"><b>${esc(r.k)}</b></td>${r.v.map(v=>`<td class="num" style="${v?"background:#e8f0fe;font-weight:600":"color:#bbb"}">${v||"·"}</td>`).join("")}<td class="num"><b>${r.t}</b></td></tr>`).join("")}
+      <tr style="background:#f7f8fa"><td><b>Total</b></td>${D.tot.map(v=>`<td class="num"><b>${v||"·"}</b></td>`).join("")}<td class="num"><b>${D.tot.reduce((s,x)=>s+x,0)}</b></td></tr></table></div>
+      <div class="small mute" style="margin-top:6px">New lead cases per day, by lead date.${lcDays().length===31?" Showing the last 31 days of the period.":""}</div>`:`<div class="empty">No lead cases in these days.</div>`}
+  else if(view.lcv==="mon"){const met=view.lcMet,M=lcMonthlyRows(met);
+    h+=M.rows.length?`<div class="tw" style="margin-top:12px"><table class="mat"><tr><th>SM</th>${M.ms.map(m=>`<th class="num">${esc(m)}</th>`).join("")}<th>Total</th></tr>
+      ${M.rows.map(r=>`<tr><td style="white-space:nowrap"><b>${esc(r.k)}</b></td>${r.v.map(v=>`<td class="num" style="${v?"":"color:#bbb"}">${lcVal(met,v)}</td>`).join("")}<td class="num"><b>${lcVal(met,r.t)}</b></td></tr>`).join("")}
+      <tr style="background:#f7f8fa"><td><b>Total</b></td>${M.tot.map(v=>`<td class="num"><b>${lcVal(met,v)}</b></td>`).join("")}<td class="num"><b>${lcVal(met,M.tot.reduce((s,x)=>s+x,0))}</b></td></tr></table></div>
+      <div class="small mute" style="margin-top:6px">${met==="n"?"New lead cases per month, by lead date.":met==="d"?"Cases disbursed per month, by disbursed month.":"Loan amount of cases disbursed per month."}</div>`:`<div class="empty">Nothing in these months.</div>`}
+  else{const L=lcCaseList(),show=L.slice(0,100);
+    h+=L.length?`<div class="tw" style="margin-top:12px"><table><tr><th>Case</th><th>Lead date</th><th>SM</th><th>Customer</th><th>Product</th><th>Amount</th><th>With</th><th>Status</th><th>Bank</th><th>Latest remark</th></tr>
+      ${show.map(({c,sm})=>`<tr><td class="num" style="white-space:nowrap">${esc(c.code)}</td><td class="num small" style="white-space:nowrap">${c.leadD?lcDs(c.leadD):"—"}</td><td>${esc(sm)}</td><td><b>${esc(c["Customer Name"])}</b><div class="small mute">${esc(c["Contact Number"])}</div></td><td class="small">${esc(c.Product)}</td><td class="num">${numOf(c["Amount Required"])?fmtL(numOf(c["Amount Required"])):"—"}</td><td class="small">${esc(c["Team Lead"]||"Not assigned")}</td><td>${casePill(c)}</td><td class="small">${esc(c["Bank Name"])||'<span class="mute">—</span>'}</td><td class="small" style="max-width:280px">${esc(String(c.Remarks||"").split(" // ")[0])||'<span class="mute">—</span>'}</td></tr>`).join("")}</table></div>
+      <div class="small mute" style="margin-top:6px">${L.length} case${L.length===1?"":"s"}${L.length>100?" – showing the latest 100; the Excel file has all of them":""}.</div>`:`<div class="empty">No cases match.</div>`}
+  return h+`</div>`}
+function bindLC(){document.querySelectorAll("[data-lcv]").forEach(b=>b.onclick=()=>{view.lcv=b.dataset.lcv;render()});
+  [["#lcSm","lcSm"],["#lcSt","lcSt"],["#lcM","lcM"],["#lcMet","lcMet"]].forEach(([s,k])=>{const e=$(s);if(e)e.onchange=()=>{view[k]=e.value;render()}});
+  const x=$("#lcX"),c=$("#lcC");if(x)x.onclick=()=>lcDownload("xlsx");if(c)c.onclick=()=>lcDownload("csv")}
 function fileStamp(){const[a,b]=rangeBounds();return sod(a)===sod(b)?ymd(a):ymd(a)+"_to_"+ymd(b)}
 function downloadBlob(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
 function toCSV(rows){return "﻿"+rows.map(r=>r.map(v=>{v=String(v??"");if(/^[=+\-@]/.test(v))v="'"+v;return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v}).join(",")).join("\r\n")}
@@ -995,7 +1121,7 @@ async function download(k,format){
     const wb=XLSX.utils.book_new();
     if(k==="full"){
       const sv=view.repLeadsAll;view.repLeadsAll=true;const se=view.repEmp,so=view.repOut;view.repEmp="all";view.repOut="all";
-      [["Summary",rSummary()],["Interested",rInterested()],["Telecaller performance",rPerformance()],["Call log",rCallLog()],["Calling list",rLeads()],["Website enquiries",rEnquiries()],["Pending callbacks",rCallbacks()],["Field work",rMeetings()]]
+      [["Summary",rSummary()],["Interested",rInterested()],["Telecaller performance",rPerformance()],["Call activity",rActivity()],["Call log",rCallLog()],["Calling list",rLeads()],["Website enquiries",rEnquiries()],["Pending callbacks",rCallbacks()],["Field work",rMeetings()]]
         .forEach(([n,rows])=>XLSX.utils.book_append_sheet(wb,sheetFrom(rows),n));
       view.repLeadsAll=sv;view.repEmp=se;view.repOut=so;
     }else XLSX.utils.book_append_sheet(wb,sheetFrom(r.rows()),r.title.slice(0,31));
@@ -1003,6 +1129,7 @@ async function download(k,format){
   }catch(e){toast("Download failed: "+e.message)}
 }
 function bindReports(){
+  bindLC();
   document.querySelectorAll("[data-dl]").forEach(b=>b.onclick=()=>download(b.dataset.dl,b.dataset.fmt));
   const e=$("#repEmp"),o=$("#repOut"),l=$("#repLeadsAll");
   if(e)e.onchange=()=>{view.repEmp=e.value;render()};
@@ -1893,7 +2020,7 @@ function openLead(id,fromCall){
   $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(l.name)}</div><div><div style="font-weight:700">${esc(l.name)}</div><div class="num mute small">${esc(l.phone)} · ${esc(l.city)}</div></div><button class="x" id="mx">×</button></div>
   <div class="mb">
    ${fromCall?`<div class="card pad" style="background:var(--green-soft);border-color:#c7e8d2;margin-bottom:6px"><b style="color:var(--green)">📞 Dialing ${esc(l.phone)}…</b><div class="small mute" style="margin-top:3px">Your phone's dialer should open. After the call, record the outcome below.</div></div>`:""}
-   <div class="row"><a class="btn call" href="${telHref(l.phone)}">📞 Call ${esc(l.phone)}</a>${isLead()&&can("doAssign")?`<label class="small mute" style="display:flex;gap:6px;align-items:center">Assigned to <select id="mAsg">${l.assignedTo?"":`<option value="" selected disabled>Choose a telecaller…</option>`}${asgOpts(l.assignedTo)}</select></label>`:`<span class="mute small">Assigned to ${esc(l.assignedTo?empName(l.assignedTo):"nobody")}</span>`}</div>
+   <div class="row"><a class="btn call" href="${telHref(l.phone)}">📞 Call ${esc(l.phone)}</a><span class="wawrap"><select id="waT" aria-label="WhatsApp message">${WA_T.map((t,i)=>`<option value="${i}">${esc(t[0])}</option>`).join("")}</select><a class="btn wa" id="waGo" target="_blank" rel="noopener" href="${waHref(l,0)}">WhatsApp</a></span>${isLead()&&can("doAssign")?`<label class="small mute" style="display:flex;gap:6px;align-items:center">Assigned to <select id="mAsg">${l.assignedTo?"":`<option value="" selected disabled>Choose a telecaller…</option>`}${asgOpts(l.assignedTo)}</select></label>`:`<span class="mute small">Assigned to ${esc(l.assignedTo?empName(l.assignedTo):"nobody")}</span>`}</div>
    <label class="f">Call outcome</label>
    <div class="outs">${Object.entries(OUTCOMES).map(([k,o])=>`<button class="out" data-out="${k}"><span class="pill ${o.cls}">${o.label}</span></button>`).join("")}</div>
    <div id="fuWrap" style="display:none"><label class="f">Call back on</label><input type="datetime-local" id="fu" style="width:100%"></div>
@@ -1905,6 +2032,7 @@ function openLead(id,fromCall){
   $("#mbg").classList.add("show");
   const close=()=>$("#mbg").classList.remove("show");
   $("#mx").onclick=close;$("#mc").onclick=close;
+  const wt=$("#waT");if(wt)wt.onchange=()=>{$("#waGo").href=waHref(l,+wt.value)};
   const ma=$("#mAsg");if(ma)ma.onchange=async()=>{const to=ma.value;if(!to)return;
     if(!await askOk({title:"Assign this contact?",ok:"Yes, assign",body:`<b>${esc(l.name)}</b> will move to <b>${esc(empName(to))}</b>.`})){ma.value=l.assignedTo||"";return}
     ma.disabled=true;
