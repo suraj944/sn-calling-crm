@@ -83,7 +83,8 @@ const CASE_HDR = ["Timestamp", "SM Name", "Customer Name", "Contact Number", "Pr
   "Connector Name", "Connector Contact No", "Connector Location", "Lead Type", "Lead Shared by", "Lead Date", "Monthly",
   "Unique Lead Code", "Bank Name", "Banker Name", "Banker Contact No", "Status", "Remarks", "Disbursed Date", "Disbursed Month",
   "Customer Status", "Contact ID", "Team Lead", "Telecaller ID", "Last updated", "Updated by",
-  "Follow-up history", "Next follow-up", "Login date", "Sanction date"];   // last three are added to the sheet automatically
+  "Follow-up history", "Next follow-up", "Login date", "Sanction date",
+  "Login by", "Sanction by", "Disbursed by"];   // columns after Follow-up history are added to the sheet automatically
 const CASE_COLS = CASE_HDR.length, C_ = Object.fromEntries(CASE_HDR.map((h, i) => [h, i]));
 // what a Team Lead / Manager / Admin may change from the CRM (everything else is filled automatically)
 const CASE_EDIT = ["SM Name", "Lead Shared by", "Product", "Amount Required", "Lead Source", "Connector Name", "Connector Contact No", "Connector Location",
@@ -736,11 +737,14 @@ function saveCase_(me, c) {
   const L = lists_();
   CASE_EDIT.forEach(h => { if (c[h] !== undefined) row[C_[h]] = h === "Remarks" ? tidyText_(cl(c[h])) : h === "Next follow-up" ? fuDate_(c[h]) : LIST_COLS.indexOf(h) >= 0 ? pick_(h, cl(c[h]), rows[i][C_[h]], L) : h === "Banker Name" || h === "Connector Name" ? properName_(cl(c[h])) : cl(c[h]); });
   const st = String(row[C_["Status"]]), was = String(rows[i][C_["Status"]]), today = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
-  if (st !== was) {                                     // remember when a case reached login and sanction (for the funnel and targets)
-    if (/sanction/i.test(st)) { if (!row[C_["Sanction date"]]) row[C_["Sanction date"]] = today; if (!row[C_["Login date"]]) row[C_["Login date"]] = today; }
-    else if (/login/i.test(st) && !row[C_["Login date"]]) row[C_["Login date"]] = today;
+  const ty = stType_(st, L), who = String(row[C_["Team Lead"]] || "").trim() || me.name;   // credit goes to the person the case is with
+  if (st !== was) {                                     // remember when (and by whom) a case reached login, sanction and disbursal
+    if (/sanction/i.test(st)) {
+      if (!row[C_["Sanction date"]]) row[C_["Sanction date"]] = today; if (!row[C_["Sanction by"]]) row[C_["Sanction by"]] = who;
+      if (!row[C_["Login date"]]) row[C_["Login date"]] = today; if (!row[C_["Login by"]]) row[C_["Login by"]] = who;
+    } else if (/login/i.test(st)) { if (!row[C_["Login date"]]) row[C_["Login date"]] = today; if (!row[C_["Login by"]]) row[C_["Login by"]] = who; }
+    if (ty === "disb" && !row[C_["Disbursed by"]]) row[C_["Disbursed by"]] = who;
   }
-  const ty = stType_(st, L);
   if (ty === "disb" || ty === "closed") row[C_["Next follow-up"]] = "";   // nothing more to follow up
   row[C_["Contact Number"]] = text_(row[C_["Contact Number"]]);
   ["Connector Contact No", "Banker Contact No"].forEach(h => row[C_[h]] = text_(row[C_[h]]));

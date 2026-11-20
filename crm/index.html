@@ -910,17 +910,30 @@ function activitySection(m){
   const A=activity(m.logs),one=(()=>{const[a,b]=rangeBounds();return sod(a)===sod(b)})();
   const card=(label,val,sub,ic)=>`<div class="card stat act"><span>${ic} ${label}</span><b>${val}</b>${sub?`<div class="small mute">${sub}</div>`:""}</div>`;
   const peak=A.hours.reduce((m2,b)=>b.n>m2.n?b:m2,{n:0});
-  let h=`<div class="card pad" style="margin-bottom:16px"><div class="row" style="justify-content:space-between;align-items:baseline"><h3 style="margin:0">Call activity</h3><span class="small mute">From calls logged in the CRM · talk time and incoming/missed calls need a phone app</span></div>
+  const CS=CASES(),inR=t=>t&&inRange(t),lg=CS.filter(c=>inR(c.login)).length,sc=CS.filter(c=>inR(c.sanc)).length,dsL=CS.filter(c=>stType(c.Status)==="disb"&&inR(c.disbD)),damt=dsL.reduce((s,c)=>s+numOf(c["Amount Required"]),0);
+  let h=`<div class="card pad" style="margin-bottom:16px"><div class="row" style="justify-content:space-between;align-items:baseline"><h3 style="margin:0">Call activity</h3></div>
   <div class="stats" style="margin-top:12px">
     ${card("Unique customers",A.uniq,`different people called`,"👥")}
     ${card("Not picked up",A.np,`no answer / busy / not connected`,"📵")}
     ${card("Wrong / switched off",A.wn,`numbers to check`,"⚠️")}
-    ${card("Working time",A.span?hm(A.span):"—",`first to last call, all callers`,"⏱")}
-    ${card("Busiest hour",peak.n?peak.label:"—",peak.n?`${peak.n} calls`:"no calls","🔥")}
-  </div>
-  <div class="grid2 dash" style="margin-top:4px"><div><h3 style="margin:10px 0 6px">Calls by hour of day</h3>${m.logs.length?columnChart(A.hours.map(b=>({label:b.label,n:b.n})),"hour"):`<div class="empty small">No calls in this period</div>`}</div>
-  <div><h3 style="margin:10px 0 6px">Telecaller activity</h3>${A.people.length?`<div class="tw"><table><tr><th>Telecaller</th><th>${one?"First call":"Avg start"}</th><th>${one?"Last call":"Avg end"}</th><th>Working time</th><th>Calls / hour</th><th>Unique</th><th>Not picked up</th></tr>
-    ${A.people.map(p=>`<tr><td style="white-space:nowrap"><b>${esc(empName(p.by))}</b>${one?"":`<div class="small mute">${p.days.length} day${p.days.length===1?"":"s"} active</div>`}</td><td class="num" style="white-space:nowrap">${p.first}</td><td class="num" style="white-space:nowrap">${p.last}</td><td class="num"><b>${hm(p.span)}</b></td><td class="num">${p.perHr}</td><td class="num">${p.uniq}</td><td class="num">${p.np}</td></tr>`).join("")}</table></div>`:`<div class="empty small">No calls in this period</div>`}</div></div></div>`;
+    ${card("Login done",lg,`lead cases logged in`,"📂")}
+    ${card("Sanction done",sc,`lead cases sanctioned`,"✅")}
+    ${card("Disbursed",dsL.length,damt?fmtL(damt)+" disbursed":"lead cases disbursed","💰")}
+  </div>`;
+  /* per person: calls (who saved the call) + case steps (credited to the person the case is with) */
+  const rows=new Map();const row=n=>{if(!rows.has(n))rows.set(n,{name:n,p:null,l:0,s:0,d:0,amt:0});return rows.get(n)};
+  A.people.forEach(p=>{row(empName(p.by)).p=p});
+  CS.forEach(c=>{const w=String(c["Team Lead"]||"").trim()||"Not assigned",by=k=>String(c[k]||"").trim()||w;if(inR(c.login))row(by("Login by")).l++;if(inR(c.sanc))row(by("Sanction by")).s++;if(stType(c.Status)==="disb"&&inR(c.disbD)){const r=row(by("Disbursed by"));r.d++;r.amt+=numOf(c["Amount Required"])}});
+  const R=[...rows.values()].sort((a,b)=>(b.d-a.d)||(b.s-a.s)||(b.l-a.l)||((b.p?b.p.calls:0)-(a.p?a.p.calls:0)));
+  const dash='<span class="mute">—</span>',z=v=>v?`<b>${v}</b>`:dash;
+  h+=`<div class="grid2 dash" style="margin-top:4px;align-items:start"><div><h3 style="margin:10px 0 6px">Calls by hour of day</h3>${m.logs.length?columnChart(A.hours.map(b=>({label:b.label,n:b.n})),"hour"):`<div class="empty small">No calls in this period</div>`}</div>
+  <div><h3 style="margin:10px 0 6px">Login, sanction and disbursal by person</h3>${hbars(R.filter(r=>r.l||r.s||r.d).map(r=>({label:r.name,v:r.l+r.s+r.d,tip:`${r.l} login, ${r.s} sanction, ${r.d} disbursed`})),{fmtV:v=>v,emptyMsg:"No login, sanction or disbursal in this period"})}</div></div>
+  <h3 style="margin:16px 0 4px">Who did what</h3><div class="small mute" style="margin-bottom:8px">Calls are counted for the person who saved them. Login, Sanction and Disbursed are counted for the person the lead case was <b>with</b> when it reached that step, so each executive, SM and Team Lead gets their own numbers – even if the case is transferred later.</div>
+  <div class="tw">${R.length?`<table><tr><th>Name</th><th>${one?"First call":"Avg start"}</th><th>${one?"Last call":"Avg end"}</th><th>Working time</th><th>Calls</th><th>Unique</th><th>Not picked up</th><th>📂 Login</th><th>✅ Sanction</th><th>💰 Disbursed</th></tr>
+    ${R.map(r=>{const p=r.p;return `<tr><td style="white-space:nowrap"><b>${esc(r.name)}</b>${p&&!one?`<div class="small mute">${p.days.length} day${p.days.length===1?"":"s"} with calls</div>`:""}</td>
+      <td class="num" style="white-space:nowrap">${p?p.first:dash}</td><td class="num" style="white-space:nowrap">${p?p.last:dash}</td><td class="num">${p?hm(p.span):dash}</td>
+      <td class="num">${p?`<b>${p.calls}</b>`:dash}</td><td class="num">${p?p.uniq:dash}</td><td class="num">${p?p.np:dash}</td>
+      <td class="num">${z(r.l)}</td><td class="num">${z(r.s)}</td><td class="num">${r.d?`<b style="color:var(--green)">${r.d}</b> <span class="small mute">${fmtL(r.amt)}</span>`:dash}</td></tr>`}).join("")}</table>`:`<div class="empty small">Nothing in this period</div>`}</div></div>`;
   return h}
 
 /* ================= DASHBOARD ================= */
@@ -999,15 +1012,18 @@ function rSummary(){
     ["Not interested",m.byOutcome.ni],["No answer / Busy",m.byOutcome.na],["Wrong / Switched off",m.byOutcome.wn],["Call back later",m.byOutcome.cb],
     ["New contacts added",m.newLeads.length],["…from website",m.website],["Callbacks due (as of now)",m.due],["Unassigned contacts (as of now)",m.unassigned],["Total contacts (as of now)",S.leads.length]];
 }
-function rActivity(){const logs=metrics().logs,A=activity(logs);
-  const rows=[["Telecaller","Days active","Avg first call","Avg last call","Working time","Calls","Calls per hour","Unique customers","Connected","Not picked up","Wrong / switched off"],
-    ...A.people.map(p=>[empName(p.by),p.days.length,p.first,p.last,hm(p.span),p.calls,p.perHr,p.uniq,p.con,p.np,p.wn])];
-  rows.push([],["Calls by hour of day"],["Hour","Calls"],...A.hours.map(b=>[b.label,b.n]));return rows}
+function rActivity(){const logs=metrics().logs,A=activity(logs),CS=CASES(),inR=t=>t&&inRange(t);
+  const rows=new Map();const row=n=>{if(!rows.has(n))rows.set(n,{name:n,p:null,l:0,s:0,d:0,amt:0});return rows.get(n)};
+  A.people.forEach(p=>{row(empName(p.by)).p=p});
+  CS.forEach(c=>{const w=String(c["Team Lead"]||"").trim()||"Not assigned",by=k=>String(c[k]||"").trim()||w;if(inR(c.login))row(by("Login by")).l++;if(inR(c.sanc))row(by("Sanction by")).s++;if(stType(c.Status)==="disb"&&inR(c.disbD)){const r=row(by("Disbursed by"));r.d++;r.amt+=numOf(c["Amount Required"])}});
+  const out=[["Name","Days with calls","Avg first call","Avg last call","Working time","Calls","Calls per hour","Unique customers","Connected","Not picked up","Wrong / switched off","Login done","Sanction done","Disbursed","Disbursed amount (₹)"],
+    ...[...rows.values()].map(r=>{const p=r.p;return [r.name,p?p.days.length:0,p?p.first:"",p?p.last:"",p?hm(p.span):"",p?p.calls:0,p?p.perHr:"",p?p.uniq:0,p?p.con:0,p?p.np:0,p?p.wn:0,r.l,r.s,r.d,Math.round(r.amt)]})];
+  out.push([],["Calls by hour of day"],["Hour","Calls"],...A.hours.map(b=>[b.label,b.n]));return out}
 const REPORTS=[
   {k:"full",title:"Full report",desc:"One Excel workbook with a summary sheet plus interested customers, telecaller performance, call activity, call log, calling list, website enquiries, callbacks and field work.",xlsxOnly:true},
   {k:"int",title:"Interested customers",desc:"Customers marked Interested or Converted in the period, with telecaller, last remark and follow-up.",rows:rInterested},
   {k:"calls",title:"Call log",desc:"Every call in the period with telecaller, outcome, remark and follow-up.",rows:rCallLog,filters:true},
-  {k:"act",title:"Call activity",desc:"Working time, first and last call, calls per hour, unique customers and not picked up for each telecaller, plus calls by hour of day.",rows:rActivity},
+  {k:"act",title:"Call activity",desc:"For each person: working time, first and last call, calls, unique customers, not picked up, and their Login, Sanction and Disbursed cases. Plus calls by hour of day.",rows:rActivity},
   {k:"perf",title:"Telecaller performance",desc:"Calls, connect rate, interested customers, converted and pending work for each telecaller.",rows:rPerformance},
   {k:"leads",title:"Calling list",desc:"All contacts with assigned telecaller, status, last remark and source.",rows:rLeads,leadsToggle:true},
   {k:"enq",title:"Website enquiries",desc:"Callback requests from the home page received in the period, and what happened to them.",rows:rEnquiries},
