@@ -139,6 +139,25 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .pgrid.pgrid3{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:560px){.pgrid.pgrid3{grid-template-columns:1fr}}
 .pgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}@media(max-width:560px){.pgrid{grid-template-columns:1fr}}.pgrp+.pgrp{margin-top:16px}
 .btn.danger{background:var(--red);border-color:var(--red);color:#fff}
+.eod-head{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:flex-end;background:#0f2a5c;color:#fff;border-radius:14px;padding:20px 22px;margin-bottom:14px}
+.eod-brand{font-size:12px;letter-spacing:.02em;opacity:.75}.eod-head h2{margin:2px 0 4px;font-size:22px;color:#fff}.eod-sub{font-size:13px;opacity:.85}
+.eod-act{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.eod-act input{height:34px;border-radius:8px;border:0;padding:0 10px;color:#111;background:#fff;color-scheme:light}
+.eod-act .btn{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25);color:#fff}.eod-act .btn:hover{background:rgba(255,255,255,.22)}
+.eod-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.eod-k{background:#fff;border:1px solid var(--line,#e6e8ee);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.eod-k>span{font-size:12.5px;color:#5b6270}.eod-k>b{font-size:26px;line-height:1.15;color:#0f2a5c}.eod-k small{font-size:12px;color:#7a818e;min-height:16px}
+.eod-k em{font-style:normal;font-size:12px;color:#5b6270;border-top:1px dashed #e3e6ec;margin-top:6px;padding-top:6px}.eod-k em b{color:#111}
+.eod-sec{background:#fff;border:1px solid var(--line,#e6e8ee);border-radius:12px;margin-bottom:14px;overflow:hidden}
+.eod-st{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;justify-content:space-between;padding:14px 16px 10px}.eod-st h3{margin:0;font-size:15px}
+.eod-t{width:100%;border-collapse:collapse;font-size:13.5px}.eod-t th,.eod-t td{padding:8px 10px;border-bottom:1px solid #eef0f4;white-space:nowrap}
+.eod-t thead th{font-size:12px;font-weight:600;color:#3b4252;background:#f7f8fb;text-align:left}.eod-t th.num,.eod-t td.num{text-align:right}
+.eod-t th[colspan]{text-align:center;border-bottom:0}.eod-g1{background:#e8eefc!important;color:#1d3f9a!important}.eod-g2{background:#e6f4ef!important;color:#16674a!important}
+.eod-g1s{box-shadow:inset 0 2px 0 #c9d6f6}.eod-g2s{box-shadow:inset 0 2px 0 #bfe3d3}
+.eod-t td.eod-n,.eod-t th.eod-n{text-align:left;font-weight:600;position:sticky;left:0;background:inherit}.eod-t tbody tr:nth-child(even){background:#fbfcfe}.eod-t tbody tr:hover{background:#f3f6fd}
+.eod-t tr.eod-tot td{font-weight:700;background:#f1f4fb;border-top:2px solid #d5dcec;border-bottom:0}.eod-z{color:#b6bcc7}.eod-amt{color:#3b4252}
+.eod-pc{display:flex;align-items:center;gap:8px;min-width:90px}.eod-pc s{display:block;width:56px;height:6px;border-radius:3px;background:#e6e9f0;overflow:hidden;flex:0 0 auto;text-decoration:none}.eod-pc i{display:block;height:100%;background:#2453d6}.eod-pc span{font-size:12.5px;color:#3b4252}
+@media print{body.printing #printArea .eod-head{background:#0f2a5c!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}#printArea .eod *{-webkit-print-color-adjust:exact;print-color-adjust:exact}#printArea .eod-t{font-size:10.5px}#printArea .eod-t th,#printArea .eod-t td{padding:4px 6px;border:1px solid #e3e6ec}#printArea .eod-k>b{font-size:18px}#printArea .eod-kpis{grid-template-columns:repeat(7,1fr)}#printArea .eod-sec{break-inside:avoid}}
+
 .impgrid{display:grid;grid-template-columns:minmax(260px,1fr) 2fr;gap:16px;align-items:start}
 @media(max-width:980px){.impgrid{grid-template-columns:1fr}}
 .imphead{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;margin-bottom:12px}.impbtns{display:flex;gap:6px;flex-shrink:0}
@@ -654,8 +673,8 @@ function render(){
 function renderAdmin(){
   if(!S.srv2&&(view.tab==="cases"||view.tab==="myteam"))view.tab="dash";
   const dueN=CASES().filter(c=>{const x=fuState(c);return x==="over"||x==="today"}).length;
-  const tabs=[["today","Today"+(dueN?" · "+dueN:"")],["dash","Dashboard"],["lead","Interested"],...(S.srv2?[["cases","Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine",ME.role==="Sales Manager"?"My page":"My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],["perf","📈 Performance"],["reports","⬇ Reports"]]
-    .filter(([k])=>k==="mine"||k==="today"||can(k==="myteam"?"team":k));   /* tabs this person is allowed to see */
+  const tabs=[["today","Today"+(dueN?" · "+dueN:"")],["dash","Dashboard"],["lead","Interested"],...(S.srv2?[["cases","Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine",ME.role==="Sales Manager"?"My page":"My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],["eod","📋 EOD Report"],["perf","📈 Performance"],["reports","⬇ Reports"]]
+    .filter(([k])=>k==="mine"||k==="today"||can(k==="myteam"?"team":k==="eod"?"reports":k));   /* tabs this person is allowed to see */
   if(!tabs.length)tabs.push(["mine","My calls"]);
   if(!tabs.some(t=>t[0]===view.tab))view.tab=tabs[0][0];
   let h=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${view.tab===k?"on":""}" data-tab="${k}">${l}</button>`).join("")}</div>`;
@@ -664,11 +683,11 @@ function renderAdmin(){
       <select id="teamSel"><option value="all">All teams</option>${TLs.map(e=>`<option value="${esc(e.id)}" ${view.team===e.id?"selected":""}>${esc(e.name)}'s team</option>`).join("")}<option value="none" ${view.team==="none"?"selected":""}>No team</option></select></label>
       ${view.team&&view.team!=="all"?`<span class="small mute">Showing only ${esc(teamName(view.team))}${view.team!=="none"?" ("+RAW.allEmps.filter(e=>e.active&&teamOf(e)===view.team).length+" people)":""}</span>`:""}</div>`;
   else if(isTL()||(ME&&rank(ME.role)>rank("Team Lead")))h+=`<div class="small mute" style="margin:-4px 0 12px">${S.employees.length>1?"Showing your team: "+esc(S.employees.map(e=>e.name).join(", ")):"Showing only your own contacts, calls and cases"}</div>`;
-  h+=({today:aToday,perf:aPerf,dash:aDash,lead:aLeadsTab,cases:aCases,byemp:aByEmp,myteam:aMyTeam,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings})[view.tab]();
+  h+=({today:aToday,perf:aPerf,dash:aDash,lead:aLeadsTab,cases:aCases,byemp:aByEmp,myteam:aMyTeam,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings,eod:aEOD})[view.tab]();
   $("#app").innerHTML=h;
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{if(b.dataset.tab==="mine"){view.who=ME.id;view.etab="leads";render();return}view.tab=b.dataset.tab;render()});
   const ts=$("#teamSel");if(ts)ts.onchange=()=>{view.team=ts.value;view.sel.clear();if(view.lsel)view.lsel.clear();render()};
-  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();bindCasesTab();bindCases();bindToday();bindPerf();bindMonthly();
+  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();bindCasesTab();bindCases();bindToday();bindPerf();bindMonthly();if(view.tab==="eod")bindEOD();
 }
 /* ---------- MY TEAM (Team Leads): members' details + reset PIN ---------- */
 function aMyTeam(){
@@ -2024,6 +2043,90 @@ function printReport(p){
   let pa=$("#printArea");if(!pa){pa=document.createElement("div");pa.id="printArea";document.body.appendChild(pa)}pa.innerHTML=html;
   document.body.classList.add("printing");const done=()=>{document.body.classList.remove("printing");window.removeEventListener("afterprint",done)};window.addEventListener("afterprint",done);
   toast("In the print window, choose “Save as PDF”");setTimeout(()=>{try{window.print()}catch(e){toast("Printing is blocked here – use the Excel report");done()}},300);
+}
+
+
+/* ---------- EOD REPORT (end of day: calling + lead pipeline, today and month to date) ---------- */
+const crore=n=>n?(n/1e7).toFixed(2):"0.00";
+function eodData(dayTs){
+  const d0=sod(dayTs),d1=d0+DAY-1,m=new Date(d0);m.setDate(1);const m0=m.getTime();
+  const inD=t=>t&&t>=d0&&t<=d1,inM=t=>t&&t>=m0&&t<=d1;
+  const logs=allLogs().filter(g=>inM(g.at)),byP=new Map();
+  (S.employees||[]).filter(e=>e.active!==false&&!/^(admin|manager|sales manager|team lead)$/i.test(e.role||"")).forEach(e=>byP.set(e.id,[]));   // calling staff always listed (0 if no calls); others only when they called
+  logs.forEach(g=>{if(!byP.has(g.by))byP.set(g.by,[]);byP.get(g.by).push(g)});
+  const st=L=>{const u=uniqN(L),c=uniqConn(L);return{calls:u,total:L.length,conn:c,pct:u?Math.round(c/u*100):0,int:uniqN(L.filter(g=>g.outcome==="int"||g.outcome==="conv"))}};
+  const calling=[...byP].map(([id,L])=>({name:empName(id),d:st(L.filter(g=>inD(g.at))),m:st(L)})).sort((a,b)=>b.m.calls-a.m.calls||a.name.localeCompare(b.name));
+  const sumC=k=>{const o={calls:0,total:0,conn:0,int:0};calling.forEach(r=>{["calls","total","conn","int"].forEach(f=>o[f]+=r[k][f])});o.pct=o.calls?Math.round(o.conn/o.calls*100):0;return o};
+  const names=lcSmMap(CASES()),blank=()=>({lead:[0,0],inq:[0,0],login:[0,0],sanc:[0,0],disb:[0,0]}),pipe={d:new Map(),m:new Map()};
+  CASES().forEach(c=>{const sm=lcSmOf(c,names),amt=numOf(c["Amount Required"]),lt=String(c["Lead Type"]||"").toLowerCase(),
+      add=(k,f,t)=>{[["d",inD],["m",inM]].forEach(([w,fn])=>{if(!fn(t))return;const M=pipe[w];if(!M.has(sm))M.set(sm,blank());const r=M.get(sm)[f];r[0]++;r[1]+=amt})};
+    add(0,lt.startsWith("inq")?"inq":"lead",c.leadD);add(0,"login",c.login);add(0,"sanc",c.sanc);if(stType(c.Status)==="disb")add(0,"disb",c.disbD)});
+  const smAll=[...new Set([...pipe.m.keys()])].sort((a,b)=>{const x=pipe.m.get(a),y=pipe.m.get(b);return (y.lead[0]+y.inq[0])-(x.lead[0]+x.inq[0])||a.localeCompare(b)});
+  const rowsOf=w=>smAll.map(n=>({name:n,...(pipe[w].get(n)||blank())})),tot=rows=>{const o=blank();rows.forEach(r=>Object.keys(o).forEach(k=>{o[k][0]+=r[k][0];o[k][1]+=r[k][1]}));return o};
+  const pd=rowsOf("d"),pm=rowsOf("m");
+  return {d0,m0,calling,cd:sumC("d"),cm:sumC("m"),pd,pm,td:tot(pd),tm:tot(pm)};
+}
+const PIPE_COLS=[["lead","Leads generated"],["inq","Inquiries"],["login","Login done"],["sanc","Sanction done"],["disb","Disbursed"]];
+function eodHTML(E){
+  const dd=v=>v?v:'<span class="eod-z">–</span>',dl=new Date(E.d0).toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short",year:"numeric"}),
+    ml=new Date(E.m0).toLocaleDateString("en-IN",{day:"numeric"})+"–"+new Date(E.d0).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});
+  const kpi=(l,a,b,sub)=>`<div class="eod-k"><span>${l}</span><b>${a}</b><small>${sub||""}</small><em>Month to date: <b>${b}</b></em></div>`;
+  const money=x=>x[0]?`${x[0]} · ₹${crore(x[1])} Cr`:"0";
+  let h=`<div class="eod-kpis">
+    ${kpi("Calls",E.cd.calls,E.cm.calls,E.cd.total>E.cd.calls?`${E.cd.total} dials incl. repeats`:"different numbers")}
+    ${kpi("Connected",E.cd.conn,E.cm.conn,`${E.cd.pct}% of calls · MTD ${E.cm.pct}%`)}
+    ${kpi("Leads generated",E.td.lead[0],money(E.tm.lead),E.td.lead[0]?`₹${crore(E.td.lead[1])} Cr`:"—")}
+    ${kpi("Inquiries",E.td.inq[0],money(E.tm.inq),E.td.inq[0]?`₹${crore(E.td.inq[1])} Cr`:"—")}
+    ${kpi("Login done",E.td.login[0],money(E.tm.login),E.td.login[0]?`₹${crore(E.td.login[1])} Cr`:"—")}
+    ${kpi("Sanction done",E.td.sanc[0],money(E.tm.sanc),E.td.sanc[0]?`₹${crore(E.td.sanc[1])} Cr`:"—")}
+    ${kpi("Disbursed",E.td.disb[0],money(E.tm.disb),E.td.disb[0]?`₹${crore(E.td.disb[1])} Cr`:"—")}</div>`;
+  const bar=p=>`<div class="eod-pc"><s><i style="width:${Math.min(100,p)}%"></i></s><span>${p}%</span></div>`;
+  const cr=(r,cls)=>`<tr class="${cls||""}"><td class="eod-n">${esc(r.name)}</td>${["d","m"].map(w=>{const x=r[w];return `<td class="num">${dd(x.calls)}</td><td class="num">${dd(x.conn)}</td><td>${x.calls?bar(x.pct):'<span class="eod-z">–</span>'}</td><td class="num">${dd(x.int)}</td>`}).join("")}</tr>`;
+  h+=`<div class="eod-sec"><div class="eod-st"><h3>Calling – pre-sales</h3><span class="small mute">Calls count each mobile number once · Connected = picked up</span></div>
+   <div class="tw"><table class="eod-t"><thead><tr><th rowspan="2" class="eod-n">Pre-sales</th><th colspan="4" class="eod-g1">Today · ${esc(dl)}</th><th colspan="4" class="eod-g2">Month to date · ${esc(ml)}</th></tr>
+   <tr>${["g1","g2"].map(g=>`<th class="num eod-${g}s">Calls</th><th class="num eod-${g}s">Connected</th><th class="eod-${g}s">Connect %</th><th class="num eod-${g}s">Interested</th>`).join("")}</tr></thead>
+   <tbody>${E.calling.length?E.calling.map(r=>cr(r)).join(""):`<tr><td colspan="9" class="mute">No calls this month</td></tr>`}</tbody>
+   <tfoot>${cr({name:"Total",d:E.cd,m:E.cm},"eod-tot")}</tfoot></table></div></div>`;
+  const pt=(rows,T,label,cls)=>`<div class="eod-sec"><div class="eod-st"><h3>Lead pipeline – ${label}</h3><span class="small mute">By SM (who filled the lead form) · amounts in ₹ crore</span></div>
+   <div class="tw"><table class="eod-t"><thead><tr><th rowspan="2" class="eod-n">Pre-sales</th>${PIPE_COLS.map(([k,l])=>`<th colspan="2" class="${cls}">${l}</th>`).join("")}</tr>
+   <tr>${PIPE_COLS.map(()=>`<th class="num ${cls}s">No.</th><th class="num ${cls}s">₹ Cr</th>`).join("")}</tr></thead>
+   <tbody>${rows.length?rows.map(r=>`<tr><td class="eod-n">${esc(r.name)}</td>${PIPE_COLS.map(([k])=>`<td class="num">${dd(r[k][0])}</td><td class="num eod-amt">${r[k][0]?crore(r[k][1]):'<span class="eod-z">–</span>'}</td>`).join("")}</tr>`).join(""):`<tr><td colspan="11" class="mute">Nothing this month yet</td></tr>`}</tbody>
+   <tfoot><tr class="eod-tot"><td class="eod-n">Total</td>${PIPE_COLS.map(([k])=>`<td class="num">${T[k][0]}</td><td class="num">${crore(T[k][1])}</td>`).join("")}</tr></tfoot></table></div></div>`;
+  const today=E.pd.filter(r=>PIPE_COLS.some(([k])=>r[k][0]));
+  h+=pt(today,E.td,"today","eod-g1")+pt(E.pm,E.tm,"month to date","eod-g2");
+  return h;
+}
+function aEOD(){
+  if(!view.eodDay)view.eodDay=ymd(Date.now());
+  const E=eodData(new Date(view.eodDay+"T12:00").getTime());view.eod=E;
+  const team=isTL()&&ME?`${esc(ME.name)}'s team`:"All teams";
+  return `<div class="eod"><div class="eod-head"><div><div class="eod-brand">SN Financial Services</div><h2>End-of-day report</h2>
+     <div class="eod-sub">${esc(new Date(E.d0).toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))} · ${team} · as of ${new Date(lastSync||Date.now()).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</div></div>
+   <div class="eod-act"><input type="date" id="eodDay" value="${view.eodDay}" max="${ymd(Date.now())}"><button class="btn sm" id="eodWa">📋 Copy for WhatsApp</button><button class="btn sm" id="eodXl">⬇ Excel</button><button class="btn sm" id="eodPdf">🖨 PDF</button></div></div>
+   ${eodHTML(E)}
+   <p class="small mute" style="margin:6px 2px 0">Leads generated and Inquiries are counted on the lead date; Login, Sanction and Disbursed on the day the case reached that step. Pre-sales in the lead pipeline is the SM Name on the lead form.</p></div>`;
+}
+function eodText(E){const dl=new Date(E.d0).toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short",year:"numeric"}),m=x=>x[0]?`${x[0]} (₹${crore(x[1])} Cr)`:"0";
+  let t=`*SN Financial Services – EOD Report*\n${dl}\n\n*Calling* (Today | MTD)\n`;
+  E.calling.forEach(r=>{t+=`• ${r.name}: ${r.d.calls} calls, ${r.d.conn} connected | ${r.m.calls}, ${r.m.conn}\n`});
+  t+=`*Total: ${E.cd.calls} calls, ${E.cd.conn} connected (${E.cd.pct}%) | ${E.cm.calls}, ${E.cm.conn} (${E.cm.pct}%)*\n\n*Lead pipeline* (Today | MTD)\n`;
+  PIPE_COLS.forEach(([k,l])=>{t+=`• ${l}: ${m(E.td[k])} | ${m(E.tm[k])}\n`});
+  const top=E.pm.filter(r=>r.lead[0]+r.inq[0]);if(top.length){t+=`\n*By pre-sales (MTD)*\n`;top.forEach(r=>{t+=`• ${r.name}: ${r.lead[0]} lead${r.lead[0]===1?"":"s"}, ${r.inq[0]} inquir${r.inq[0]===1?"y":"ies"}${r.login[0]?`, ${r.login[0]} login`:""}${r.sanc[0]?`, ${r.sanc[0]} sanction`:""}${r.disb[0]?`, ${r.disb[0]} disbursed`:""}\n`})}
+  return t.trim()}
+function eodSheets(E){const dl=ymd(E.d0);
+  const c=[["Pre-sales","Today – Calls","Today – Connected","Today – Connect %","Today – Interested","MTD – Calls","MTD – Connected","MTD – Connect %","MTD – Interested"],
+    ...E.calling.map(r=>[r.name,r.d.calls,r.d.conn,r.d.pct,r.d.int,r.m.calls,r.m.conn,r.m.pct,r.m.int]),["Total",E.cd.calls,E.cd.conn,E.cd.pct,E.cd.int,E.cm.calls,E.cm.conn,E.cm.pct,E.cm.int]];
+  const p=(rows,T)=>[["Pre-sales",...PIPE_COLS.flatMap(([,l])=>[l+" – No.",l+" – ₹ Cr"])],...rows.map(r=>[r.name,...PIPE_COLS.flatMap(([k])=>[r[k][0],+crore(r[k][1])])]),["Total",...PIPE_COLS.flatMap(([k])=>[T[k][0],+crore(T[k][1])])]];
+  return [["Calling",c],["Pipeline today",p(E.pd.filter(r=>PIPE_COLS.some(([k])=>r[k][0])),E.td)],["Pipeline MTD",p(E.pm,E.tm)]]}
+function bindEOD(){const on=(s,ev,f)=>{const el=$(s);if(el)el[ev]=f};
+  on("#eodDay","onchange",e=>{if(e.target.value){view.eodDay=e.target.value;render()}});
+  on("#eodWa","onclick",async()=>{const t=eodText(view.eod);try{await navigator.clipboard.writeText(t);toast("Copied – paste it in WhatsApp")}catch(e){askOk({title:"Copy this text",ok:"Done",body:`<textarea style="width:100%;height:260px">${esc(t)}</textarea>`})}});
+  on("#eodXl","onclick",async()=>{toast("Preparing Excel file…");await loadXLSX();const wb=XLSX.utils.book_new();eodSheets(view.eod).forEach(([n,rows])=>XLSX.utils.book_append_sheet(wb,sheetFrom(rows),n));
+    const f="SNFS EOD report "+view.eodDay+".xlsx";XLSX.writeFile(wb,f);toast("Downloaded "+f)});
+  on("#eodPdf","onclick",()=>{let pa=$("#printArea");if(!pa){pa=document.createElement("div");pa.id="printArea";document.body.appendChild(pa)}
+    pa.innerHTML=`<div class="eod eod-print">${$(".eod").innerHTML}</div>`;pa.querySelectorAll(".eod-act").forEach(x=>x.remove());
+    document.body.classList.add("printing");const done=()=>{document.body.classList.remove("printing");window.removeEventListener("afterprint",done)};window.addEventListener("afterprint",done);
+    toast("In the print window, choose “Save as PDF”");setTimeout(()=>{try{window.print()}catch(e){toast("Printing is blocked here – use Excel");done()}},300)});
 }
 
 /* ---------- LEAD & INQUIRY FORM (filled by the SM) ---------- */
