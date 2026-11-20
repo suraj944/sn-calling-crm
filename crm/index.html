@@ -968,7 +968,7 @@ function aDash(){
     ${stat("New contacts",m.newLeads.length,`added to the calling list · ${m.website} from website`)}
     ${stat("Callbacks due",m.due,`${m.unassigned} contact${m.unassigned===1?"":"s"} unassigned`,"Callbacks scheduled for today or earlier (any period)")}
   </div>`;
-  h+=activitySection(m);
+  
   const {buckets,unit}=dayBuckets(m.logs);
   h+=`<div class="grid2 dash">
     <div class="card pad"><h3>Calls per ${unit}</h3>${m.logs.length?columnChart(buckets,unit):`<div class="empty small">No calls in this period</div>`}</div>
