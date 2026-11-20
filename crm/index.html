@@ -139,6 +139,7 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .pgrid.pgrid3{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:560px){.pgrid.pgrid3{grid-template-columns:1fr}}
 .pgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}@media(max-width:560px){.pgrid{grid-template-columns:1fr}}.pgrp+.pgrp{margin-top:16px}
 .btn.danger{background:var(--red);border-color:var(--red);color:#fff}
+tr.selrow td{background:#fff4e5}
 @media(min-width:640px){.modal-bg{align-items:center}}
 .modal{background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;max-height:92vh;overflow:auto}
 @media(min-width:640px){.modal{border-radius:16px}}
@@ -440,6 +441,7 @@ const Live={
   async saveCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async createCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async removeCase(){throw new Error("Open the website version of the CRM for lead cases")},
+  async removeLogs(){throw new Error("Open the website version of the CRM to remove call logs")},
   async transferCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async setPerms(){throw new Error("Open the website version of the CRM to change permissions")},
   async saveTargets(){throw new Error("Open the website version of the CRM to set targets")},
@@ -477,6 +479,7 @@ const Script={
   async saveCase(c){await this.req("saveCase",{c})},
   async createCase(leadId){await this.req("createCase",{leadId})},
   async removeCase(code){await this.req("removeCase",{code})},
+  async removeLogs(ids){await this.req("removeLogs",{ids})},
   async transferCase(code,to,note){await this.req("transferCase",{code,to,note})},
   async setPerms(id,perms){await this.req("setPerms",{id,perms})},
   async saveTargets(month,list){await this.req("saveTargets",{month,list})},
@@ -1377,15 +1380,18 @@ function aTeam(){
     ${canViewAs()?`<button class="btn sm" data-as="${esc(e.id)}">View list</button>`:""}</td></tr>`}).join("");
   return h+`</table></div>`;
 }
+const isAdminUser=()=>MODE==="live"&&!!ME&&ME.role==="Admin";
 const filteredLogs=()=>allLogs().filter(g=>(view.logEmp==="all"||g.by===view.logEmp)&&(view.logOut==="all"||g.outcome===view.logOut));
 function aLogs(){
-  const logs=filteredLogs();
+  const logs=filteredLogs(),adm=isAdminUser();if(!view.logSel)view.logSel=new Set();
+  const shown=new Set(logs.map(g=>g.id));[...view.logSel].forEach(id=>{if(!shown.has(id))view.logSel.delete(id)});const nSel=view.logSel.size;
   let h=`<div class="card pad" style="margin-bottom:12px"><div class="row">
    <select id="lEmp"><option value="all">Everyone</option>${S.employees.map(e=>`<option value="${esc(e.id)}" ${view.logEmp===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select>
    <select id="lOut"><option value="all">All outcomes</option>${Object.entries(OUTCOMES).map(([k,o])=>`<option value="${k}" ${view.logOut===k?"selected":""}>${o.label}</option>`).join("")}</select>
-   <span class="spacer"></span><span class="mute small">${logs.length} calls</span><button class="btn" id="copyCsv">⧉ Copy as CSV</button></div></div>
-  <div class="card tw"><table><tr><th>Date & time</th><th>Called by</th><th>Customer</th><th>Number</th><th>Outcome</th><th>Remark</th><th>Follow-up</th></tr>`;
-  h+=logs.map(g=>`<tr><td class="num small">${fmt(g.at)}</td><td>${esc(empName(g.by))}</td><td><b>${esc(g.lead.name)}</b></td><td class="num">${esc(g.lead.phone)}</td><td>${pill(g.outcome)}</td><td class="small" style="max-width:260px">${esc(g.remark)||'<span class="mute">—</span>'}</td><td class="small num">${g.followUp?fmt(g.followUp):"—"}</td></tr>`).join("")||`<tr><td colspan="7"><div class="empty">No calls logged</div></td></tr>`;
+   <span class="spacer"></span><span class="mute small">${logs.length} calls</span>${adm&&nSel?`<button class="btn" id="lgClr">Clear selection</button><button class="btn danger" id="lgRm">🗑 Remove ${nSel} call${nSel===1?"":"s"}</button>`:""}<button class="btn" id="copyCsv">⧉ Copy as CSV</button></div>
+   ${adm?`<p class="mute small" style="margin:8px 0 0">Admin only: tick wrong or test calls and press Remove. They stop counting everywhere (Dashboard, reports, targets) and are kept in the <b>Removed Calls</b> tab of the sheet.</p>`:""}</div>
+  <div class="card tw"><table><tr>${adm?`<th style="width:30px"><input type="checkbox" id="lgAll" title="Select all shown" ${logs.length&&logs.every(g=>view.logSel.has(g.id))?"checked":""}></th>`:""}<th>Date & time</th><th>Called by</th><th>Customer</th><th>Number</th><th>Outcome</th><th>Remark</th><th>Follow-up</th></tr>`;
+  h+=logs.map(g=>`<tr${adm&&view.logSel.has(g.id)?' class="selrow"':""}>${adm?`<td><input type="checkbox" data-lsel="${esc(g.id)}" ${view.logSel.has(g.id)?"checked":""}></td>`:""}<td class="num small">${fmt(g.at)}</td><td>${esc(empName(g.by))}</td><td><b>${esc(g.lead.name)}</b></td><td class="num">${esc(g.lead.phone)}</td><td>${pill(g.outcome)}</td><td class="small" style="max-width:260px">${esc(g.remark)||'<span class="mute">—</span>'}</td><td class="small num">${g.followUp?fmt(g.followUp):"—"}</td></tr>`).join("")||`<tr><td colspan="${adm?8:7}"><div class="empty">No calls logged</div></td></tr>`;
   return h+`</table></div>`;
 }
 function distributePlan(ids){const E=callers().length?callers():S.employees;const plan={};if(!E.length)return plan;
@@ -1433,6 +1439,18 @@ function bindAdmin(){
   document.querySelectorAll("[data-as]").forEach(b=>b.onclick=()=>{view.who=b.dataset.as;view.tab="my";render()});
   on("#lEmp","onchange",e=>{view.logEmp=e.target.value;render()});
   on("#lOut","onchange",e=>{view.logOut=e.target.value;render()});
+  document.querySelectorAll("[data-lsel]").forEach(c=>c.onchange=()=>{c.checked?view.logSel.add(c.dataset.lsel):view.logSel.delete(c.dataset.lsel);render()});
+  on("#lgAll","onchange",e=>{filteredLogs().forEach(g=>e.target.checked?view.logSel.add(g.id):view.logSel.delete(g.id));render()});
+  on("#lgClr","onclick",()=>{view.logSel.clear();render()});
+  on("#lgRm","onclick",async()=>{if(!isAdminUser())return toast("Only Admin can remove call logs");
+    const pick=allLogs().filter(g=>view.logSel.has(g.id)),ids=pick.map(g=>g.id);if(!ids.length)return toast("Tick the calls to remove first");
+    const by={};pick.forEach(g=>{const k=empName(g.by);by[k]=(by[k]||0)+1});
+    if(!await askOk({title:"Remove "+ids.length+" call log"+(ids.length===1?"":"s")+"?",ok:"Yes, remove",danger:true,
+      body:`<ul>${Object.entries(by).map(([k,n])=>`<li><b>${esc(k)}</b>: ${n} call${n===1?"":"s"}</li>`).join("")}</ul>
+      <p>${pick.slice(0,5).map(g=>`${fmt(g.at)} · ${esc(g.lead.name)} · ${OUTCOMES[g.outcome]?OUTCOMES[g.outcome].label:esc(g.outcome)}`).join("<br>")}${pick.length>5?`<br>…and ${pick.length-5} more`:""}</p>
+      <p class="mute small">They stop counting in the Dashboard, reports and targets. A copy is kept in the <b>Removed Calls</b> tab of the Google Sheet.</p>`}))return;
+    const done=btnBusy($("#lgRm"),"Removing…");
+    if(await write(api=>api.removeLogs(ids),ids.length+" call log"+(ids.length===1?"":"s")+" removed","Removing "+ids.length+" call log"+(ids.length===1?"":"s")+"…")){view.logSel.clear();render()}else done()});
   on("#copyCsv","onclick",async()=>{const q=v=>`"${String(v??"").replace(/"/g,'""')}"`;
     const csv=["Date,Called by,Customer,Number,City,Outcome,Remark,Follow-up",...filteredLogs().map(g=>[fmt(g.at),empName(g.by),g.lead.name,g.lead.phone,g.lead.city,OUTCOMES[g.outcome].label,g.remark,g.followUp?fmt(g.followUp):""].map(q).join(","))].join("\n");
     try{await navigator.clipboard.writeText(csv);toast("Copied – paste into Excel")}catch(e){toast("Copy blocked by browser")}});

@@ -129,6 +129,7 @@ function doPost(e) {
         case "newCase":    return newCase_(me, b.c || {}, !!b.force, String(b.to || ""));
         case "createCase": can_(me, "caseEdit"); return createCaseFor_(me, b.leadId);
         case "removeCase": can_(me, "caseRemove"); return removeCase_(me, b.code);
+        case "removeLogs": if (me.role !== "Admin") throw new Error("Only Admin can remove call logs"); return removeLogs_(me, b.ids || []);
         case "transferCase": return transferCase_(me, b.code, b.to, b.note);   // Admin (caseTransfer) or the SM who filled the case, while it's still with them
     case "saveTargets": can_(me, "targetEdit"); return saveTargets_(me, b.month, b.list);
         case "setPerms":   need_(me, "Admin"); return setPerms_(me, b.id, b.perms || []);
@@ -714,6 +715,38 @@ function transferCase_(me, code, to, note) {
   row[C_["Last updated"]] = now_(); row[C_["Updated by"]] = me.name;
   sh.getRange(i + 2, 1, 1, CASE_COLS).setValues([row]);
   return { saved: true, to: t.name };
+}
+// Admin only: take wrong call logs out of CallLogs. The rows are kept in the "Removed Calls" tab (with who removed them and when),
+// so nothing is lost. A contact whose latest call was removed goes back to its latest remaining call (or to "not called yet").
+function removeLogs_(me, ids) {
+  const want = new Set((ids || []).map(x => String(x).trim()).filter(Boolean));
+  if (!want.size) throw new Error("Choose the calls to remove");
+  if (want.size > 500) throw new Error("Remove at most 500 calls at a time");
+  const ss = SpreadsheetApp.getActiveSpreadsheet(), sh = sheet_("CallLogs"), n = sh.getLastRow() - 1;
+  if (n < 1) throw new Error("There are no call logs");
+  const nc = Math.max(10, sh.getLastColumn()), vals = sh.getRange(2, 1, n, nc).getDisplayValues();
+  const hit = []; vals.forEach((r, i) => { if (want.has(String(r[0]).trim())) hit.push(i); });
+  if (!hit.length) throw new Error("Those calls were not found – press Refresh");
+  let rm = ss.getSheetByName("Removed Calls");
+  if (!rm) {
+    rm = ss.insertSheet("Removed Calls");
+    rm.getRange(1, 1, 1, nc + 2).setValues([sh.getRange(1, 1, 1, nc).getDisplayValues()[0].concat(["Removed at", "Removed by"])]); rm.setFrozenRows(1);
+  }
+  const at = now_();
+  rm.getRange(rm.getLastRow() + 1, 1, hit.length, nc + 2).setValues(hit.map(i => vals[i].concat([at, me.name])));
+  for (let k = hit.length - 1; k >= 0;) {                 // delete from the bottom up, a block of neighbouring rows at a time
+    let j = k; while (j > 0 && hit[j - 1] === hit[j] - 1) j--;
+    sh.deleteRows(hit[j] + 2, k - j + 1); k = j - 1;
+  }
+  const gone = new Set(hit), leads = sheet_("Leads");
+  new Set(hit.map(i => String(vals[i][2]).trim())).forEach(id => {
+    const r = id && findRow_(leads, id); if (!r) return;
+    const lastAt = String(leads.getRange(r, 9).getDisplayValue()).trim();
+    if (!hit.some(i => String(vals[i][2]).trim() === id && String(vals[i][1]).trim() === lastAt)) return;   // its latest call is still there
+    let last = null; vals.forEach((x, i) => { if (!gone.has(i) && String(x[2]).trim() === id) last = x; });
+    leads.getRange(r, 6, 1, 4).setValues([last ? [last[7], last[9], last[8], last[1]] : ["", "", "", ""]]);
+  });
+  return { saved: true, removed: hit.length };
 }
 function removeCase_(me, code) {
   const sh = caseSheet_(), rows = caseRows_();
