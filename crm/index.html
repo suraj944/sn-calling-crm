@@ -696,7 +696,7 @@ function aByEmp(){
       ${canViewAs()?`<button class="btn sm" data-goemp="${esc(P.e.id)}">Open their page</button>`:""}</div>
     <div class="stats sm">
       <div class="card stat"><span>Calling list</span><b>${P.list.length}</b><div class="small mute">${P.notCalled} not yet called</div></div>
-      <div class="card stat"><span>Calls made</span><b>${P.calls.length}</b><div class="small mute">${P.calls.length?pct(P.connected,P.calls.length)+"% connected":"in this period"}</div></div>
+      <div class="card stat" title="Different mobile numbers called"><span>Calls made</span><b>${uniqN(P.calls)}</b><div class="small mute">${P.calls.length?pct(uniqConn(P.calls),uniqN(P.calls))+"% connected"+(P.calls.length>uniqN(P.calls)?" · "+P.calls.length+" calls in total":""):"in this period"}</div></div>
       <div class="card stat"><span>Interested</span><b style="color:var(--green)">${P.leads.length}</b><div class="small mute">${P.leadsP.length} new in this period</div></div>
       <div class="card stat"><span>Converted</span><b style="color:var(--brand)">${P.conv}</b><div class="small mute">as of now</div></div>
       <div class="card stat"><span>Callbacks due</span><b style="color:var(--amber)">${P.due}</b><div class="small mute">today or earlier</div></div></div>
@@ -775,6 +775,8 @@ const leadLog=l=>{for(let i=l.logs.length-1;i>=0;i--){const g=l.logs[i];if(g.out
 const leadAt=l=>{const g=leadLog(l);return g?g.at:(isLeadC(l)?(l.lastAt||l.created):null)};
 const leadsIn=(arr=S.leads)=>arr.filter(l=>isLeadC(l)&&inRange(leadAt(l)));
 const custKey=g=>{const d=String(g.lead.phone||"").replace(/\D/g,"").slice(-10);return d.length===10?d:"id:"+g.lead.id};   // one customer = one mobile number
+const uniqN=logs=>new Set(logs.map(custKey)).size,uniqConn=logs=>uniqN(logs.filter(g=>CONNECTED(g.outcome)));
+const callsSub=(logs,extra)=>{const u=uniqN(logs),n=logs.length;return [n>u?`${n} calls in total (${n-u} repeat${n-u===1?"":"s"})`:"",extra||""].filter(Boolean).join(" · ")||"each number counted once"};
 function allLogs(){return S.leads.flatMap(l=>l.logs.map(g=>({...g,lead:l}))).sort((a,b)=>(b.at||0)-(a.at||0))}
 const callers=()=>S.employees.filter(e=>e.role==="Telecaller Executive"||e.role==="Team Lead"||S.leads.some(l=>l.assignedTo===e.id));
 /* ================= DATE RANGE (shared by Dashboard & Reports) ================= */
@@ -946,8 +948,8 @@ function aDash(){
   const stat=(label,val,sub,tip)=>`<div class="card stat" ${tip?`title="${esc(tip)}"`:""}><span>${label}</span><b>${val}</b>${sub?`<div class="small mute">${sub}</div>`:""}</div>`;
   let h=rangeBar();
   h+=`<div class="stats">
-    ${stat("Calls made",m.logs.length,`${m.people.filter(p=>p.calls).length} telecaller${m.people.filter(p=>p.calls).length===1?"":"s"} active`)}
-    ${stat("Connected",m.connected,`${pct(m.connected,m.logs.length)}% of calls`,"Calls that weren't 'No answer / Busy' or 'Wrong / Switched off'")}
+    ${stat("Calls made",uniqN(m.logs),callsSub(m.logs,`${m.people.filter(p=>p.calls).length} telecaller${m.people.filter(p=>p.calls).length===1?"":"s"} active`),"Different mobile numbers called – calling the same number again is not counted twice")}
+    ${stat("Connected",uniqConn(m.logs),`${pct(uniqConn(m.logs),uniqN(m.logs))}% of numbers called`,"Different numbers that picked up at least once (not 'No answer / Busy', 'Not connected' or 'Wrong / Switched off')")}
     ${stat("Interested",m.leads.length,`customer${m.leads.length===1?"":"s"} who said they're interested`,"Each customer is counted once – on the day they first said they're interested (marked Interested or Converted)")}
     ${stat("Converted",m.byOutcome.conv,`${pct(m.byOutcome.conv,m.connected)}% of connected`)}
     ${stat("New contacts",m.newLeads.length,`added to the calling list · ${m.website} from website`)}
@@ -1526,8 +1528,8 @@ function renderEmp(){
   let h=etabs()+`<div style="margin-bottom:14px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">${backBtn}<div style="flex:1"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>${tlBtn}</div>`;
   h+=rangeBar();
   h+=`<div class="stats">
-  <div class="card stat"><span>Calls made</span><b>${calls.length}</b><div class="small mute">${calls.length?new Set(calls.map(custKey)).size+" different customers":"in this period"}</div></div>
-  <div class="card stat"><span>Connected</span><b>${con}</b><div class="small mute">${calls.length?Math.round(con/calls.length*100)+"% of calls":"—"}</div></div>
+  <div class="card stat" title="Different mobile numbers called – calling the same number again is not counted twice"><span>Calls made</span><b>${uniqN(calls)}</b><div class="small mute">${calls.length?callsSub(calls):"in this period"}</div></div>
+  <div class="card stat" title="Different numbers that picked up at least once"><span>Connected</span><b>${uniqConn(calls)}</b><div class="small mute">${calls.length?Math.round(uniqConn(calls)/uniqN(calls)*100)+"% of numbers called":"—"}</div></div>
   <div class="card stat" title="Customers marked Interested (or Converted) – counted on the day they first said they're interested"><span>Interested</span><b style="color:var(--green)">${myLeadsP.length}</b><div class="small mute">${oc("ni")} not interested</div></div>
   <div class="card stat"><span>Converted</span><b style="color:var(--brand)">${oc("conv")}</b><div class="small mute">${oc("cb")} call back later</div></div>
   <div class="card stat"><span>${own?"My calling list":"Calling list"}</span><b>${mine.length}</b><div class="small mute">${mine.filter(l=>l.status==="new").length} not yet called</div></div>
