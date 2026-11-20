@@ -655,7 +655,7 @@ function prepareCase_(me, c, force, to, src) {
   if (t) lines.push(d + " Transferred from " + me.name + " to " + t.name + " by " + me.name);
   if (note) lines.push(d + " " + note);
   row[C_["Remarks"]] = lines.join(" // ");
-  row[C_["Team Lead"]] = t ? t.name : "";
+  row[C_["Team Lead"]] = t ? t.name : me.name;                          // not sent on: the case stays with the person who filled it
   row[C_["Last updated"]] = now_(); row[C_["Updated by"]] = me.name;
   return { row, code: nextCode_(rows), to: t ? t.name : "" };
 }
