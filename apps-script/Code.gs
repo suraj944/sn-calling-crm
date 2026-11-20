@@ -411,7 +411,9 @@ function caseSheet_() {
   if (!caseColsOk_) {                                   // add Next follow-up / Login date / Sanction date columns once
     if (sh.getMaxColumns() < CASE_COLS) sh.insertColumnsAfter(sh.getMaxColumns(), CASE_COLS - sh.getMaxColumns());
     const hdr = sh.getRange(1, 1, 1, CASE_COLS).getDisplayValues()[0];
-    if (hdr.some((h, i) => !String(h).trim())) sh.getRange(1, 1, 1, CASE_COLS).setValues([hdr.map((h, i) => String(h).trim() || CASE_HDR[i])]);
+    // blank headers get their name; the CRM's own columns (Last updated onwards) always carry the right name
+    const fix = hdr.map((h, i) => i >= C_["Last updated"] ? CASE_HDR[i] : (String(h).trim() || CASE_HDR[i]));
+    if (fix.some((h, i) => h !== hdr[i])) sh.getRange(1, 1, 1, CASE_COLS).setValues([fix]);
     caseColsOk_ = true;
   }
   return sh;
