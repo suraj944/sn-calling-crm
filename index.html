@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="site.css?v=3">
+<link rel="stylesheet" href="site.css?v=4">
 </head>
 <body>
 
@@ -68,12 +68,13 @@
   <div class="wrap">
     <div class="lhead">
       <div>
-        <h2 class="h2">Banks and NBFCs we place files with</h2>
-        <p class="lead">We compare offers across public sector banks, private banks, housing finance companies and NBFCs, and pick the lenders that suit your profile.</p>
+        <h2 class="h2">We work with all banks and NBFCs</h2>
+        <p class="lead">Public sector banks, private banks, housing finance companies and NBFCs – we compare offers across all of them and pick the lenders that suit your profile. Some of the lenders we work with:</p>
       </div>
-      <div class="lstat"><b id="lenderCount"></b><span>lending partners</span></div>
+      <div class="lstat"><b>All banks</b><span>and NBFCs</span></div>
     </div>
     <div class="lgrid" id="lenderGrid"></div>
+    <p class="lmore">…and every other bank and NBFC. Already talking to a lender that isn’t listed here? We work with them too.</p>
   </div>
 </section>
 
@@ -247,8 +248,7 @@ else{$("#cPhoneRow").remove();$("#mCall").remove()}
 $("#cEmail").textContent=CONTACT.email;$("#cEmail").href="mailto:"+CONTACT.email;
 $("#cHours").textContent=CONTACT.hours;
 $("#yr").textContent=new Date().getFullYear();
-$("#lenderGrid").innerHTML=LENDERS.map(([g,l])=>`<div class="lgroup"><h3>${esc(g)}<span>${l.length} ${l.length===1?"lender":"lenders"}</span></h3><ul>${l.map(n=>"<li>"+esc(n)+"</li>").join("")}</ul></div>`).join("");
-$("#lenderCount").textContent=LENDERS.reduce((a,g)=>a+g[1].length,0);
+$("#lenderGrid").innerHTML=LENDERS.map(([g,l])=>`<div class="lgroup"><h3>${esc(g)}</h3><ul>${l.map(n=>"<li>"+esc(n)+"</li>").join("")}</ul></div>`).join("");
 
 /* phone menu */
 const mb=$("#menuBtn"),dr=$("#drawer");
