@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page not found – SN Financial Services</title>
+<meta name="robots" content="noindex">
+<style>
+body{margin:0;font-family:Inter,system-ui,sans-serif;color:#17181a;background:#f3f4f1;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.box{background:#fff;border:1px solid #e3e4df;border-radius:18px;padding:36px;max-width:460px}
+h1{font-size:28px;margin:16px 0 8px}p{color:#3d4148;margin:0 0 22px;line-height:1.55}
+a.btn{display:inline-flex;align-items:center;min-height:48px;padding:12px 20px;border-radius:10px;font-weight:600;text-decoration:none;margin:0 8px 8px 0}
+.y{background:#FFD43B;color:#17181a}.o{border:1.5px solid #17181a;color:#17181a}
+</style>
+</head>
+<body>
+<div class="box">
+<svg width="22" height="36" viewBox="0 0 64 104" aria-hidden="true"><rect x="-21" y="-21" width="42" height="42" rx="13" transform="translate(32 70) rotate(45)" fill="#FFD93D"/><rect x="-21" y="-21" width="42" height="42" rx="3" transform="translate(32 32) rotate(45)" fill="#FFE352"/></svg>
+<h1>We couldn't find that page</h1>
+<p>The page may have moved when we updated our website. You can go to the home page, or call us on <a href="tel:+919833844220">98338 44220</a>.</p>
+<a class="btn y" id="home" href="/">Go to the home page</a><a class="btn o" id="cb" href="/#contact">Request a callback</a>
+</div>
+<script>
+const base=location.hostname.endsWith("github.io")?"/sn-calling-crm/":"/";
+document.getElementById("home").href=base;document.getElementById("cb").href=base+"#contact";
+</script>
+</body>
+</html>
