@@ -139,6 +139,19 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .pgrid.pgrid3{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:560px){.pgrid.pgrid3{grid-template-columns:1fr}}
 .pgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}@media(max-width:560px){.pgrid{grid-template-columns:1fr}}.pgrp+.pgrp{margin-top:16px}
 .btn.danger{background:var(--red);border-color:var(--red);color:#fff}
+.impgrid{display:grid;grid-template-columns:minmax(260px,1fr) 2fr;gap:16px;align-items:start}
+@media(max-width:980px){.impgrid{grid-template-columns:1fr}}
+.imphead{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;margin-bottom:12px}.impbtns{display:flex;gap:6px;flex-shrink:0}
+.impbox{width:100%;box-sizing:border-box;min-height:150px;font:13px/1.55 ui-monospace,Consolas,monospace;tab-size:20}
+.impsum{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0 8px}
+.impchip{font-size:13px;font-weight:600;padding:4px 10px;border-radius:999px}
+.imp-ok{background:#e7f6ec;color:#17733a}.imp-dup{background:#fff4e0;color:#a35b00}.imp-bad{background:#fdecec;color:#b42318}
+.imptw{max-height:300px;overflow:auto;border:1px solid var(--line,#e6e8ee);border-radius:10px}
+.imptable{width:100%;font-size:13px}.imptable th{position:sticky;top:0;background:#f7f8fb;z-index:1}
+.imptable tr.impskip td{background:#fcfcfd;color:#8a909c}.imptag{font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;margin-right:4px;white-space:nowrap}
+.impfoot{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line,#e6e8ee)}
+.impmsg{font-size:12.5px;margin-top:4px;min-height:0}.impmsg.on{color:#a35b00}
+
 tr.selrow td{background:#fff4e5}
 @media(min-width:640px){.modal-bg{align-items:center}}
 .modal{background:#fff;width:100%;max-width:520px;border-radius:16px 16px 0 0;max-height:92vh;overflow:auto}
@@ -469,7 +482,7 @@ const Script={
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu,by,form,force){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
-  async addLeads(list){await this.req("addLeads",{leads:list.map(x=>({...x,phone:normPhone(x.phone)}))})},
+  async addLeads(list){return await this.req("addLeads",{leads:list.map(x=>({...x,phone:normPhone(x.phone)}))})},
   async addEmp(o){await this.req("addEmp",{...o,phone:o.phone?normPhone(o.phone):""})},
   async updateEmp(o){await this.req("updateEmp",{...o,phone:o.phone?normPhone(o.phone):""})},
   async resetPin(id,pin){await this.req("resetPin",{id,pin})},
@@ -1321,18 +1334,63 @@ function aAssign(){
   return h+`</table></div>`;
 }
 function aImport(){
-  return `<div class="grid2"><div class="card pad"><h3>Add a single contact</h3>
-   <label class="f">Name</label><input id="nName" style="width:100%" placeholder="Customer name">
-   <label class="f">Mobile number</label><input id="nPhone" inputmode="tel" style="width:100%" placeholder="98XXX XXXXX">
-   <label class="f">City / note</label><input id="nCity" style="width:100%" placeholder="Optional">
-   <label class="f">Assign to</label><select id="nEmp" style="width:100%">${isTL()?`<option value="">Choose…</option>`:`<option value="">Assign later</option>`}${asgOpts()}</select>
-   <div style="margin-top:14px"><button class="btn pri" id="addOne">Add contact</button></div></div>
-   <div class="card pad"><h3>Bulk import (paste from Excel)</h3>
-   <p class="mute small" style="margin-top:-4px">One contact per line: <b>Name, Number, City</b>. Copy columns straight from Excel / Google Sheets – tabs work too.</p>
-   <textarea id="bulk" style="min-height:170px" placeholder="Ramesh Kumar, 9876543210, Delhi&#10;Sunita Shah, 9123456780, Surat"></textarea>
-   <label class="f">Assign imported contacts to</label><select id="bEmp" style="width:100%">${isTL()?"":`<option value="">Leave unassigned</option>`}<option value="__auto">Auto-distribute equally${isTL()?" in my team":""}</option>${asgOpts()}</select>
-   <div style="margin-top:14px"><button class="btn pri" id="doBulk">Import contacts</button></div></div></div>`;
+  const tl=isTL();
+  return `<div class="impgrid"><div class="card pad"><h3>Add one contact</h3>
+   <p class="mute small" style="margin-top:-4px">For a single customer – a walk-in, a referral or a missed call.</p>
+   <label class="f">Customer name</label><input id="nName" style="width:100%" placeholder="e.g. Ramesh Kumar">
+   <label class="f">Mobile number</label><input id="nPhone" inputmode="tel" style="width:100%" placeholder="10-digit mobile, e.g. 98765 43210"><div id="nDup" class="impmsg"></div>
+   <label class="f">City / area <span class="mute">(optional)</span></label><input id="nCity" style="width:100%" placeholder="e.g. Thane">
+   <label class="f">Who should call</label><select id="nEmp" style="width:100%">${tl?`<option value="">Choose…</option>`:`<option value="">Assign later</option>`}${asgOpts()}</select>
+   <div style="margin-top:16px"><button class="btn pri" id="addOne">Add contact</button></div></div>
+   <div class="card pad"><div class="imphead"><div><h3 style="margin:0">Import a list</h3>
+     <p class="mute small" style="margin:4px 0 0">Copy the columns from Excel or Google Sheets and paste them below, or upload a CSV file. <b>Name and mobile number</b> are needed; <b>city / area is optional</b>. Columns can be in any order – the mobile number is found automatically.</p></div>
+     <div class="impbtns"><button class="btn sm" id="impFileBtn">📄 Upload CSV</button><input type="file" id="impFile" accept=".csv,.txt,.tsv,text/csv,text/plain" hidden><button class="btn sm" id="impClear">Clear</button></div></div>
+   <textarea id="bulk" class="impbox" spellcheck="false" placeholder="Name\tMobile\tCity (optional)&#10;Ramesh Kumar\t98765 43210\tThane&#10;Sunita Shah\t91234 56780">${esc(view.bulkText||"")}</textarea>
+   <div id="impPrev"></div>
+   <div class="impfoot"><div style="flex:1;min-width:240px"><label class="f" style="margin-top:0">Who should call these contacts</label><select id="bEmp" style="width:100%">${tl?"":`<option value="">Leave unassigned (assign later)</option>`}<option value="__auto">Share equally across ${tl?"my team":"all telecallers"}</option>${asgOpts()}</select><div id="impPlan" class="small mute" style="margin-top:6px"></div></div>
+   <div style="align-self:flex-end"><button class="btn pri" id="doBulk" disabled>Import contacts</button></div></div>
+   <p class="small mute" style="margin:10px 0 0">One mobile number = one contact. Numbers already in the calling list (any team), repeated numbers and invalid numbers are skipped automatically.</p></div></div>`;
 }
+/* ---- import helpers: one mobile number = one contact ---- */
+const phoneKey=p=>{let d=String(p||"").replace(/\D/g,"");if(d.length===12&&d.startsWith("91"))d=d.slice(2);if(d.length===11&&d.startsWith("0"))d=d.slice(1);return d};
+const validMob=k=>/^[6-9]\d{9}$/.test(k);
+const fmtMob=k=>validMob(k)?k.slice(0,5)+" "+k.slice(5):k;
+function knownPhones(){const m=new Map();(S.leads||[]).forEach(l=>{const k=phoneKey(l.phone);if(k&&!m.has(k))m.set(k,{name:l.name,with:l.assignedTo?empName(l.assignedTo):""})});
+  const r=view.impRemote||{};Object.entries(r).forEach(([k,v])=>{if(!m.has(k))m.set(k,{name:v.name,with:v.with})});return m}
+function parseBulk(text){const rows=[],seen=new Map(),known=knownPhones();
+  const lines=String(text||"").split(/\r?\n/).map((ln,i)=>({i,raw:ln.replace(/\s+$/,""),parts:ln.split(/\t|,|;/).map(s=>s.trim().replace(/^"+|"+$/g,""))})).filter(x=>x.raw.trim());
+  const cnt={};lines.forEach(x=>{const j=x.parts.findIndex(s=>validMob(phoneKey(s)));if(j>=0)cnt[j]=(cnt[j]||0)+1});
+  const pc=+(Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]||[1])[0],nc=pc===0?1:0;       // the column most lines keep the mobile number in
+  lines.forEach(({i,raw,parts})=>{
+    if(!parts.some(s=>s.replace(/\D/g,"").length>=6)&&/name|mobile|number|phone|contact/i.test(raw))return;   // a heading row
+    let pi=validMob(phoneKey(parts[pc]))?pc:parts.findIndex(s=>validMob(phoneKey(s)));if(pi<0)pi=pc;
+    const phone=parts[pi]||"",k=phoneKey(phone),ni=pi===nc?parts.findIndex((s,j)=>j!==pi&&s):nc,name=ni>=0?(parts[ni]||""):"",city=parts.find((s,j)=>j!==pi&&j!==ni&&s)||"";
+    const r={line:i+1,name,city,phone,key:k};
+    if(!validMob(k))r.st="bad";else if(!r.name)r.st="noname";else if(known.has(k)){r.st="exists";r.was=known.get(k)}else if(seen.has(k)){r.st="rep";r.dupOf=seen.get(k)}else{seen.set(k,r.line);r.st="ok"}
+    rows.push(r)});
+  return rows}
+const IMP_ST={ok:["imp-ok","✓ Ready"],exists:["imp-dup","Already in calling list"],rep:["imp-dup","Repeated in this list"],bad:["imp-bad","Invalid mobile number"],noname:["imp-bad","Name missing"]};
+function impPreview(){const box=$("#impPrev");if(!box)return;const rows=parseBulk($("#bulk").value),ok=rows.filter(r=>r.st==="ok");view.impRows=rows;
+  const n=s=>rows.filter(r=>r.st===s).length,dup=n("exists")+n("rep"),bad=n("bad")+n("noname");
+  const btn=$("#doBulk");btn.disabled=!ok.length;btn.textContent=ok.length?`Import ${ok.length} contact${ok.length===1?"":"s"}`:"Import contacts";
+  if(!rows.length){box.innerHTML="";impPlan();return}
+  const show=rows.slice(0,300);
+  box.innerHTML=`<div class="impsum"><span class="impchip imp-ok">✓ ${ok.length} ready to import</span>${dup?`<span class="impchip imp-dup">⚠ ${dup} duplicate${dup===1?"":"s"} – will be skipped</span>`:""}${bad?`<span class="impchip imp-bad">✕ ${bad} with errors – will be skipped</span>`:""}<span class="small mute">${rows.length} line${rows.length===1?"":"s"} found${view.impChecking?" · checking all teams…":""}</span></div>
+   <div class="imptw"><table class="imptable"><tr><th>#</th><th>Name</th><th>Mobile</th><th>City / area</th><th>Check</th></tr>
+   ${show.map(r=>{const [c,l]=IMP_ST[r.st];const extra=r.st==="exists"?` – ${esc(r.was.name)}${r.was.with?` (with ${esc(r.was.with)})`:" (not assigned)"}`:r.st==="rep"?` (same as line ${r.dupOf})`:"";
+     return `<tr class="${r.st==="ok"?"":"impskip"}"><td class="mute num">${r.line}</td><td>${esc(r.name)||'<span class="mute">—</span>'}</td><td class="num">${esc(validMob(r.key)?fmtMob(r.key):r.phone)||'<span class="mute">missing</span>'}</td><td>${esc(r.city)||'<span class="mute">—</span>'}</td><td><span class="imptag ${c}">${l}</span><span class="small mute">${extra}</span></td></tr>`}).join("")}
+   ${rows.length>show.length?`<tr><td colspan="5" class="small mute">…and ${rows.length-show.length} more lines</td></tr>`:""}</table></div>`;
+  impPlan()}
+function impPlan(){const el=$("#impPlan"),sel=$("#bEmp");if(!el||!sel)return;const ok=(view.impRows||[]).filter(r=>r.st==="ok").length;
+  if(!ok){el.textContent="";return}
+  if(sel.value==="__auto"){const plan=distributePlan([...Array(ok).keys()]);el.innerHTML="Goes to: "+Object.entries(plan).map(([e,ids])=>`<b>${esc(empName(e))}</b> ${ids.length}`).join(" · ")}
+  else el.innerHTML=sel.value?`All ${ok} go to <b>${esc(empName(sel.value))}</b>`:`${ok} contact${ok===1?"":"s"} will wait in the calling list without an owner`}
+let impTimer=null;
+function impCheckRemote(){clearTimeout(impTimer);impTimer=setTimeout(async()=>{if(MODE!=="live")return;
+  const keys=[...new Set((view.impRows||[]).map(r=>r.key).filter(validMob))].filter(k=>!(view.impRemote||{})[k]&&!(view.impAsked||new Set()).has(k));if(!keys.length)return;
+  view.impChecking=true;impPreview();
+  try{const j=await Script.req("checkPhones",{phones:keys});view.impRemote=Object.assign(view.impRemote||{},j.found||{});(view.impAsked=view.impAsked||new Set());keys.forEach(k=>view.impAsked.add(k))}catch(e){}
+  view.impChecking=false;impPreview()},500)}
 const customRoles=()=>[...new Set((S.allEmps||S.employees||[]).map(e=>e.role).filter(isCustomRole))].sort();
 const roleOpts=sel=>ROLES.filter(r=>canManageRole(r)).map(r=>`<option ${r===sel?"selected":""}>${r}</option>`).join("")
   +customRoles().map(r=>`<option ${r===sel?"selected":""}>${esc(r)}</option>`).join("")
@@ -1417,15 +1475,33 @@ function bindAdmin(){
     if(!await askOk({title:"Share out "+un.length+" contacts?",ok:"Yes, share out",body:`<ul>${Object.entries(plan).map(([eid,ids])=>`<li><b>${esc(empName(eid))}</b>: ${ids.length}</li>`).join("")}</ul>`}))return;
     await write(async api=>{for(const [eid,ids] of Object.entries(plan))await api.assign(ids,eid)},`${un.length} contacts distributed`,"Sharing out "+un.length+" contacts…")});
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false));
-  on("#addOne","onclick",async()=>{const n=$("#nName").value.trim(),p=$("#nPhone").value.trim();if(!n||!p)return toast("Name and number are required");
+  const nPh=$("#nPhone");
+  const nDupMsg=()=>{const el=$("#nDup");if(!el)return null;const k=phoneKey(nPh.value);let w=null;
+    if(validMob(k)){w=knownPhones().get(k)||null;el.innerHTML=w?`⚠ Already in the calling list – <b>${esc(w.name)}</b>${w.with?` (with ${esc(w.with)})`:" (not assigned)"}`:"";el.className="impmsg"+(w?" on":"")}
+    else{el.innerHTML=nPh.value.replace(/\D/g,"").length>=10?"Enter a 10-digit Indian mobile number":"";el.className="impmsg"+(el.innerHTML?" on":"")}return w};
+  if(nPh)nPh.oninput=()=>{nDupMsg();const k=phoneKey(nPh.value);if(validMob(k)&&MODE==="live"&&!knownPhones().has(k))Script.req("checkPhones",{phones:[k]}).then(j=>{view.impRemote=Object.assign(view.impRemote||{},j.found||{});nDupMsg()}).catch(()=>{})};
+  on("#addOne","onclick",async()=>{const n=$("#nName").value.trim(),p=$("#nPhone").value.trim();if(!n||!p)return toast("Name and mobile number are required");
+    if(!validMob(phoneKey(p)))return toast("Enter a 10-digit Indian mobile number");
+    if(nDupMsg())return toast("This number is already in the calling list – it was not added again");
     if(isTL()&&!$("#nEmp").value)return toast("Choose who in your team should call this contact");
     await write(api=>api.addLeads([{name:n,phone:p,city:$("#nCity").value.trim(),assignedTo:$("#nEmp").value}]),"Contact added","Adding contact…")});
-  on("#doBulk","onclick",async()=>{const lines=$("#bulk").value.split("\n").map(s=>s.trim()).filter(Boolean);const to=$("#bEmp").value;const list=[];
-    lines.forEach(ln=>{const p=ln.split(/\t|,/).map(s=>s.trim());if(p.length<2||p[1].replace(/\D/g,"").length<6)return;list.push({name:p[0],phone:p[1],city:p[2]||""})});
-    if(!list.length)return toast("No valid lines – use: Name, Number, City");
+  const bulk=$("#bulk");
+  if(bulk){bulk.oninput=()=>{view.bulkText=bulk.value;impPreview();impCheckRemote()};impPreview();if(bulk.value)impCheckRemote()}
+  on("#bEmp","onchange",impPlan);
+  on("#impClear","onclick",()=>{view.bulkText="";$("#bulk").value="";impPreview()});
+  on("#impFileBtn","onclick",()=>$("#impFile").click());
+  on("#impFile","onchange",e=>{const f=e.target.files[0];if(!f)return;if(/\.xlsx?$/i.test(f.name))return toast("For Excel files: select the columns in Excel, copy, and paste them here");
+    const rd=new FileReader();rd.onload=()=>{bulk.value=String(rd.result||"");view.bulkText=bulk.value;impPreview();impCheckRemote()};rd.readAsText(f)});
+  on("#doBulk","onclick",async()=>{const rows=parseBulk($("#bulk").value),ok=rows.filter(r=>r.st==="ok"),skip=rows.length-ok.length,to=$("#bEmp").value;
+    if(!ok.length)return toast("Nothing to import – check the lines marked in red or orange");
+    const list=ok.map(r=>({name:r.name,phone:r.key,city:r.city}));
     if(to==="__auto"){const plan=distributePlan(list.map((_,i)=>i));Object.entries(plan).forEach(([eid,idx])=>idx.forEach(i=>list[i].assignedTo=eid))}else list.forEach(x=>x.assignedTo=to);
-    if(!await askOk({title:"Import "+list.length+" contact"+(list.length===1?"":"s")+"?",ok:"Yes, import",body:`${list.length} contact${list.length===1?"":"s"} will be added${to==="__auto"?" and shared out across the team":to?` and assigned to <b>${esc(empName(to))}</b>`:" without an owner"}.${lines.length-list.length?` ${lines.length-list.length} line(s) will be skipped.`:""}`}))return;
-    if(await write(api=>api.addLeads(list),`${list.length} contact(s) imported`+(lines.length-list.length?`, ${lines.length-list.length} skipped`:""),"Importing "+list.length+" contacts…")){view.tab="assign";render()}});
+    const per={};list.forEach(x=>{const k=x.assignedTo?empName(x.assignedTo):"Not assigned";per[k]=(per[k]||0)+1});
+    if(!await askOk({title:"Import "+list.length+" contact"+(list.length===1?"":"s")+"?",ok:"Yes, import",body:`<ul>${Object.entries(per).map(([k,v])=>`<li><b>${esc(k)}</b>: ${v}</li>`).join("")}</ul>${skip?`<p class="mute small">${skip} line${skip===1?"":"s"} will be skipped (duplicates or errors).</p>`:""}`}))return;
+    let res=null;
+    if(await write(async api=>{res=await api.addLeads(list)},`${list.length} contact${list.length===1?"":"s"} imported`,"Importing "+list.length+" contacts…")){
+      if(res&&res.skipped)toast(`${res.added} imported · ${res.skipped} skipped – already in the calling list`);
+      view.bulkText="";view.impRows=[];view.tab="assign";render()}});
   bindRolePick("eRole","eRoleC");
   on("#addEmp","onclick",async()=>{const n=$("#eName").value.trim(),ph=$("#ePhone").value.trim(),pin=$("#ePin").value.trim(),role=pickedRole("eRole","eRoleC"),tl=$("#eTl").value;
     if(role.length<2)return toast("Type the designation (at least 2 letters)");

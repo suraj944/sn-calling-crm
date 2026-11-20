@@ -118,6 +118,7 @@ function doPost(e) {
         case "logCall":   return logCall_(me, b);
         case "assign":    can_(me, "doAssign"); if (!b.to) throw new Error("Choose a telecaller"); return assign_(b.ids || [], b.to, me);
         case "addLeads":  can_(me, "import"); return addLeads_(b.leads || [], me);
+        case "checkPhones": can_(me, "import"); return checkPhones_(b.phones || []);
         case "addEmp":    need_(me, "Manager"); can_(me, "empEdit"); return addEmp_(me, b);
         case "updateEmp": need_(me, "Manager"); can_(me, "empEdit"); return updateEmp_(me, b);
         case "resetPin":  can_(me, "pinReset"); return resetPin_(me, b.id, b.pin);
@@ -272,13 +273,39 @@ function addLeads_(list, me) {
 
     if (list.some(x => x && !team.has(String(x.assignedTo || "")))) throw new Error("Assign the new contacts to someone in your team");
   }
+  // one mobile number = one contact: numbers already in the Calling List (or repeated in this list) are skipped
+  const have = existingPhones_(), seen = new Set(), skipped = [];
+  const keep = list.filter(x => {
+    if (!x || !x.name || !x.phone) return false;
+    const k = phoneKey_(x.phone);
+    if (have.has(k)) { skipped.push({ phone: x.phone, name: x.name, was: have.get(k) }); return false; }
+    if (seen.has(k)) { skipped.push({ phone: x.phone, name: x.name, repeat: true }); return false; }
+    seen.add(k); return true;
+  });
+  if (list.length === 1 && skipped.length) {
+    const w = skipped[0].was;
+    throw new Error("This number is already in the calling list" + (w ? " – " + w.name + (w.with ? " (with " + w.with + ")" : " (not assigned)") : ""));
+  }
   const sh = sheet_("Leads"); let max = 1000;
   rows_("Leads", 1).forEach(r => { const v = parseInt(String(r[0]).replace(/\D/g, ""), 10); if (v > max) max = v; });
   const at = now_();
   const src = list.length > 1 ? "Import" : "Manual";
-  const out = list.filter(x => x && x.name && x.phone).map(x => ["L" + (++max), properName_(x.name), text_(x.phone), properName_(x.city || ""), x.assignedTo || "", "New", "", "", "", at, src]);
+  const out = keep.map(x => ["L" + (++max), properName_(x.name), text_(x.phone), properName_(x.city || ""), x.assignedTo || "", "New", "", "", "", at, src]);
   if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, 11).setValues(out);
-  return { added: out.length };
+  return { added: out.length, skipped: skipped.length, dups: skipped.slice(0, 20) };
+}
+// last 10 digits of an Indian mobile (drops +91 / 0 in front)
+function phoneKey_(p) { let d = digits_(p); if (d.length === 12 && d.startsWith("91")) d = d.slice(2); if (d.length === 11 && d.startsWith("0")) d = d.slice(1); return d; }
+function existingPhones_() {
+  const emps = emps_(), m = new Map();
+  rows_("Leads", 5).forEach(r => { const k = phoneKey_(r[2]); if (k.length >= 10 && !m.has(k)) { const e = emps.find(x => x.id === String(r[4]).trim()); m.set(k, { id: r[0], name: r[1], with: e ? e.name : "" }); } });
+  return m;
+}
+// Import screen: which of these numbers are already in the Calling List (any team), and with whom
+function checkPhones_(phones) {
+  const m = existingPhones_(), found = {};
+  (phones || []).slice(0, 3000).forEach(p => { const k = phoneKey_(p); if (m.has(k)) found[k] = m.get(k); });
+  return { found };
 }
 
 function addEmp_(me, b) {
