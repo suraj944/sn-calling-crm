@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="site.css?v=4">
+<link rel="stylesheet" href="site.css?v=5">
 </head>
 <body>
 
@@ -162,7 +162,17 @@
 <section class="careers" id="careers">
   <div class="wrap">
     <div style="flex:1 1 520px;min-width:0"><h2>Work with us</h2><p>We are growing our calling and sales team in Thane. Send your CV and the role you want.</p></div>
-    <a class="btn o" href="mailto:sales@snfinancialservices.com?subject=Job%20application">Email your CV</a>
+    <button class="btn o" type="button" id="cvBtn" aria-expanded="false" aria-controls="cvBox">Send your CV</button>
+    <div class="cvbox" id="cvBox" hidden>
+      <p>Send your CV and the role you want to <b>sales@snfinancialservices.com</b> using any of these:</p>
+      <div class="cvacts">
+        <a class="btn k" target="_blank" rel="noopener" href="https://mail.google.com/mail/?view=cm&amp;fs=1&amp;to=sales@snfinancialservices.com&amp;su=Job%20application%20%E2%80%93%20SN%20Financial%20Services">Open in Gmail</a>
+        <a class="btn o" target="_blank" rel="noopener" href="https://wa.me/919833844220?text=Hi%2C%20I%20would%20like%20to%20apply%20for%20a%20job%20at%20SN%20Financial%20Services.">Send on WhatsApp</a>
+        <button class="btn o" type="button" id="cvCopy">Copy email address</button>
+        <a class="btn o" href="mailto:sales@snfinancialservices.com?subject=Job%20application">Other email app</a>
+      </div>
+      <p class="small" id="cvMsg" role="status"></p>
+    </div>
   </div>
 </section>
 
@@ -186,7 +196,7 @@
         <label>City<input id="fCity" autocomplete="address-level2" placeholder="e.g. Thane"></label>
         <label class="full">Anything we should know? (optional)<textarea id="fMsg" placeholder="e.g. Need 30 lakh for a flat in Thane, salaried"></textarea></label>
         <div class="hp" aria-hidden="true"><label>Website<input id="fWeb" tabindex="-1" autocomplete="off"></label></div>
-        <label class="chk full"><input type="checkbox" id="fOk" checked> I agree that SN Financial Services may call or WhatsApp me about this request, as set out in the <a href="privacy.html">privacy policy</a>.</label>
+        <label class="chk full"><input type="checkbox" id="fOk" checked><span>I agree that SN Financial Services may call or WhatsApp me about this request, as set out in the <a href="privacy.html">privacy policy</a>.</span></label>
         <p class="msg" id="fMsgOut" role="alert"></p>
         <button class="btn y" id="fBtn" type="submit">Request a callback</button>
       </form>
@@ -242,6 +252,11 @@ dr.addEventListener("click",e=>{if(e.target.tagName==="A"){dr.classList.remove("
 
 /* "Talk to us about your project" pre-selects the loan type */
 document.querySelectorAll("[data-need]").forEach(a=>a.addEventListener("click",()=>{$("#fNeed").value=a.dataset.need;setTimeout(()=>$("#fName").focus({preventScroll:true}),600)}));
+
+/* careers: send CV options */
+const cvB=$("#cvBtn"),cvX=$("#cvBox");
+cvB.addEventListener("click",()=>{const o=cvX.hidden;cvX.hidden=!o;cvB.setAttribute("aria-expanded",o)});
+$("#cvCopy").addEventListener("click",async()=>{const m=$("#cvMsg");try{await navigator.clipboard.writeText("sales@snfinancialservices.com");m.textContent="Email address copied. Paste it in your email app and attach your CV."}catch(e){m.textContent="Copy this address: sales@snfinancialservices.com"}});
 
 /* ===== EMI calculator ===== */
 const inr=n=>"₹"+Math.round(n).toLocaleString("en-IN");

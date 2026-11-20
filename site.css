@@ -264,3 +264,8 @@ footer .cp{margin-left:auto}
 @media (max-width:640px){.fphoto{flex:1 1 100%;max-width:250px}.fphoto img{box-shadow:8px 8px 0 var(--yel)}.fyrs2{flex-direction:column;gap:2px}}
 .lstat b{font-size:34px}
 .lmore{margin-top:16px;font-size:15px;color:var(--ink2)}
+.cvbox{flex:1 1 100%;background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
+.cvbox p{color:var(--ink2)}
+.cvacts{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 4px}
+.cvbox .small{font-size:14px;margin-top:6px;color:var(--ink)}
+.form .chk span{display:block}
