@@ -774,6 +774,7 @@ const isLeadC=l=>l.status==="int"||l.status==="conv";
 const leadLog=l=>{for(let i=l.logs.length-1;i>=0;i--){const g=l.logs[i];if(g.outcome==="int"||g.outcome==="conv")return g}return null}; // first interested call
 const leadAt=l=>{const g=leadLog(l);return g?g.at:(isLeadC(l)?(l.lastAt||l.created):null)};
 const leadsIn=(arr=S.leads)=>arr.filter(l=>isLeadC(l)&&inRange(leadAt(l)));
+const custKey=g=>{const d=String(g.lead.phone||"").replace(/\D/g,"").slice(-10);return d.length===10?d:"id:"+g.lead.id};   // one customer = one mobile number
 function allLogs(){return S.leads.flatMap(l=>l.logs.map(g=>({...g,lead:l}))).sort((a,b)=>(b.at||0)-(a.at||0))}
 const callers=()=>S.employees.filter(e=>e.role==="Telecaller Executive"||e.role==="Team Lead"||S.leads.some(l=>l.assignedTo===e.id));
 /* ================= DATE RANGE (shared by Dashboard & Reports) ================= */
@@ -831,7 +832,7 @@ function metrics(){
     const assigned=S.leads.filter(l=>l.assignedTo===e.id);
     return {e,calls:mine.length,connected:con,int:mine.filter(g=>g.outcome==="int").length,conv:mine.filter(g=>g.outcome==="conv").length,
       ni:mine.filter(g=>g.outcome==="ni").length,na:mine.filter(g=>NOT_CONN.includes(g.outcome)).length,
-      leads:mine.length?new Set(mine.map(g=>g.lead.id)).size:0,gen:leadsIn(assigned).length,assigned:assigned.length,
+      leads:mine.length?new Set(mine.map(custKey)).size:0,gen:leadsIn(assigned).length,assigned:assigned.length,
       untouched:assigned.filter(l=>l.status==="new").length,due:assigned.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<=endToday).length};
   }).sort((a,b)=>b.calls-a.calls||b.conv-a.conv);
   const connected=logs.filter(g=>CONNECTED(g.outcome)).length;
@@ -903,11 +904,11 @@ function activity(logs){
   const out=[...people.values()].map(p=>{const mine=logs.filter(g=>g.by===p.by);
     const mins=t=>{const d=new Date(t);return d.getHours()*60+d.getMinutes()};const avg=a=>Math.round(a.reduce((s,x)=>s+x,0)/a.length);
     const fa=avg(p.days.map(d=>mins(d.a))),la=avg(p.days.map(d=>mins(d.b)));const lab=v=>{const d=new Date(2000,0,1,Math.floor(v/60),v%60);return d.toLocaleTimeString("en-IN",{hour:"numeric",minute:"2-digit"})};
-    return {...p,first:lab(fa),last:lab(la),uniq:new Set(mine.map(g=>g.lead.id)).size,np:mine.filter(g=>g.outcome==="na"||g.outcome==="nc").length,wn:mine.filter(g=>g.outcome==="wn").length,con:mine.filter(g=>CONNECTED(g.outcome)).length,
+    return {...p,first:lab(fa),last:lab(la),uniq:new Set(mine.map(custKey)).size,np:mine.filter(g=>g.outcome==="na"||g.outcome==="nc").length,wn:mine.filter(g=>g.outcome==="wn").length,con:mine.filter(g=>CONNECTED(g.outcome)).length,
       perHr:p.span>=15*60000?(p.calls/(p.span/3600000)).toFixed(1):"—"}}).sort((a,b)=>b.calls-a.calls);
   const hours=[];for(let i=8;i<=21;i++)hours.push({h:i,label:new Date(2000,0,1,i).toLocaleTimeString("en-IN",{hour:"numeric"}),n:0});
   logs.forEach(g=>{const x=hours.find(b=>b.h===new Date(g.at).getHours());if(x)x.n++});
-  return {people:out,hours,span:out.reduce((s,p)=>s+p.span,0),uniq:new Set(logs.map(g=>g.lead.id)).size,np:logs.filter(g=>g.outcome==="na"||g.outcome==="nc").length,wn:logs.filter(g=>g.outcome==="wn").length}
+  return {people:out,hours,span:out.reduce((s,p)=>s+p.span,0),uniq:new Set(logs.map(custKey)).size,np:logs.filter(g=>g.outcome==="na"||g.outcome==="nc").length,wn:logs.filter(g=>g.outcome==="wn").length}
 }
 function activitySection(m){
   const A=activity(m.logs),one=(()=>{const[a,b]=rangeBounds();return sod(a)===sod(b)})();
@@ -1525,7 +1526,7 @@ function renderEmp(){
   let h=etabs()+`<div style="margin-bottom:14px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">${backBtn}<div style="flex:1"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>${tlBtn}</div>`;
   h+=rangeBar();
   h+=`<div class="stats">
-  <div class="card stat"><span>Calls made</span><b>${calls.length}</b><div class="small mute">${calls.length?new Set(calls.map(g=>g.lead.id)).size+" different customers":"in this period"}</div></div>
+  <div class="card stat"><span>Calls made</span><b>${calls.length}</b><div class="small mute">${calls.length?new Set(calls.map(custKey)).size+" different customers":"in this period"}</div></div>
   <div class="card stat"><span>Connected</span><b>${con}</b><div class="small mute">${calls.length?Math.round(con/calls.length*100)+"% of calls":"—"}</div></div>
   <div class="card stat" title="Customers marked Interested (or Converted) – counted on the day they first said they're interested"><span>Interested</span><b style="color:var(--green)">${myLeadsP.length}</b><div class="small mute">${oc("ni")} not interested</div></div>
   <div class="card stat"><span>Converted</span><b style="color:var(--brand)">${oc("conv")}</b><div class="small mute">${oc("cb")} call back later</div></div>
