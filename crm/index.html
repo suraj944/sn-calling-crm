@@ -2173,7 +2173,7 @@ function eodHTML(E){view.eodDr=[];const DR=(n,title,kind,items,cls,label)=>{if(!
   const bar=p=>`<div class="eod-pc"><s><i class="${tone(p)}" style="width:${Math.min(100,p)}%"></i></s><span>${p}%</span></div>`;
   const ini=n=>String(n||"?").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
   const who=r=>`<div class="eod-who"><span class="eod-av">${esc(ini(r.name))}</span><div><b>${esc(r.name)}</b>${r.role?`<small>${esc(r.role)}</small>`:""}</div></div>`;
-  const noToday=!E.cd.total,N=E.calling.length;
+  const noToday=false,N=E.calling.length;   // every person keeps a row; empty days show "–" like the lead pipeline
   const cells=(r,w,first)=>{const x=r[w],when=w==="d"?"today":"month to date",gs=' class="num eod-gs"';
     if(w==="d"&&noToday)return first===-1?`<td colspan="4" class="eod-gs"></td>`:first?`<td colspan="4" rowspan="${N}" class="eod-empty eod-gs"><b>No calls logged yet today</b><span>Today's numbers appear here as soon as the team saves calls.</span></td>`:"";
     return `<td${gs}>${DR(x.calls,`${r.name} – calls ${when}`,"calls",x.L)}</td><td class="num">${DR(x.conn,`${r.name} – connected ${when}`,"calls",x.CL)}</td><td>${x.calls?bar(x.pct):'<span class="eod-z">–</span>'}</td><td class="num">${DR(x.int,`${r.name} – interested ${when}`,"calls",x.IL)}</td>`};
