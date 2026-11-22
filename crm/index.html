@@ -219,7 +219,7 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .eod-empty b{display:block;color:#3b4252;font-size:14px;margin-bottom:4px}.eod-empty span{font-size:12.5px}
 .eod-call col.c-name{width:220px}.eod-call col.c-n{width:96px}.eod-call col.c-bar{width:150px}
 .eod-pc i.good{background:#16a34a}.eod-pc i.mid{background:#d97706}.eod-pc i.low{background:#dc2626}.eod-pc s{width:70px}
-.eod-st>div{display:flex;flex-direction:column;gap:3px}
+.eod-st>div{display:flex;flex-direction:column;gap:3px}.eod-none .eod-st{padding:14px 16px;align-items:center}.eod-nb{font-size:12.5px;font-weight:600;color:#6b7280;background:#f3f4f6;border-radius:999px;padding:4px 10px}
 .eod-k>b.eod-k0{color:#c3c8d2}.eod-k em{display:flex;flex-direction:column;gap:1px}.eod-k em span{font-size:11.5px;color:#8a909c}.eod-k em b{font-size:14px}
 .eod-drbg{position:fixed;inset:0;background:rgba(15,25,45,.38);display:none;z-index:80;justify-content:flex-end}.eod-drbg.show{display:flex}
 .eod-dr-p{background:#fff;width:min(980px,100%);height:100%;overflow:auto;box-shadow:-8px 0 30px rgba(0,0,0,.15);padding:18px 20px}
@@ -2194,13 +2194,13 @@ function eodHTML(E){view.eodDr=[];const DR=(n,title,kind,items,cls,label)=>{if(!
    <div class="eod-m">${noToday?`<div class="eod-mnote"><b>No calls logged yet today.</b> Month-to-date numbers are below.</div>`:""}${E.calling.map(r=>mCall(r)).join("")}${mCall({name:"Total",d:E.cd,m:E.cm},1)}</div></div>`;
   const mPipe=(r,label,tot)=>`<div class="eod-pcard${tot?" tot":""}">${tot?'<div class="eod-who"><b>Team total</b></div>':who(r)}<div class="eod-mg"><div class="l hd"></div><div class="hd">No.</div><div class="hd">₹ Cr</div>
     ${PIPE_COLS.map(([k,l])=>mrow(l,DR(r[k][0],`${r.name==="Total"?"":r.name+" – "}${l} (${label})`,"cases",r[k][2]),r[k][0]?crore(r[k][1]):'<span class="eod-z">–</span>')).join("")}</div></div>`;
-  const pt=(rows,T,label,cls)=>`<div class="eod-sec"><div class="eod-st"><h3>Lead pipeline – ${label}</h3><span class="small mute">By SM (who filled the lead form) · amounts in ₹ crore</span></div>
+  const pt=(rows,T,label,cls)=>!rows.length?`<div class="eod-sec eod-none"><div class="eod-st"><div><h3>Lead pipeline – ${label}</h3><span class="small mute">${label==="today"?"No new leads, inquiries, logins, sanctions or disbursals saved yet today.":"Nothing saved this month yet."}</span></div><span class="eod-nb">0 today</span></div></div>`:`<div class="eod-sec"><div class="eod-st"><h3>Lead pipeline – ${label}</h3><span class="small mute">By SM (who filled the lead form) · amounts in ₹ crore</span></div>
    <div class="tw"><table class="eod-t"><thead><tr><th rowspan="2" class="eod-n">Pre-sales</th>${PIPE_COLS.map(([k,l])=>`<th colspan="2" class="eod-grp ${cls}">${l}</th>`).join("")}</tr>
    <tr class="eod-sub">${PIPE_COLS.map(()=>`<th class="num eod-gs">No.</th><th class="num">₹ Cr</th>`).join("")}</tr></thead>
    <tbody>${rows.length?rows.map(r=>`<tr><td class="eod-n">${who(r)}</td>${PIPE_COLS.map(([k,l])=>`<td class="num eod-gs">${DR(r[k][0],`${r.name} – ${l} (${label})`,"cases",r[k][2])}</td><td class="num eod-amt">${r[k][0]?crore(r[k][1]):'<span class="eod-z">–</span>'}</td>`).join("")}</tr>`).join(""):`<tr><td colspan="11" class="eod-empty"><b>${label==="today"?"Nothing yet today":"Nothing this month yet"}</b><span>New leads, inquiries, logins, sanctions and disbursals will show here.</span></td></tr>`}</tbody>
    <tfoot><tr class="eod-tot"><td class="eod-n">Total</td>${PIPE_COLS.map(([k,l])=>`<td class="num eod-gs">${T[k][0]?DR(T[k][0],`${l} – ${label}`,"cases",T[k][2]):0}</td><td class="num">${crore(T[k][1])}</td>`).join("")}</tr></tfoot></table></div>
    <div class="eod-m">${rows.length?"":`<div class="eod-mnote"><b>${label==="today"?"Nothing yet today.":"Nothing this month yet."}</b></div>`}${rows.map(r=>mPipe(r,label)).join("")}${rows.length?mPipe({name:"Total",...T},label,1):""}</div></div>`;
-  const today=E.pd.filter(r=>PIPE_COLS.some(([k])=>r[k][0]));
+  const today=E.pd;   // every pre-sales person of this month, with dashes where nothing happened today
   h+=pt(today,E.td,"today","eod-g1")+pt(E.pm,E.tm,"month to date","eod-g2");
   return h;
 }
