@@ -158,6 +158,48 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .eod-pc{display:flex;align-items:center;gap:8px;min-width:90px}.eod-dr{all:unset;cursor:pointer;color:#1d4ed8;font-weight:inherit;border-bottom:1px dashed #9db4ee;line-height:1.2}.eod-dr:hover{color:#0f2a5c;border-bottom-style:solid}.eod-dr:focus-visible{outline:2px solid #2453d6;outline-offset:2px;border-radius:3px}
 .eod-k .eod-dr{border-bottom-width:2px}.eod-kc{transition:border-color .15s}.eod-kc:hover{border-color:#c9d6f6}
 
+
+/* ===== Phones: tabs as scrollable chips, tables as cards, EOD as person cards ===== */
+.eod-m{display:none}
+@media(max-width:640px){
+ main{padding:12px 12px 28px}
+ .tabs{gap:6px;border:0;margin:0 -12px 12px;padding:2px 12px 8px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent)}
+ .tabs::-webkit-scrollbar{display:none}
+ .tab{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:#fff;font-size:13.5px;flex:0 0 auto}
+ .tab.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+ .tab:last-child{margin-right:24px}
+ /* any simple table becomes a stack of cards */
+ table.rcard,table.rcard tbody{display:block;width:100%}
+ table.rcard thead,table.rcard tr.rc-h{display:none}
+ table.rcard tr{display:block;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 10px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+ table.rcard td{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:5px 0;border:0;text-align:right;white-space:normal!important;position:static!important;box-shadow:none!important;background:none!important;font-size:14px}
+ table.rcard td::before{content:attr(data-label);flex:0 0 38%;text-align:left;color:var(--mute);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;padding-top:2px}
+ table.rcard td.rc-title{display:block;text-align:left;font-size:15px;padding:0 0 6px;margin-bottom:4px;border-bottom:1px dashed var(--line)}
+ table.rcard td.rc-title::before,table.rcard td.rc-nolab::before{display:none}
+ table.rcard td.rc-nolab{display:block;text-align:left}
+ table.rcard td.rc-act{display:flex;justify-content:stretch;gap:8px;padding-top:8px}table.rcard td.rc-act::before{display:none}table.rcard td.rc-act>.btn,table.rcard td.rc-act>button{flex:1;justify-content:center}
+ table.rcard td.rc-empty{display:none}
+ table.rcard td>.rc-v{flex:1;min-width:0;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:2px;overflow-wrap:anywhere}
+ table.rc-onlyempty tr:has(th){display:none}table.rc-onlyempty td{text-align:center!important;padding:18px 12px!important}
+ .card.tw:has(table.rcard),.tw:has(>table.rcard){background:none;border:0;box-shadow:none;padding:0;overflow:visible}
+ /* EOD report */
+ .eod-head{padding:16px;border-radius:12px}.eod-head h2{font-size:19px}.eod-act{width:100%}.eod-act input{flex:1 1 140px}.eod-act .btn{flex:1 1 auto;justify-content:center}.eod-act .btn.eod-wa{flex-basis:100%;order:-1;padding:10px}
+ .eod-kpis{grid-template-columns:1fr 1fr;gap:8px}.eod-k{padding:10px 12px}.eod-k>b{font-size:22px}
+ .eod-sec>.tw{display:none}.eod-m{display:block;padding:0 12px 4px}
+ .eod-st{padding:12px 12px 8px}
+ .eod-pcard{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 10px;background:#fff}
+ .eod-pcard.tot{background:#f6f8fc;border-color:#d9dfeb}
+ .eod-pcard .eod-who{margin-bottom:8px}
+ .eod-mg{display:grid;grid-template-columns:1fr 70px 70px;gap:0;font-size:14px;font-variant-numeric:tabular-nums}
+ .eod-mg>div{padding:6px 0;border-top:1px solid #f0f2f6;text-align:right}.eod-mg>div.l{text-align:left;color:#5b6270;font-size:13px}
+ .eod-mg>div.hd{border-top:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding-top:0}
+ .eod-mg>div.hd.t{color:#1d3f9a}.eod-mg>div.hd.m{color:#16674a}
+ .eod-mg .eod-pc{justify-content:flex-end;min-width:0}.eod-mg .eod-pc s{display:none}
+ .eod-rt{font-weight:700}.eod-rt.good{color:#15803d}.eod-rt.mid{color:#b45309}.eod-rt.low{color:#b91c1c}
+ .eod-mnote{font-size:12.5px;color:#6b7280;background:#f8f9fb;border-radius:10px;padding:10px 12px;margin:0 0 10px}
+ .eod-dr-p{padding:14px 12px}.eod-dr-h h3{font-size:16px}
+ .imptw{max-height:none}
+}
 /* EOD tables – refined */
 .eod-t{font-variant-numeric:tabular-nums;font-size:14px}
 .eod-t th,.eod-t td{padding:11px 14px;border-bottom:1px solid #eef0f4}
@@ -686,8 +728,22 @@ function renderWho(){
   $("#who").value=view.who;
 }
 $("#who").onchange=e=>{view.who=e.target.value;view.tab=view.who==="admin"?"dash":"my";view.filter="all";view.q="";render()};
+
+/* phones: label every simple table's cells with its column name so CSS can show rows as cards */
+function mobileCards(root){(root||document).querySelectorAll("table").forEach(t=>{
+  const body=[...t.rows].filter(r=>r.querySelector("td"));if(body.length&&body.every(r=>r.cells.length===1&&r.cells[0].colSpan>1)){t.classList.add("rc-onlyempty");return}
+  if(t.dataset.rc||t.closest("#printArea")||t.classList.contains("no-card")||(t.classList.contains("eod-t")&&!t.classList.contains("eod-drt"))||t.classList.contains("mtable")||t.querySelector("th[colspan],td[colspan]:not([colspan='1'])")&&!t.classList.contains("eod-drt"))return;
+  const hr=t.querySelector("thead tr")||[...t.rows].find(r=>r.querySelector("th"));if(!hr)return;
+  const labels=[...hr.cells].map(c=>c.textContent.trim());if(labels.length<2)return;
+  t.dataset.rc="1";t.classList.add("rcard");[...t.rows].forEach(r=>{if(r===hr||(!r.querySelector("td")&&r.querySelector("th"))){r.classList.add("rc-h");return}
+    [...r.cells].forEach((c,i)=>{const lab=labels[i]||"";c.dataset.label=lab;const txt=c.textContent.trim(),onlyBtn=c.querySelector("button,.btn")&&!txt.replace(/open( case| contact)?|edit|remove|call|whatsapp/ig,"").trim();
+      if(i===0)c.classList.add("rc-title");else if(onlyBtn)c.classList.add("rc-act");else if(!lab)c.classList.add("rc-nolab");
+      if(i>0&&!onlyBtn&&lab&&c.childNodes.length){const w=document.createElement("div");w.className="rc-v";while(c.firstChild)w.appendChild(c.firstChild);c.appendChild(w)}
+      if(i>0&&!onlyBtn&&(!txt||txt==="—"||txt==="–")&&!c.querySelector("input,select,button,img,svg"))c.classList.add("rc-empty")})})})}
+const isPhone=()=>window.matchMedia("(max-width:640px)").matches;
+function afterRender(){if(!isPhone())return;mobileCards(document.querySelector("main")||document);const on=document.querySelector(".tabs .tab.on");if(on)on.scrollIntoView({block:"nearest",inline:"center"})}
 function render(){
-  setSync();
+  setSync();requestAnimationFrame(afterRender);
   if(MODE==="login")return;
   if(MODE==="loading"){showBoot();return}
   if(ME&&!isLead())view.who=ME.id;          // employees only ever see their own list
@@ -2114,18 +2170,28 @@ function eodHTML(E){view.eodDr=[];const DR=(n,title,kind,items,cls,label)=>{if(!
     if(w==="d"&&noToday)return first===-1?`<td colspan="4" class="eod-gs"></td>`:first?`<td colspan="4" rowspan="${N}" class="eod-empty eod-gs"><b>No calls logged yet today</b><span>Today's numbers appear here as soon as the team saves calls.</span></td>`:"";
     return `<td${gs}>${DR(x.calls,`${r.name} – calls ${when}`,"calls",x.L)}</td><td class="num">${DR(x.conn,`${r.name} – connected ${when}`,"calls",x.CL)}</td><td>${x.calls?bar(x.pct):'<span class="eod-z">–</span>'}</td><td class="num">${DR(x.int,`${r.name} – interested ${when}`,"calls",x.IL)}</td>`};
   const cr=(r,cls,i)=>`<tr class="${cls||""}"><td class="eod-n">${cls?"Total":who(r)}</td>${cells(r,"d",i===-1?-1:i===0)}${cells(r,"m")}</tr>`;
+  const mrow=(l,a,b)=>`<div class="l">${l}</div><div>${a}</div><div>${b}</div>`;
+  const mCall=(r,tot)=>{const d=r.d,m=r.m,nm=r.name;return `<div class="eod-pcard${tot?" tot":""}">${tot?'<div class="eod-who"><b>Team total</b></div>':who(r)}<div class="eod-mg"><div class="l hd"></div><div class="hd t">Today</div><div class="hd m">Month</div>
+    ${mrow("Calls",DR(d.calls,`${nm} – calls today`,"calls",d.L),DR(m.calls,`${nm} – calls month to date`,"calls",m.L))}
+    ${mrow("Connected",DR(d.conn,`${nm} – connected today`,"calls",d.CL),DR(m.conn,`${nm} – connected month to date`,"calls",m.CL))}
+    ${mrow("Connect rate",d.calls?`<span class="eod-rt ${tone(d.pct)}">${d.pct}%</span>`:'<span class="eod-z">–</span>',m.calls?`<span class="eod-rt ${tone(m.pct)}">${m.pct}%</span>`:'<span class="eod-z">–</span>')}
+    ${mrow("Interested",DR(d.int,`${nm} – interested today`,"calls",d.IL),DR(m.int,`${nm} – interested month to date`,"calls",m.IL))}</div></div>`};
   const sub=g=>`<th class="num eod-gs">Calls</th><th class="num">Connected</th><th>Connect rate</th><th class="num">Interested</th>`;
   h+=`<div class="eod-sec"><div class="eod-st"><div><h3>Calling – pre-sales</h3><span class="small mute">Calls count each mobile number once · Connected = the customer picked up · Click any blue number to see the calls</span></div></div>
    <div class="tw"><table class="eod-t eod-call"><colgroup><col class="c-name">${'<col class="c-n"><col class="c-n"><col class="c-bar"><col class="c-n">'.repeat(2)}</colgroup>
    <thead><tr><th rowspan="2" class="eod-n">Pre-sales</th><th colspan="4" class="eod-grp eod-g1">Today<small>${esc(dl)}</small></th><th colspan="4" class="eod-grp eod-g2">Month to date<small>${esc(ml)}</small></th></tr>
    <tr class="eod-sub">${sub()}${sub()}</tr></thead>
    <tbody>${N?E.calling.map((r,i)=>cr(r,"",i)).join(""):`<tr><td colspan="9" class="mute">No calls this month</td></tr>`}</tbody>
-   <tfoot>${cr({name:"Total",d:E.cd,m:E.cm},"eod-tot",-1)}</tfoot></table></div></div>`;
+   <tfoot>${cr({name:"Total",d:E.cd,m:E.cm},"eod-tot",-1)}</tfoot></table></div>
+   <div class="eod-m">${noToday?`<div class="eod-mnote"><b>No calls logged yet today.</b> Month-to-date numbers are below.</div>`:""}${E.calling.map(r=>mCall(r)).join("")}${mCall({name:"Total",d:E.cd,m:E.cm},1)}</div></div>`;
+  const mPipe=(r,label,tot)=>`<div class="eod-pcard${tot?" tot":""}">${tot?'<div class="eod-who"><b>Team total</b></div>':who(r)}<div class="eod-mg"><div class="l hd"></div><div class="hd">No.</div><div class="hd">₹ Cr</div>
+    ${PIPE_COLS.map(([k,l])=>mrow(l,DR(r[k][0],`${r.name==="Total"?"":r.name+" – "}${l} (${label})`,"cases",r[k][2]),r[k][0]?crore(r[k][1]):'<span class="eod-z">–</span>')).join("")}</div></div>`;
   const pt=(rows,T,label,cls)=>`<div class="eod-sec"><div class="eod-st"><h3>Lead pipeline – ${label}</h3><span class="small mute">By SM (who filled the lead form) · amounts in ₹ crore</span></div>
    <div class="tw"><table class="eod-t"><thead><tr><th rowspan="2" class="eod-n">Pre-sales</th>${PIPE_COLS.map(([k,l])=>`<th colspan="2" class="eod-grp ${cls}">${l}</th>`).join("")}</tr>
    <tr class="eod-sub">${PIPE_COLS.map(()=>`<th class="num eod-gs">No.</th><th class="num">₹ Cr</th>`).join("")}</tr></thead>
    <tbody>${rows.length?rows.map(r=>`<tr><td class="eod-n">${who(r)}</td>${PIPE_COLS.map(([k,l])=>`<td class="num eod-gs">${DR(r[k][0],`${r.name} – ${l} (${label})`,"cases",r[k][2])}</td><td class="num eod-amt">${r[k][0]?crore(r[k][1]):'<span class="eod-z">–</span>'}</td>`).join("")}</tr>`).join(""):`<tr><td colspan="11" class="eod-empty"><b>${label==="today"?"Nothing yet today":"Nothing this month yet"}</b><span>New leads, inquiries, logins, sanctions and disbursals will show here.</span></td></tr>`}</tbody>
-   <tfoot><tr class="eod-tot"><td class="eod-n">Total</td>${PIPE_COLS.map(([k,l])=>`<td class="num eod-gs">${T[k][0]?DR(T[k][0],`${l} – ${label}`,"cases",T[k][2]):0}</td><td class="num">${crore(T[k][1])}</td>`).join("")}</tr></tfoot></table></div></div>`;
+   <tfoot><tr class="eod-tot"><td class="eod-n">Total</td>${PIPE_COLS.map(([k,l])=>`<td class="num eod-gs">${T[k][0]?DR(T[k][0],`${l} – ${label}`,"cases",T[k][2]):0}</td><td class="num">${crore(T[k][1])}</td>`).join("")}</tr></tfoot></table></div>
+   <div class="eod-m">${rows.length?"":`<div class="eod-mnote"><b>${label==="today"?"Nothing yet today.":"Nothing this month yet."}</b></div>`}${rows.map(r=>mPipe(r,label)).join("")}${rows.length?mPipe({name:"Total",...T},label,1):""}</div></div>`;
   const today=E.pd.filter(r=>PIPE_COLS.some(([k])=>r[k][0]));
   h+=pt(today,E.td,"today","eod-g1")+pt(E.pm,E.tm,"month to date","eod-g2");
   return h;
@@ -2164,7 +2230,7 @@ function eodDrill(i){const d=(view.eodDr||[])[i];if(!d)return;let bg=$("#eodDrBg
      <div class="tw"><table class="eod-t eod-drt"><thead><tr><th>Time</th><th>Customer</th><th>Number</th><th>Outcome</th><th>Called by</th><th>Remark</th><th>Lead case</th><th></th></tr></thead><tbody>
      ${L.map(g=>{const cs=eodCaseFor(g.lead);return `<tr data-olead="${esc(g.lead.id)}" data-ocode="${cs?esc(cs.code):""}"><td class="num small">${fmt(g.at)}</td><td><b>${esc(g.lead.name)}</b><div class="small mute">${esc(g.lead.city||"")}</div></td><td class="num">${esc(g.lead.phone)}</td><td>${OUTCOMES[g.outcome]?pill(g.outcome):esc(g.outcome)}</td><td>${esc(empName(g.by))}</td><td class="small">${esc(g.remark||"")||'<span class="mute">—</span>'}</td><td>${cs?`<b>${esc(cs.code)}</b><div>${casePill(cs)}</div>`:'<span class="mute small">No case</span>'}</td><td><button class="btn sm">${cs?"Open case":"Open contact"}</button></td></tr>`}).join("")}</tbody></table></div>`}
   bg.innerHTML=`<div class="eod-dr-p" role="dialog" aria-label="${esc(d.title)}"><div class="eod-dr-h"><h3>${esc(d.title)}</h3><button class="btn sm" id="eodDrX">✕ Close</button></div>${body}</div>`;
-  bg.classList.add("show");$("#eodDrX").onclick=()=>bg.classList.remove("show");
+  bg.classList.add("show");$("#eodDrX").onclick=()=>bg.classList.remove("show");if(isPhone())mobileCards(bg);
   bg.querySelectorAll("[data-ocase]").forEach(tr=>tr.onclick=()=>{bg.classList.remove("show");openCase(tr.dataset.ocase)});
   bg.querySelectorAll("[data-olead]").forEach(tr=>tr.onclick=()=>{bg.classList.remove("show");tr.dataset.ocode?openCase(tr.dataset.ocode):openLead(tr.dataset.olead)})}
 // the lead case for a called contact: linked by contact, else the latest case with the same mobile number
