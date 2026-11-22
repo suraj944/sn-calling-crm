@@ -576,7 +576,7 @@ const Script={
   async updateEmp(o){await this.req("updateEmp",{...o,phone:o.phone?normPhone(o.phone):""})},
   async resetPin(id,pin){await this.req("resetPin",{id,pin})},
   async changePin(oldPin,newPin){await this.req("changePin",{oldPin,newPin})},
-  async removeEmp(id){await this.req("removeEmp",{id})},
+  async removeEmp(id){return await this.req("removeEmp",{id})},
   async saveMeeting(m){await this.req("saveMeeting",{m})},
   async saveCase(c){await this.req("saveCase",{c})},
   async createCase(leadId){await this.req("createCase",{leadId})},
@@ -1616,8 +1616,16 @@ function bindAdmin(){
   on("#myPin2","onclick",()=>openChangePin());
   document.querySelectorAll("[data-perm]").forEach(b=>b.onclick=()=>openPerms(b.dataset.perm));
   document.querySelectorAll("[data-del]").forEach(b=>{b.onclick=async()=>{
-    if(!await askOk({title:"Remove "+empName(b.dataset.del)+"?",ok:"Yes, remove",danger:true,body:"They can't log in any more and their contacts become unassigned."}))return;
-    await write(api=>api.removeEmp(b.dataset.del),"Removed – their contacts are now unassigned","Removing "+empName(b.dataset.del)+"…")}});
+    const id=b.dataset.del,nm=empName(id),nC=allLogs().filter(g=>g.by===id).length,nL=(S.leads||[]).filter(l=>l.assignedTo===id).length,
+      nK=CASES().filter(c=>{const w=String(c["Team Lead"]||"").trim();return w&&(w===id||w.toLowerCase()===nm.toLowerCase())}).length;
+    if(!await askOk({title:"Remove "+nm+"?",ok:"Yes, remove",danger:true,body:`<p>This will:</p><ul>
+      <li>stop <b>${esc(nm)}</b> from logging in</li>
+      <li>remove <b>${nC}</b> call${nC===1?"":"s"} they saved from every report (Dashboard, EOD, targets)</li>
+      <li>move <b>${nL}</b> contact${nL===1?"":"s"} from their calling list back to <b>unassigned</b></li>
+      <li>move <b>${nK}</b> lead case${nK===1?"":"s"} that ${nK===1?"is":"are"} with them to <b>Not assigned</b>, so someone can take ${nK===1?"it":"them"} over (cases are never deleted)</li></ul>
+      <p class="mute small">A copy of every removed call is kept in the <b>Removed Calls</b> tab of the Google Sheet.</p>`}))return;
+    let res=null;
+    if(await write(async api=>{res=await api.removeEmp(id)},nm+" removed","Removing "+nm+"…")&&res&&res.calls!=null)toast(`${nm} removed · ${res.calls} calls taken out of reports · ${res.contacts} contacts unassigned · ${res.cases} cases now Not assigned`)}});
   document.querySelectorAll("[data-as]").forEach(b=>b.onclick=()=>{view.who=b.dataset.as;view.tab="my";render()});
   on("#lEmp","onchange",e=>{view.logEmp=e.target.value;render()});
   on("#lOut","onchange",e=>{view.logOut=e.target.value;render()});

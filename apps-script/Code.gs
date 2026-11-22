@@ -372,9 +372,28 @@ function removeEmp_(me, id) {
   canManage_(me, e.role);
   sheet_("Employees").getRange(e.row, 4).setValue("No");
   logoutAll_(e.id);
+  // 1) their contacts go back to the unassigned pool
   const ids = rows_("Leads", 5).filter(x => String(x[4]).trim() === e.id).map(x => String(x[0]).trim());
   if (ids.length) assign_(ids, "");
-  return { removed: true };
+  // 2) their calls leave every report – kept in the "Removed Calls" tab, nothing is lost
+  let calls = 0;
+  const lsh = sheet_("CallLogs"), ln = lsh.getLastRow() - 1;
+  if (ln > 0) {
+    const logIds = lsh.getRange(2, 1, ln, 6).getDisplayValues().filter(r => String(r[5]).trim() === e.id).map(r => String(r[0]).trim()).filter(Boolean);
+    for (let k = 0; k < logIds.length; k += 500) calls += removeLogs_({ name: me.name + " (removed " + e.name + ")" }, logIds.slice(k, k + 500)).removed;
+  }
+  // 3) lead cases that were with them stay (they are customers' loans) but go to "Not assigned" so someone takes them over
+  let cases = 0;
+  const csh = caseSheet_(), rows = caseRows_(), d = Utilities.formatDate(new Date(), "Asia/Kolkata", "d-MM");
+  rows.forEach((r, i) => {
+    if (!tlMatch_(r[C_["Team Lead"]], e)) return;
+    const row = r.slice(), old = String(row[C_["Remarks"]] || "").trim();
+    row[C_["Team Lead"]] = "";
+    row[C_["Remarks"]] = (d + " " + e.name + " was removed – case needs a new owner" + (old ? " // " + old : "")).slice(0, 2000);
+    row[C_["Last updated"]] = now_(); row[C_["Updated by"]] = me.name;
+    csh.getRange(i + 2, 1, 1, CASE_COLS).setValues([row]); cases++;
+  });
+  return { removed: true, contacts: ids.length, calls, cases };
 }
 
 /* ---------------- field work ("Field Work" tab of this spreadsheet) ---------------- */
