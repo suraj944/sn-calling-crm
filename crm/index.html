@@ -2395,13 +2395,24 @@ async function eodWorkbook(E){await loadExcelJS();const wb=new ExcelJS.Workbook(
     if(!rows.length){ws.mergeCells(r,2,r,15);const c=ws.getRow(r).getCell(2);c.value=label==="today"?"Nothing saved yet today":"Nothing this month yet";c.font={italic:true,color:{argb:MUTE}};c.alignment={indent:1};r++}
     rows.forEach(x=>prow(x));prow({name:"Total",...T},1);r++};
   ptab(E.pd.filter(x=>PIPE_COLS.some(([k])=>x[k][0])),E.td,"today",BLUE);ptab(E.pm,E.tm,"month to date",GREEN);
-  ws.mergeCells(r,2,r,15);cell(ws.getRow(r).getCell(2).address,"Leads generated and Inquiries are counted on the lead date; Login, Sanction and Disbursed on the day the case reached that step.",{font:{size:9,italic:true,color:{argb:MUTE}},alignment:{indent:1}});
+  ws.mergeCells(r,2,r,15);cell(ws.getRow(r).getCell(2).address,"Leads generated and Inquiries are counted on the lead date; Login, Sanction and Disbursed on the day the case reached that step. The full list of connected calls is on the “Connected calls” sheet.",{font:{size:9,italic:true,color:{argb:MUTE}},alignment:{indent:1}});
   ws.eachRow({includeEmpty:true},row=>row.eachCell({includeEmpty:true},c=>{c.font={name:"Calibri",...(c.font||{})}}));
   // plain data sheets (same as before, with a styled header)
   eodSheets(E).forEach(([n,rows])=>{const s=wb.addWorksheet(n,{views:[{state:"frozen",ySplit:1}]});rows.forEach(x=>s.addRow(x));
     s.columns.forEach((c,i)=>{c.width=Math.min(40,Math.max(11,...rows.map(x=>String(x[i]??"").length+2)))});
     s.getRow(1).eachCell(c=>{c.font={name:"Calibri",bold:true,color:{argb:"FFFFFFFF"}};c.fill=fill(NAVY);c.alignment={wrapText:true,vertical:"middle"}});s.getRow(1).height=32;
     s.lastRow.eachCell(c=>{c.font={name:"Calibri",bold:true};c.fill=fill(TINT)})});
+  // every connected call this month (newest first), with its lead case
+  {const L=[...E.cm.CL].sort((a,b)=>(b.at||0)-(a.at||0)),s=wb.addWorksheet("Connected calls",{views:[{state:"frozen",ySplit:3}]});
+   s.columns=[{width:12},{width:9},{width:20},{width:24},{width:14},{width:18},{width:40},{width:12},{width:20}];
+   s.mergeCells("A1:I1");s.getCell("A1").value=`Connected calls – ${ml}`;s.getCell("A1").font={name:"Calibri",bold:true,size:14,color:{argb:INK}};
+   s.mergeCells("A2:I2");s.getCell("A2").value=`${L.length} connected call${L.length===1?"":"s"} · ${uniqN(L)} different numbers · newest first${hidP.length?` · Not shown: ${hidP.map(x=>x.name).join(", ")}`:""}`;s.getCell("A2").font={name:"Calibri",size:10,color:{argb:MUTE}};
+   const H=["Date","Time","Called by","Customer","Number","Outcome","Remark","Lead case","Case status"];s.getRow(3).values=H;
+   s.getRow(3).eachCell(c=>{c.font={name:"Calibri",bold:true,color:{argb:"FFFFFFFF"}};c.fill=fill(GREEN);c.alignment={vertical:"middle"}});s.getRow(3).height=22;
+   L.forEach((g,i)=>{const d=new Date(g.at),cs=eodCaseFor(g.lead),r=s.addRow([d.toLocaleDateString("en-IN",{day:"2-digit",month:"short"}),d.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}),empName(g.by),g.lead?g.lead.name:"",g.lead?g.lead.phone:"",OUTCOMES[g.outcome]?OUTCOMES[g.outcome].label:String(g.outcome||""),g.remark||"",cs?cs.code:"",cs?String(cs.Status||""):""]);
+     r.eachCell({includeEmpty:true},c=>{c.font={name:"Calibri",size:11,color:{argb:INK}};c.border={bottom:thin};c.alignment={vertical:"top",wrapText:c.col===7}});if(i%2)r.eachCell({includeEmpty:true},c=>c.fill=fill("FFF8FAFC"))});
+   if(!L.length){s.mergeCells("A4:I4");s.getCell("A4").value="No connected calls this month";s.getCell("A4").font={name:"Calibri",italic:true,color:{argb:MUTE}}}
+   s.autoFilter={from:"A3",to:"I3"}}
   return wb.xlsx.writeBuffer()}
 // "Show people" dropdown on the EOD calling table
 function eodPicker(btn){let pp=$("#eodPick");if(pp){pp.remove();return}
