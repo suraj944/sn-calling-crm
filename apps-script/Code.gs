@@ -319,7 +319,18 @@ function addEmp_(me, b) {
   const id = "E" + (max + 1);
   sheet_("Employees").appendRow([id, properName_(b.name), text_(b.phone || ""), "Yes", role, "", hash_(id, b.pin), "", now_(), tlName_(b.tl, role)]);
   if (role === "Team Lead") ensureTeamTab_(properName_(b.name));
+  if (role !== "Admin") addListValue_("SM Name", properName_(b.name));   // so the lead form's SM Name list has them, spelled the same
   return { id };
+}
+// Lists tab: add a value at the bottom of a column (by its heading) if it isn't there yet
+function addListValue_(header, val) {
+  val = String(val || "").trim(); if (!val) return;
+  const sh = sheet_("Lists"), lc = sh.getLastColumn(); if (lc < 1) return;
+  const c = sh.getRange(1, 1, 1, lc).getDisplayValues()[0].findIndex(h => norm_(h) === norm_(header)); if (c < 0) return;
+  const n = sh.getLastRow(), col = n > 1 ? sh.getRange(2, c + 1, n - 1, 1).getDisplayValues().map(r => String(r[0]).trim()) : [];
+  if (col.some(v => norm_(v) === norm_(val))) return;
+  let last = col.length; while (last > 0 && !col[last - 1]) last--;
+  sh.getRange(last + 2, c + 1).setValue(val);
 }
 
 function updateEmp_(me, b) {
@@ -337,6 +348,7 @@ function updateEmp_(me, b) {
   if (e.role === "Team Lead" && newName !== e.name)               // keep team members pointing at the renamed Team Lead
     emps_().filter(x => x.tl === e.id).forEach(x => shE.getRange(x.row, 10).setValue(newName));
   if (role === "Team Lead") ensureTeamTab_(newName, e.role === "Team Lead" ? e.name : "");
+  if (newName !== e.name && role !== "Admin") addListValue_("SM Name", newName);
   return { updated: true };
 }
 
@@ -618,7 +630,11 @@ function canSeeCase_(me, row, emps, team) {
   if (sc === "all") return true;
   if (tlMatch_(row[C_["Team Lead"]], me)) return true;                  // cases sent to them as Team Lead
   const tel = String(row[C_["Telecaller ID"]]).trim();
-  return sc === "team" ? team.has(tel) : tel === me.id;                 // their team's cases / their own cases
+  if (sc !== "team") return tel === me.id;                               // their own cases
+  if (team.has(tel)) return true;                                        // filled in the CRM by someone in the team
+  const mates = emps.filter(x => team.has(x.id));
+  return mates.some(x => tlMatch_(row[C_["Team Lead"]], x) ||            // with someone in the team now
+    norm_(row[C_["SM Name"]]) === norm_(x.name));                        // SM Name is someone in the team (also old imported cases)
 }
 // Who may change a case: the person it is with now; the SM who filled it, until they transfer it;
 // and people with "Edit lead cases" who can see the whole team or everyone.

@@ -138,7 +138,7 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 @media(max-width:520px){.pmf .btn{flex:1}.pmf .sp{display:none}#pdef{flex-basis:100%}}
 .pgrid.pgrid3{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:560px){.pgrid.pgrid3{grid-template-columns:1fr}}
 .pgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}@media(max-width:560px){.pgrid{grid-template-columns:1fr}}.pgrp+.pgrp{margin-top:16px}
-.btn.danger{background:var(--red);border-color:var(--red);color:#fff}
+.btn.danger{background:var(--red);border-color:var(--red);color:#fff}.smtag{display:inline-block;background:#eef2fb;color:#1d3f9a;border-radius:6px;padding:2px 8px;font-weight:600;font-size:12.5px}
 .eod-head{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:flex-end;background:#0f2a5c;color:#fff;border-radius:14px;padding:20px 22px;margin-bottom:14px}
 .eod-brand{font-size:12px;letter-spacing:.02em;opacity:.75}.eod-head h2{margin:2px 0 4px;font-size:22px;color:#fff}.eod-sub{font-size:13px;opacity:.85}
 .eod-act{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.eod-act input{height:34px;border-radius:8px;border:0;padding:0 10px;color:#111;background:#fff;color-scheme:light}
@@ -1807,13 +1807,13 @@ const caseOf=leadId=>CASES().find(c=>c["Contact ID"]===leadId);
 const casePill=c=>{const t=CASE_TONE[c.Status]||{new:"amber",disb:"green",closed:"red",prog:"amber"}[stType(c.Status)];return `<span class="pill" style="${t==="green"?"background:var(--green-soft);color:var(--green)":t==="red"?"background:#fdecec;color:#c0392b":t==="blue"?"background:#e8f0fe;color:var(--brand)":t==="amber"?"background:#fff4e0;color:#b26a00":"background:#eef0f3;color:#555"}">${esc(c.Status||"New")}</span>`};
 const inr=v=>{const n=parseFloat(String(v).replace(/[^\d.]/g,""));return isFinite(n)&&n>0?"₹"+n.toLocaleString("en-IN"):esc(v||"")};
 function casesTable(list,{empty="No lead cases yet."}={}){
-  return `<div class="card tw"><table class="ctab"><tr><th>Lead code</th><th>Lead date</th><th>Customer</th><th>Product</th><th>Amount</th><th>Shared by</th><th>With</th><th>Bank</th><th>Status</th><th>Next follow-up</th><th>Last update</th><th></th></tr>
+  return `<div class="card tw"><table class="ctab"><tr><th>Lead code</th><th>Lead date</th><th>Customer</th><th>SM</th><th>Product</th><th>Amount</th><th>Shared by</th><th>With</th><th>Bank</th><th>Status</th><th>Next follow-up</th><th>Last update</th><th></th></tr>
    ${list.map(c=>`<tr><td class="num" style="white-space:nowrap"><b>${esc(c.code)}</b></td><td class="small num" style="white-space:nowrap">${esc(c["Lead Date"])}</td>
      <td><b>${esc(c["Customer Name"])}</b><div class="small mute num" style="white-space:nowrap">${isLead()?`<a class="lnk" href="${telHref(c["Contact Number"])}">${esc(c["Contact Number"])}</a>`:esc(c["Contact Number"])}</div></td>
-     <td class="small">${esc(c.Product)||'<span class="mute">—</span>'}</td><td class="num" style="white-space:nowrap">${inr(c["Amount Required"])||'<span class="mute">—</span>'}</td>
+     <td class="small" style="white-space:nowrap">${c["SM Name"]?`<span class="smtag">${esc(c["SM Name"])}</span>`:'<span class="mute">—</span>'}</td><td class="small">${esc(c.Product)||'<span class="mute">—</span>'}</td><td class="num" style="white-space:nowrap">${inr(c["Amount Required"])||'<span class="mute">—</span>'}</td>
      <td class="small">${esc(c["Lead Shared by"])}</td><td class="small" style="white-space:nowrap">${esc(c["Team Lead"])||NA}</td><td class="small">${esc(c["Bank Name"])||'<span class="mute">—</span>'}</td>
      <td>${casePill(c)}</td><td>${fuBadge(c)}</td><td class="small" style="min-width:200px;max-width:280px">${c.upd?fmt(c.upd):""}<div class="mute clip" title="${esc(c.Remarks)}">${esc(c.Remarks)}</div></td>
-     <td><button class="btn sm" data-case="${esc(c.code)}">${canEditCase(c)?"Open":"View"}</button></td></tr>`).join("")||`<tr><td colspan="12"><div class="empty">${empty}</div></td></tr>`}</table></div>`;
+     <td><button class="btn sm" data-case="${esc(c.code)}">${canEditCase(c)?"Open":"View"}</button></td></tr>`).join("")||`<tr><td colspan="12"><div class="empty">${empty}</div></td></tr>`}</table></div>`.replace('<td colspan="12">','<td colspan="13">');
 }
 function bindCases(){document.querySelectorAll("[data-case]").forEach(b=>b.onclick=e=>{e.preventDefault();openCase(b.dataset.case)});
   document.querySelectorAll("[data-mkcase]").forEach(b=>b.onclick=async()=>{const l=S.leads.find(x=>x.id===b.dataset.mkcase)||{},tl=tlOf(l.assignedTo);
@@ -1883,9 +1883,15 @@ function openCase(code){
     sv.disabled=true;sv.innerHTML=`<span class="spin"></span> Saving…`;if(await write(api=>api.saveCase(o),"Case "+c.code+" saved","Saving case "+c.code+"…"))close();else{sv.disabled=false;sv.textContent="Save case"}};
 }
 function aCases(){
-  const f=view.cf||(view.cf={st:"all",mon:"all",q:"",fu:"all"}),q=f.q.toLowerCase(),all=CASES();f.fu=f.fu||"all";
+  const f=view.cf||(view.cf={st:"all",mon:"all",q:"",fu:"all",sm:"all"}),q=f.q.toLowerCase(),all=CASES();f.fu=f.fu||"all";f.sm=f.sm||"all";
+  // SM buttons: a Team Lead sees only the people in her team (plus one "Other SMs" button); Admin sees every SM
+  const teamView=!!ME&&ME.role!=="Admin"&&isTL(),teamNames=teamView?(S.employees||[]).map(e=>e.name):[],nk=s=>String(s||"").trim().toLowerCase();
+  const smOf=c=>{const s=String(c["SM Name"]||"").trim();if(!teamView)return s||"(no SM)";const m=teamNames.find(n=>nk(n)===nk(s));return m||"__other"};
+  const smCnt={};if(teamView)teamNames.forEach(n=>smCnt[n]=0);all.forEach(c=>{const k=smOf(c);smCnt[k]=(smCnt[k]||0)+1});
+  const smList=Object.entries(smCnt).filter(([k,n])=>k!=="__other"||n).sort((a,b)=>(a[0]==="__other")-(b[0]==="__other")||b[1]-a[1]);
+  const smLabel=k=>k==="__other"?"Other SMs":k;
   const months=[...new Set(all.map(c=>c.Monthly).filter(Boolean))];
-  const list=all.filter(c=>(f.fu==="all"||fuState(c)===f.fu)&&(f.st==="all"||c.Status===f.st)&&(f.mon==="all"||c.Monthly===f.mon)&&(!q||(c["Customer Name"]+c["Contact Number"]+c.code+c["Bank Name"]+c["Lead Shared by"]).toLowerCase().includes(q))).sort((a,b)=>(b.at||0)-(a.at||0));
+  const list=all.filter(c=>(f.sm==="all"||smOf(c)===f.sm)&&(f.fu==="all"||fuState(c)===f.fu)&&(f.st==="all"||c.Status===f.st)&&(f.mon==="all"||c.Monthly===f.mon)&&(!q||(c["Customer Name"]+c["Contact Number"]+c.code+c["Bank Name"]+c["Lead Shared by"]+c["SM Name"]).toLowerCase().includes(q))).sort((a,b)=>(b.at||0)-(a.at||0));
   const ofType=t=>all.filter(c=>stType(c.Status)===t),disb=ofType("disb"),closed=ofType("closed").length,newN=ofType("new").length,cnt=st=>st==="New"?newN:all.filter(c=>c.Status===st).length;
   const amt=disb.reduce((s,c)=>s+(parseFloat(String(c["Amount Required"]).replace(/[^\d.]/g,""))||0),0);
   let h=`<div class="stats sm"><div class="card stat"><span>Lead cases</span><b>${all.length}</b><div class="small mute">${cnt("New")} new – not yet followed up</div></div>
@@ -1896,12 +1902,13 @@ function aCases(){
     <select id="cst"><option value="all">All statuses</option>${[...new Set([...caseOpts("Status"),...all.map(c=>c.Status).filter(Boolean)])].map(x=>`<option ${f.st===x?"selected":""}>${x}</option>`).join("")}</select>
     <select id="cmon"><option value="all">All months</option>${months.map(m=>`<option ${f.mon===m?"selected":""}>${esc(m)}</option>`).join("")}</select>
     <span class="small mute">${list.length} case${list.length===1?"":"s"}</span></div>
+    ${smList.length>1?`<div class="chips" style="margin:10px 0 0"><span class="small mute" style="align-self:center">${teamView?"My team":"SM"}:</span><button class="chip ${f.sm==="all"?"on":""}" data-csm="all">All · ${all.length}</button>${smList.map(([k,n])=>`<button class="chip ${f.sm===k?"on":""}" data-csm="${esc(k)}" ${k==="__other"?'title="Cases with you whose SM is not in your team"':""}>${esc(smLabel(k))} · ${n}</button>`).join("")}</div>`:""}
     <div class="chips" style="margin:10px 0 0"><span class="small mute" style="align-self:center">Follow-up:</span>${FU_F.map(([k,l])=>{const n=k==="all"?all.length:all.filter(c=>fuState(c)===k).length;return `<button class="chip ${f.fu===k?"on":""}" data-cfu="${k}" ${k==="over"&&n?'style="color:#c0392b"':""}>${l} · ${n}</button>`}).join("")}</div>
     <div class="row" style="margin-top:10px;justify-content:space-between"><div class="small mute" style="flex:1;min-width:260px">Cases come from the <b>lead form</b> (filled by the SM) or open by themselves when a telecaller marks a customer <b>Interested</b>. The person a case is <b>with</b> follows up; whoever sent it can still see the updates.</div><button class="btn pri sm" data-newcase>➕ New lead case</button></div>${ME&&ME.role==="Admin"?`<div class="small" style="margin-top:6px;padding:8px 10px;background:var(--brand-soft);border-radius:8px">➕ <b>New status, product, bank or other choice?</b> Type it at the bottom of its column in the <b>Lists</b> tab of the sheet${SHEET_URL?` (<a class="lnk" href="${esc(SHEET_URL)}" target="_blank" rel="noopener">Open sheet ↗</a>)`:""}, then press <b>⟳ Refresh</b> here. For a new status, also fill <b>Counts as</b>: New, In progress, Disbursed or Closed.</div>`:""}</div>`;
   return h+casesTable(list,{empty:all.length?"No cases match these filters.":"No lead cases yet – they appear when a customer is marked Interested."});
 }
 function bindCasesTab(){const q=$("#cq");if(!q)return;
-  $("#cst").onchange=e=>{view.cf.st=e.target.value;render()};document.querySelectorAll("[data-newcase]").forEach(b=>b.onclick=()=>openNewCase());document.querySelectorAll("[data-cfu]").forEach(b=>b.onclick=()=>{view.cf.fu=b.dataset.cfu;render()});$("#cmon").onchange=e=>{view.cf.mon=e.target.value;render()};
+  $("#cst").onchange=e=>{view.cf.st=e.target.value;render()};document.querySelectorAll("[data-newcase]").forEach(b=>b.onclick=()=>openNewCase());document.querySelectorAll("[data-cfu]").forEach(b=>b.onclick=()=>{view.cf.fu=b.dataset.cfu;render()});document.querySelectorAll("[data-csm]").forEach(b=>b.onclick=()=>{view.cf.sm=b.dataset.csm;render()});$("#cmon").onchange=e=>{view.cf.mon=e.target.value;render()};
   q.oninput=e=>{view.cf.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#cq");n.focus();n.setSelectionRange(p,p)};}
 function leadRow(l){
   const last=lastOf(l);
