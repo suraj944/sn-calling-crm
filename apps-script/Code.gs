@@ -623,7 +623,13 @@ function perfOut_(me, emps, logs) {
     return { targets: targets_().filter(r => mine(r[1])), board, boardNames: all ? emps.map(x => [x.id, x.name, x.role, x.active ? "Yes" : "No", x.tl || ""]) : [] };
   } catch (e) { return { targets: [], board: {}, perfError: String(e.message || e) }; }
 }
-function listsOut_() { const L = lists_(); return { lists: L.lists, statusType: L.statusType, banks: L.lists["Bank Name"] || [] }; }
+function listsOut_() { const L = lists_(); return { lists: Object.assign({}, L.lists, { "SM Name": smList_(L) }), statusType: L.statusType, banks: L.lists["Bank Name"] || [] }; }
+// SM Name choices = the Lists tab column + every active employee (Team Leads too), so nobody who calls is missing from the form
+function smList_(L) {
+  const out = (L.lists["SM Name"] || []).slice(), seen = new Set(out.map(norm_));
+  emps_().filter(e => e.active && e.role !== "Admin").forEach(e => { if (!seen.has(norm_(e.name))) { seen.add(norm_(e.name)); out.push(e.name); } });
+  return out.sort((a, b) => a.localeCompare(b));
+}
 function lists_() { return memo_("lists", listsRead_); }
 function listsRead_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet(), sh = ss.getSheetByName("Lists"), lists = {}, statusType = {};
@@ -650,7 +656,7 @@ function listsRead_() {
 function pick_(h, v, old, L) {
   v = String(v == null ? "" : v).trim();
   if (!v) return "";
-  const list = L.lists[h] || [];
+  const list = h === "SM Name" ? smList_(L) : (L.lists[h] || []);
   if (!list.length) return h === "SM Name" ? properName_(v) : v;
   const hit = list.find(x => x.toLowerCase() === v.toLowerCase());
   if (hit) return hit;
@@ -797,7 +803,7 @@ function prepareCase_(me, c, force, to, src) {
   if (!full && !to) throw new Error("Choose who to send this case to");
   const cl = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "").replace(/\s+/g, " ").trim().slice(0, 300);
   const need = (h, label) => { const v = cl(c[h]); if (!v) throw new Error("Fill in " + (label || h)); return v; };
-  const choose = h => { const v = need(h); const list = L.lists[h] || []; if (!list.length) return properName_(v);
+  const choose = h => { const v = need(h); const list = h === "SM Name" ? smList_(L) : (L.lists[h] || []); if (!list.length) return properName_(v);
     const hit = list.find(x => x.toLowerCase() === v.toLowerCase()); if (!hit) throw new Error("Choose " + h + " from the list"); return hit; };
   const ph = digits_(src.phone || need("Contact Number")).replace(/^(91|0)(?=\d{10}$)/, "");
   if (!/^[6-9]\d{9}$/.test(ph)) throw new Error("Contact Number should be a 10-digit mobile number");

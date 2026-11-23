@@ -2572,6 +2572,7 @@ function updatesTimeline(c){const parts=String(c.Remarks||"").split(" // ").map(
   return `<ol class="tl">${parts.map(p=>{const m=p.match(/^(\d{1,2}-\d{1,2}(?:-\d{2,4})?)\s+(.*)$/);return `<li>${m?`<b class="num">${esc(m[1])}</b> ${esc(m[2])}`:esc(p)}</li>`}).join("")}</ol>`}
 // the form's fields – used in the call window (customer marked Interested) and in Lead Cases (people with Lead Cases access)
 function nfHTML(f,full,o={}){
+  if(!f["SM Name"]&&ME&&ME.role!=="Admin"){const me=(caseOpts("SM Name")||[]).find(x=>normName(x)===normName(ME.name));if(me)f["SM Name"]=me}   // whoever fills the form is the SM unless they pick someone else
   const opt=h=>(caseOpts(h)||[]).filter(Boolean),people=(S.handTo||[]).slice().sort((a,b)=>a.name.localeCompare(b.name)),need=!full,id=h=>"nf_"+h.replace(/\W/g,"");
   const fld=(h,req,inner,{hint="",wide=false,label=h}={})=>`<div class="fld" data-f="${esc(h)}"${wide?' style="grid-column:1/-1"':""}><label for="${id(h)}">${esc(label)}${req?"<i>*</i>":""}${hint?` <em>${hint}</em>`:""}</label>${inner}<div class="msg">${h==="Send this case to"?"Choose who will take this case":"Required"}</div></div>`;
   const group=(h,cls)=>{const v=opt(h);if(!v.length)return`<input id="${id(h)}" value="${esc(f[h]||"")}">`;
