@@ -273,18 +273,19 @@ function addLeads_(list, me) {
 
     if (list.some(x => x && !team.has(String(x.assignedTo || "")))) throw new Error("Assign the new contacts to someone in your team");
   }
-  // one mobile number = one contact: numbers already in the Calling List (or repeated in this list) are skipped
+  // a duplicate = same mobile number AND same name (already in the Calling List, or repeated in this list) – it is skipped.
+  // The same number with a different name (e.g. a family member) is added as a separate contact.
   const have = existingPhones_(), seen = new Set(), skipped = [];
   const keep = list.filter(x => {
     if (!x || !x.name || !x.phone) return false;
-    const k = phoneKey_(x.phone);
-    if (have.has(k)) { skipped.push({ phone: x.phone, name: x.name, was: have.get(k) }); return false; }
-    if (seen.has(k)) { skipped.push({ phone: x.phone, name: x.name, repeat: true }); return false; }
-    seen.add(k); return true;
+    const k = phoneKey_(x.phone), was = (have.get(k) || []).find(w => sameName_(w.name, x.name));
+    if (was) { skipped.push({ phone: x.phone, name: x.name, was }); return false; }
+    if ([...seen].some(s => s.k === k && sameName_(s.n, x.name))) { skipped.push({ phone: x.phone, name: x.name, repeat: true }); return false; }
+    seen.add({ k, n: x.name }); return true;
   });
   if (list.length === 1 && skipped.length) {
     const w = skipped[0].was;
-    throw new Error("This number is already in the calling list" + (w ? " – " + w.name + (w.with ? " (with " + w.with + ")" : " (not assigned)") : ""));
+    throw new Error("This customer (same name and number) is already in the calling list" + (w ? " – " + w.name + (w.with ? " (with " + w.with + ")" : " (not assigned)") : ""));
   }
   const sh = sheet_("Leads"); let max = 1000;
   rows_("Leads", 1).forEach(r => { const v = parseInt(String(r[0]).replace(/\D/g, ""), 10); if (v > max) max = v; });
@@ -296,9 +297,15 @@ function addLeads_(list, me) {
 }
 // last 10 digits of an Indian mobile (drops +91 / 0 in front)
 function phoneKey_(p) { let d = digits_(p); if (d.length === 12 && d.startsWith("91")) d = d.slice(2); if (d.length === 11 && d.startsWith("0")) d = d.slice(1); return d; }
+const nameKey_ = s => String(s || "").toLowerCase().replace(/[^a-z]/g, "");
+// same person: same name, or one name is the other plus more words ("Ankit" / "Ankit Gupta"); "Ramesh" is not "Rameshwar"
+const nameToks_ = s => String(s || "").toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/).filter(Boolean);
+function sameName_(a, b) { const x = nameToks_(a), y = nameToks_(b); if (!x.length || !y.length) return false; const s = x.length <= y.length ? x : y, l = s === x ? y : x; return s.every((t, i) => t === l[i]) && (s.length > 1 || s[0].length >= 3); }
+// every contact already saved under each mobile number
 function existingPhones_() {
   const emps = emps_(), m = new Map();
-  rows_("Leads", 5).forEach(r => { const k = phoneKey_(r[2]); if (k.length >= 10 && !m.has(k)) { const e = emps.find(x => x.id === String(r[4]).trim()); m.set(k, { id: r[0], name: r[1], with: e ? e.name : "" }); } });
+  rows_("Leads", 5).forEach(r => { const k = phoneKey_(r[2]); if (k.length < 10) return; const e = emps.find(x => x.id === String(r[4]).trim());
+    if (!m.has(k)) m.set(k, []); m.get(k).push({ id: r[0], name: r[1], with: e ? e.name : "" }); });
   return m;
 }
 // Import screen: which of these numbers are already in the Calling List (any team), and with whom

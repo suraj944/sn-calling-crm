@@ -239,7 +239,7 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .imptable{width:100%;font-size:13px}.imptable th{position:sticky;top:0;background:#f7f8fb;z-index:1}
 .imptable tr.impskip td{background:#fcfcfd;color:#8a909c}.imptag{font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;margin-right:4px;white-space:nowrap}
 .impfoot{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line,#e6e8ee)}
-.impmsg{font-size:12.5px;margin-top:4px;min-height:0}.impmsg.on{color:#a35b00}
+.impmsg{font-size:12.5px;margin-top:4px;min-height:0}.impmsg.on{color:#a35b00}.impmsg.info{color:#1d4ed8}
 
 tr.selrow td{background:#fff4e5}
 @media(min-width:640px){.modal-bg{align-items:center}}
@@ -1452,15 +1452,21 @@ function aImport(){
    <div id="impPrev"></div>
    <div class="impfoot"><div style="flex:1;min-width:240px"><label class="f" style="margin-top:0">Who should call these contacts</label><select id="bEmp" style="width:100%">${tl?"":`<option value="">Leave unassigned (assign later)</option>`}<option value="__auto">Share equally across ${tl?"my team":"all telecallers"}</option>${asgOpts()}</select><div id="impPlan" class="small mute" style="margin-top:6px"></div></div>
    <div style="align-self:flex-end"><button class="btn pri" id="doBulk" disabled>Import contacts</button></div></div>
-   <p class="small mute" style="margin:10px 0 0">One mobile number = one contact. Numbers already in the calling list (any team), repeated numbers and invalid numbers are skipped automatically.</p></div></div>`;
+   <p class="small mute" style="margin:10px 0 0">A duplicate = <b>same name and same mobile number</b>. Duplicates already in the calling list (any team), lines repeated in this list and invalid numbers are skipped automatically. The same number with a different name is added as a separate contact.</p></div></div>`;
 }
 /* ---- import helpers: one mobile number = one contact ---- */
 const phoneKey=p=>{let d=String(p||"").replace(/\D/g,"");if(d.length===12&&d.startsWith("91"))d=d.slice(2);if(d.length===11&&d.startsWith("0"))d=d.slice(1);return d};
 const validMob=k=>/^[6-9]\d{9}$/.test(k);
 const fmtMob=k=>validMob(k)?k.slice(0,5)+" "+k.slice(5):k;
-function knownPhones(){const m=new Map();(S.leads||[]).forEach(l=>{const k=phoneKey(l.phone);if(k&&!m.has(k))m.set(k,{name:l.name,with:l.assignedTo?empName(l.assignedTo):""})});
-  const r=view.impRemote||{};Object.entries(r).forEach(([k,v])=>{if(!m.has(k))m.set(k,{name:v.name,with:v.with})});return m}
-function parseBulk(text){const rows=[],seen=new Map(),known=knownPhones();
+// every contact already saved under each mobile number (own list + what the server found in other teams)
+function knownPhones(){const m=new Map(),add=(k,v)=>{if(!m.has(k))m.set(k,[]);const L=m.get(k);if(!L.some(x=>x.name===v.name&&x.with===v.with))L.push(v)};
+  (S.leads||[]).forEach(l=>{const k=phoneKey(l.phone);if(k)add(k,{name:l.name,with:l.assignedTo?empName(l.assignedTo):""})});
+  const r=view.impRemote||{};Object.entries(r).forEach(([k,v])=>(Array.isArray(v)?v:[v]).forEach(x=>add(k,{name:x.name,with:x.with})));return m}
+const nameKey=s=>String(s||"").toLowerCase().replace(/[^a-z]/g,"");
+// same person: same name, or one name is the other plus more words ("Ankit" / "Ankit Gupta"); "Ramesh" ≠ "Rameshwar"
+const nameToks=s=>String(s||"").toLowerCase().replace(/[^a-z\s]/g," ").split(/\s+/).filter(Boolean);
+const sameName=(a,b)=>{const x=nameToks(a),y=nameToks(b);if(!x.length||!y.length)return false;const [s,l]=x.length<=y.length?[x,y]:[y,x];return s.every((t,i)=>t===l[i])&&(s.length>1||s[0].length>=3)};
+function parseBulk(text){const rows=[],seen=new Map(),seenNm=new Map(),known=knownPhones();
   const lines=String(text||"").split(/\r?\n/).map((ln,i)=>({i,raw:ln.replace(/\s+$/,""),parts:ln.split(/\t|,|;/).map(s=>s.trim().replace(/^"+|"+$/g,""))})).filter(x=>x.raw.trim());
   const cnt={};lines.forEach(x=>{const j=x.parts.findIndex(s=>validMob(phoneKey(s)));if(j>=0)cnt[j]=(cnt[j]||0)+1});
   const pc=+(Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0]||[1])[0],nc=pc===0?1:0;       // the column most lines keep the mobile number in
@@ -1469,22 +1475,24 @@ function parseBulk(text){const rows=[],seen=new Map(),known=knownPhones();
     let pi=validMob(phoneKey(parts[pc]))?pc:parts.findIndex(s=>validMob(phoneKey(s)));if(pi<0)pi=pc;
     const phone=parts[pi]||"",k=phoneKey(phone),ni=pi===nc?parts.findIndex((s,j)=>j!==pi&&s):nc,name=ni>=0?(parts[ni]||""):"",city=parts.find((s,j)=>j!==pi&&j!==ni&&s)||"";
     const r={line:i+1,name,city,phone,key:k};
-    if(!validMob(k))r.st="bad";else if(!r.name)r.st="noname";else if(known.has(k)){r.st="exists";r.was=known.get(k)}else if(seen.has(k)){r.st="rep";r.dupOf=seen.get(k)}else{seen.set(k,r.line);r.st="ok"}
+    const same=validMob(k)&&r.name?(known.get(k)||[]).find(w=>sameName(w.name,r.name)):null,sk=k+"|"+nameKey(r.name),prev=[...seen.keys()].find(x=>x.split("|")[0]===k&&sameName(seenNm.get(x),r.name)),sib=[...seen.keys()].find(x=>x.split("|")[0]===k);
+    if(!validMob(k))r.st="bad";else if(!r.name)r.st="noname";else if(same){r.st="exists";r.was=same}else if(prev){r.st="rep";r.dupOf=seen.get(prev)}
+    else{seen.set(sk,r.line);seenNm.set(sk,r.name);const other=(known.get(k)||[])[0];r.st=other||sib?"samenum":"ok";r.was=other||{name:"line "+seen.get(sib),with:""}}
     rows.push(r)});
   return rows}
-const IMP_ST={ok:["imp-ok","✓ Ready"],exists:["imp-dup","Already in calling list"],rep:["imp-dup","Repeated in this list"],bad:["imp-bad","Invalid mobile number"],noname:["imp-bad","Name missing"]};
-function impPreview(){const box=$("#impPrev");if(!box)return;const rows=parseBulk($("#bulk").value),ok=rows.filter(r=>r.st==="ok");view.impRows=rows;
+const IMP_ST={ok:["imp-ok","✓ Ready"],samenum:["imp-ok","✓ Ready – same number, different name"],exists:["imp-dup","Already in calling list"],rep:["imp-dup","Repeated in this list"],bad:["imp-bad","Invalid mobile number"],noname:["imp-bad","Name missing"]};
+function impPreview(){const box=$("#impPrev");if(!box)return;const rows=parseBulk($("#bulk").value),ok=rows.filter(r=>r.st==="ok"||r.st==="samenum");view.impRows=rows;
   const n=s=>rows.filter(r=>r.st===s).length,dup=n("exists")+n("rep"),bad=n("bad")+n("noname");
   const btn=$("#doBulk");btn.disabled=!ok.length;btn.textContent=ok.length?`Import ${ok.length} contact${ok.length===1?"":"s"}`:"Import contacts";
   if(!rows.length){box.innerHTML="";impPlan();return}
   const show=rows.slice(0,300);
   box.innerHTML=`<div class="impsum"><span class="impchip imp-ok">✓ ${ok.length} ready to import</span>${dup?`<span class="impchip imp-dup">⚠ ${dup} duplicate${dup===1?"":"s"} – will be skipped</span>`:""}${bad?`<span class="impchip imp-bad">✕ ${bad} with errors – will be skipped</span>`:""}<span class="small mute">${rows.length} line${rows.length===1?"":"s"} found${view.impChecking?" · checking all teams…":""}</span></div>
    <div class="imptw"><table class="imptable"><tr><th>#</th><th>Name</th><th>Mobile</th><th>City / area</th><th>Check</th></tr>
-   ${show.map(r=>{const [c,l]=IMP_ST[r.st];const extra=r.st==="exists"?` – ${esc(r.was.name)}${r.was.with?` (with ${esc(r.was.with)})`:" (not assigned)"}`:r.st==="rep"?` (same as line ${r.dupOf})`:"";
-     return `<tr class="${r.st==="ok"?"":"impskip"}"><td class="mute num">${r.line}</td><td>${esc(r.name)||'<span class="mute">—</span>'}</td><td class="num">${esc(validMob(r.key)?fmtMob(r.key):r.phone)||'<span class="mute">missing</span>'}</td><td>${esc(r.city)||'<span class="mute">—</span>'}</td><td><span class="imptag ${c}">${l}</span><span class="small mute">${extra}</span></td></tr>`}).join("")}
+   ${show.map(r=>{const [c,l]=IMP_ST[r.st];const extra=r.st==="exists"?` – ${esc(r.was.name)}${r.was.with?` (with ${esc(r.was.with)})`:" (not assigned)"}`:r.st==="samenum"?` – also saved as ${esc(r.was.name)}${r.was.with?` (with ${esc(r.was.with)})`:""}`:r.st==="rep"?` (same as line ${r.dupOf})`:"";
+     return `<tr class="${r.st==="ok"||r.st==="samenum"?"":"impskip"}"><td class="mute num">${r.line}</td><td>${esc(r.name)||'<span class="mute">—</span>'}</td><td class="num">${esc(validMob(r.key)?fmtMob(r.key):r.phone)||'<span class="mute">missing</span>'}</td><td>${esc(r.city)||'<span class="mute">—</span>'}</td><td><span class="imptag ${c}">${l}</span><span class="small mute">${extra}</span></td></tr>`}).join("")}
    ${rows.length>show.length?`<tr><td colspan="5" class="small mute">…and ${rows.length-show.length} more lines</td></tr>`:""}</table></div>`;
   impPlan()}
-function impPlan(){const el=$("#impPlan"),sel=$("#bEmp");if(!el||!sel)return;const ok=(view.impRows||[]).filter(r=>r.st==="ok").length;
+function impPlan(){const el=$("#impPlan"),sel=$("#bEmp");if(!el||!sel)return;const ok=(view.impRows||[]).filter(r=>r.st==="ok"||r.st==="samenum").length;
   if(!ok){el.textContent="";return}
   if(sel.value==="__auto"){const plan=distributePlan([...Array(ok).keys()]);el.innerHTML="Goes to: "+Object.entries(plan).map(([e,ids])=>`<b>${esc(empName(e))}</b> ${ids.length}`).join(" · ")}
   else el.innerHTML=sel.value?`All ${ok} go to <b>${esc(empName(sel.value))}</b>`:`${ok} contact${ok===1?"":"s"} will wait in the calling list without an owner`}
@@ -1579,13 +1587,15 @@ function bindAdmin(){
     await write(async api=>{for(const [eid,ids] of Object.entries(plan))await api.assign(ids,eid)},`${un.length} contacts distributed`,"Sharing out "+un.length+" contacts…")});
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false));
   const nPh=$("#nPhone");
-  const nDupMsg=()=>{const el=$("#nDup");if(!el)return null;const k=phoneKey(nPh.value);let w=null;
-    if(validMob(k)){w=knownPhones().get(k)||null;el.innerHTML=w?`⚠ Already in the calling list – <b>${esc(w.name)}</b>${w.with?` (with ${esc(w.with)})`:" (not assigned)"}`:"";el.className="impmsg"+(w?" on":"")}
+  const nDupMsg=()=>{const el=$("#nDup");if(!el)return null;const k=phoneKey(nPh.value),nm=($("#nName")||{}).value||"";let w=null;
+    if(validMob(k)){const L=knownPhones().get(k)||[];w=nm.trim()?L.find(x=>sameName(x.name,nm))||null:null;const o=!w&&L[0];
+      el.innerHTML=w?`⚠ Already in the calling list – <b>${esc(w.name)}</b>${w.with?` (with ${esc(w.with)})`:" (not assigned)"}`:o?`ℹ This number is also saved as <b>${esc(o.name)}</b>${o.with?` (with ${esc(o.with)})`:""} – a different name will be added as a new contact`:"";el.className="impmsg"+(w?" on":o?" info":"")}
     else{el.innerHTML=nPh.value.replace(/\D/g,"").length>=10?"Enter a 10-digit Indian mobile number":"";el.className="impmsg"+(el.innerHTML?" on":"")}return w};
-  if(nPh)nPh.oninput=()=>{nDupMsg();const k=phoneKey(nPh.value);if(validMob(k)&&MODE==="live"&&!knownPhones().has(k))Script.req("checkPhones",{phones:[k]}).then(j=>{view.impRemote=Object.assign(view.impRemote||{},j.found||{});nDupMsg()}).catch(()=>{})};
+  const nNm=$("#nName");if(nNm)nNm.addEventListener("input",()=>nDupMsg());
+  if(nPh)nPh.oninput=()=>{nDupMsg();const k=phoneKey(nPh.value);if(validMob(k)&&MODE==="live"&&!(view.impAsked||new Set()).has(k))Script.req("checkPhones",{phones:[k]}).then(j=>{view.impRemote=Object.assign(view.impRemote||{},j.found||{});(view.impAsked=view.impAsked||new Set()).add(k);nDupMsg()}).catch(()=>{})};
   on("#addOne","onclick",async()=>{const n=$("#nName").value.trim(),p=$("#nPhone").value.trim();if(!n||!p)return toast("Name and mobile number are required");
     if(!validMob(phoneKey(p)))return toast("Enter a 10-digit Indian mobile number");
-    if(nDupMsg())return toast("This number is already in the calling list – it was not added again");
+    if(nDupMsg())return toast("This customer (same name and number) is already in the calling list – not added again");
     if(isTL()&&!$("#nEmp").value)return toast("Choose who in your team should call this contact");
     await write(api=>api.addLeads([{name:n,phone:p,city:$("#nCity").value.trim(),assignedTo:$("#nEmp").value}]),"Contact added","Adding contact…")});
   const bulk=$("#bulk");
@@ -1595,7 +1605,7 @@ function bindAdmin(){
   on("#impFileBtn","onclick",()=>$("#impFile").click());
   on("#impFile","onchange",e=>{const f=e.target.files[0];if(!f)return;if(/\.xlsx?$/i.test(f.name))return toast("For Excel files: select the columns in Excel, copy, and paste them here");
     const rd=new FileReader();rd.onload=()=>{bulk.value=String(rd.result||"");view.bulkText=bulk.value;impPreview();impCheckRemote()};rd.readAsText(f)});
-  on("#doBulk","onclick",async()=>{const rows=parseBulk($("#bulk").value),ok=rows.filter(r=>r.st==="ok"),skip=rows.length-ok.length,to=$("#bEmp").value;
+  on("#doBulk","onclick",async()=>{const rows=parseBulk($("#bulk").value),ok=rows.filter(r=>r.st==="ok"||r.st==="samenum"),skip=rows.length-ok.length,to=$("#bEmp").value;
     if(!ok.length)return toast("Nothing to import – check the lines marked in red or orange");
     const list=ok.map(r=>({name:r.name,phone:r.key,city:r.city}));
     if(to==="__auto"){const plan=distributePlan(list.map((_,i)=>i));Object.entries(plan).forEach(([eid,idx])=>idx.forEach(i=>list[i].assignedTo=eid))}else list.forEach(x=>x.assignedTo=to);
