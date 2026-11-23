@@ -138,7 +138,10 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 @media(max-width:520px){.pmf .btn{flex:1}.pmf .sp{display:none}#pdef{flex-basis:100%}}
 .pgrid.pgrid3{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:560px){.pgrid.pgrid3{grid-template-columns:1fr}}
 .pgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}@media(max-width:560px){.pgrid{grid-template-columns:1fr}}.pgrp+.pgrp{margin-top:16px}
-.btn.danger{background:var(--red);border-color:var(--red);color:#fff}.smtag{display:inline-block;background:#eef2fb;color:#1d3f9a;border-radius:6px;padding:2px 8px;font-weight:600;font-size:12.5px}
+.btn.danger{background:var(--red);border-color:var(--red);color:#fff}.smrow .smlab{font-size:12px;font-weight:700;color:#16674a;background:#e6f4ef;border-radius:6px;padding:3px 8px;align-self:center}.smrow .smlab.out{color:#a35b00;background:#fff4e0}
+.bulkbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;border-color:#c9d6f6;background:#f7f9ff;position:sticky;top:8px;z-index:5}.bulkbar select{min-width:220px}
+.smrep-h{margin:16px 0 8px;font-size:14px;color:#16674a}.smrep-h.out{color:#a35b00}.smrep .tw{border:1px solid var(--line);border-radius:10px;overflow:auto}
+.smtag{display:inline-block;background:#eef2fb;color:#1d3f9a;border-radius:6px;padding:2px 8px;font-weight:600;font-size:12.5px}
 .eod-head{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:flex-end;background:#0f2a5c;color:#fff;border-radius:14px;padding:20px 22px;margin-bottom:14px}
 .eod-brand{font-size:12px;letter-spacing:.02em;opacity:.75}.eod-head h2{margin:2px 0 4px;font-size:22px;color:#fff}.eod-sub{font-size:13px;opacity:.85}
 .eod-act{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.eod-act input{height:34px;border-radius:8px;border:0;padding:0 10px;color:#111;background:#fff;color-scheme:light}
@@ -545,6 +548,7 @@ const Live={
   async removeCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async removeLogs(){throw new Error("Open the website version of the CRM to remove call logs")},
   async transferCase(){throw new Error("Open the website version of the CRM for lead cases")},
+  async transferCases(){throw new Error("Open the website version of the CRM for lead cases")},
   async setPerms(){throw new Error("Open the website version of the CRM to change permissions")},
   async saveTargets(){throw new Error("Open the website version of the CRM to set targets")},
   async newCase(){throw new Error("Open the website version of the CRM to fill the lead form")},
@@ -583,6 +587,8 @@ const Script={
   async removeCase(code){await this.req("removeCase",{code})},
   async removeLogs(ids){await this.req("removeLogs",{ids})},
   async transferCase(code,to,note){await this.req("transferCase",{code,to,note})},
+  async transferCases(codes,to){try{return await this.req("transferCases",{codes,to})}catch(e){if(!/unknown action/i.test(e.message))throw e;   // server not updated yet: one by one
+    let done=0,skipped=0;for(const c of codes){try{await this.req("transferCase",{code:c,to});done++}catch(x){if(/already with/i.test(x.message))skipped++;else throw x}}return{done,skipped}}},
   async setPerms(id,perms){await this.req("setPerms",{id,perms})},
   async saveTargets(month,list){await this.req("saveTargets",{month,list})},
   async newCase(c,force,to){return await this.req("newCase",{c,force,to})},
@@ -771,7 +777,7 @@ function renderAdmin(){
   $("#app").innerHTML=h;
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{if(b.dataset.tab==="mine"){view.who=ME.id;view.etab="leads";render();return}view.tab=b.dataset.tab;render()});
   const ts=$("#teamSel");if(ts)ts.onchange=()=>{view.team=ts.value;view.sel.clear();if(view.lsel)view.lsel.clear();render()};
-  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();bindCasesTab();bindCases();bindToday();bindPerf();bindMonthly();if(view.tab==="eod")bindEOD();
+  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();bindCasesTab();bindCases();bindToday();bindPerf();bindMonthly();if(view.tab==="eod")bindEOD();if(view.tab==="reports")bindSmReport();
 }
 /* ---------- MY TEAM (Team Leads): members' details + reset PIN ---------- */
 function aMyTeam(){
@@ -1159,6 +1165,7 @@ function aReports(){
   h+=`<div class="card pad rep" style="border-color:#c9d6f6;background:#f7f9ff"><div class="rep-h"><div><h3>Monthly owner report</h3><p class="small mute" style="margin:4px 0 0">Targets vs actual, conversion funnel, days to disbursal, lead sources and connectors, disbursed cases and overdue follow-ups – one Excel file or a PDF.</p></div></div>
     <div class="row" style="margin-top:12px"><select id="mrPer">${PERIODS.map(([k,l])=>`<option value="${k}" ${(view.pp||"cur")===k?"selected":""}>${l}${k==="cur"||k==="prev"?" ("+(k==="cur"?curMon():monAdd(curMon(),-1))+")":""}</option>`).join("")}</select>
     <button class="btn pri sm" data-mrep="xlsx">⬇ Excel</button><button class="btn sm" data-mrep="pdf">🖨 Save as PDF</button></div></div>`;
+  h+=smReportCard();
   h+=REPORTS.map(r=>{const n=r.rows?r.rows().length-1:null;
     return `<div class="card pad rep"><div class="rep-h"><div><h3>${r.title}</h3><p class="small mute" style="margin:4px 0 0">${r.desc}</p></div>${n!=null?`<span class="pill s-new">${n} row${n===1?"":"s"}</span>`:""}</div>
       ${r.filters?`<div class="row" style="margin-top:12px"><select id="repEmp"><option value="all">All telecallers</option>${S.employees.map(e=>`<option value="${esc(e.id)}" ${view.repEmp===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select>
@@ -1167,6 +1174,28 @@ function aReports(){
       <div class="row" style="margin-top:14px"><button class="btn pri sm" data-dl="${r.k}" data-fmt="xlsx">⬇ Excel</button>${r.xlsxOnly?"":`<button class="btn sm" data-dl="${r.k}" data-fmt="csv">⬇ CSV</button>`}</div></div>`}).join("");
   return h+`</div>`;
 }
+
+/* ---------- Cases by SM: SMs who are CRM employees vs SMs not in the CRM ---------- */
+function smReportData(){const nk=s=>String(s||"").trim().toLowerCase(),emps=(S.allEmps&&S.allEmps.length?S.allEmps:S.employees||[]).filter(e=>e.active!==false&&e.role!=="Admin");
+  const g=new Map(),canon=new Map();CASES().forEach(c=>{const s0=String(c["SM Name"]||"").trim().replace(/\s+/g," ")||"(no SM)";if(!canon.has(nk(s0)))canon.set(nk(s0),s0);const s=canon.get(nk(s0)),e=emps.find(x=>nk(x.name)===nk(s)),k=e?e.name:s;
+    if(!g.has(k))g.set(k,{name:k,id:e?e.id:"",crm:!!e,all:[],prog:[],disb:[],closed:[]});const r=g.get(k),t=stType(c.Status);r.all.push(c);(t==="disb"?r.disb:t==="closed"?r.closed:r.prog).push(c)});
+  const rows=[...g.values()].sort((a,b)=>b.all.length-a.all.length);return{inR:rows.filter(r=>r.crm),outR:rows.filter(r=>!r.crm)}}
+function smReportCard(){const {inR,outR}=smReportData();view.eodDr=[];
+  const DR=(L,t)=>{if(!L.length)return'<span class="eod-z">–</span>';view.eodDr.push({title:t,kind:"cases",items:L});return `<button class="eod-dr" data-dr="${view.eodDr.length-1}">${L.length}</button>`};
+  const tot=R=>({name:"Total",id:"",all:R.flatMap(r=>r.all),prog:R.flatMap(r=>r.prog),disb:R.flatMap(r=>r.disb),closed:R.flatMap(r=>r.closed)});
+  const tb=(R,id,label)=>`<div class="tw"><table class="eod-t smrep-t"><thead><tr><th class="eod-n">SM Name</th>${id?"<th>Emp ID</th>":""}<th class="num">Cases</th><th class="num">In progress</th><th class="num">Disbursed</th><th class="num">Closed / dropped</th></tr></thead>
+    <tbody>${R.map(r=>`<tr><td class="eod-n">${esc(r.name)}</td>${id?`<td class="mute">${esc(r.id)}</td>`:""}<td class="num">${DR(r.all,r.name+" – all cases")}</td><td class="num">${DR(r.prog,r.name+" – in progress")}</td><td class="num">${DR(r.disb,r.name+" – disbursed")}</td><td class="num">${DR(r.closed,r.name+" – closed / dropped")}</td></tr>`).join("")||`<tr><td colspan="6" class="mute">None</td></tr>`}</tbody>
+    ${R.length?`<tfoot>${(t=>`<tr class="eod-tot"><td class="eod-n">Total</td>${id?"<td></td>":""}<td class="num">${DR(t.all,label+" – all cases")}</td><td class="num">${DR(t.prog,label+" – in progress")}</td><td class="num">${DR(t.disb,label+" – disbursed")}</td><td class="num">${DR(t.closed,label+" – closed / dropped")}</td></tr>`)(tot(R))}</tfoot>`:""}</table></div>`;
+  return `<div class="card pad rep smrep" style="grid-column:1/-1"><div class="rep-h"><div><h3>Cases by SM – in CRM / not in CRM</h3><p class="small mute" style="margin:4px 0 0">Every lead case grouped by its SM Name. <b>In CRM</b> = the SM is an employee (with Emp ID). <b>Not in CRM</b> = the SM has left or was never added – reassign their open cases from Lead Cases. Click any number to see the cases.</p></div><span class="pill s-new">${CASES().length} cases</span></div>
+    <h4 class="smrep-h">In CRM · ${inR.length} SM${inR.length===1?"":"s"}</h4>${tb(inR,true,"In CRM")}
+    <h4 class="smrep-h out">Not in CRM · ${outR.length} SM${outR.length===1?"":"s"}</h4>${tb(outR,false,"Not in CRM")}
+    <div class="row" style="margin-top:14px"><button class="btn pri sm" id="smrepXl">⬇ Excel</button></div></div>`}
+function bindSmReport(){document.querySelectorAll(".smrep [data-dr]").forEach(b=>b.onclick=()=>eodDrill(+b.dataset.dr));
+  const x=$("#smrepXl");if(x)x.onclick=async()=>{toast("Preparing Excel file…");await loadXLSX();const {inR,outR}=smReportData(),wb=XLSX.utils.book_new(),st=t=>stType(t.Status);
+    const sum=(R,id)=>[["SM Name",...(id?["Emp ID"]:[]),"Cases","In progress","Disbursed","Closed / dropped"],...R.map(r=>[r.name,...(id?[r.id]:[]),r.all.length,r.prog.length,r.disb.length,r.closed.length])];
+    const lst=R=>[["Lead code","Lead date","SM Name","Customer","Contact","Product","Amount","Status","With","Remarks"],...R.flatMap(r=>r.all).sort((a,b)=>(b.leadD||0)-(a.leadD||0)).map(c=>[c.code,c["Lead Date"],c["SM Name"],c["Customer Name"],c["Contact Number"],c.Product,numOf(c["Amount Required"])||"",c.Status,c["Team Lead"]||"",c.Remarks||""])];
+    [["In CRM – summary",sum(inR,1)],["In CRM – cases",lst(inR)],["Not in CRM – summary",sum(outR,0)],["Not in CRM – cases",lst(outR)]].forEach(([n,r])=>XLSX.utils.book_append_sheet(wb,sheetFrom(r),n));
+    const f="SNFS cases by SM "+ymd(Date.now())+".xlsx";XLSX.writeFile(wb,f);toast("Downloaded "+f)}}
 /* ---------- LEAD CASES REPORT: SM wise – summary, daily, monthly, case list ---------- */
 if(!view.lcv)view.lcv="sum";if(!view.lcSm)view.lcSm="all";if(!view.lcSt)view.lcSt="all";if(!view.lcM)view.lcM="6";if(!view.lcMet)view.lcMet="n";
 const lcSmKey=c=>{const v=String(c["SM Name"]||"").trim().replace(/\s+/g," ");return v||"Not recorded"};
@@ -1816,14 +1845,15 @@ const CASES=()=>S.cases||[];
 const caseOf=leadId=>CASES().find(c=>c["Contact ID"]===leadId);
 const casePill=c=>{const t=CASE_TONE[c.Status]||{new:"amber",disb:"green",closed:"red",prog:"amber"}[stType(c.Status)];return `<span class="pill" style="${t==="green"?"background:var(--green-soft);color:var(--green)":t==="red"?"background:#fdecec;color:#c0392b":t==="blue"?"background:#e8f0fe;color:var(--brand)":t==="amber"?"background:#fff4e0;color:#b26a00":"background:#eef0f3;color:#555"}">${esc(c.Status||"New")}</span>`};
 const inr=v=>{const n=parseFloat(String(v).replace(/[^\d.]/g,""));return isFinite(n)&&n>0?"₹"+n.toLocaleString("en-IN"):esc(v||"")};
-function casesTable(list,{empty="No lead cases yet."}={}){
-  return `<div class="card tw"><table class="ctab"><tr><th>Lead code</th><th>Lead date</th><th>Customer</th><th>SM</th><th>Product</th><th>Amount</th><th>Shared by</th><th>With</th><th>Bank</th><th>Status</th><th>Next follow-up</th><th>Last update</th><th></th></tr>
-   ${list.map(c=>`<tr><td class="num" style="white-space:nowrap"><b>${esc(c.code)}</b></td><td class="small num" style="white-space:nowrap">${esc(c["Lead Date"])}</td>
+function casesTable(list,{empty="No lead cases yet.",sel=false}={}){
+  const S2=view.csel||new Set(),allOn=sel&&list.length&&list.every(c=>S2.has(c.code));
+  return `<div class="card tw"><table class="ctab"><tr>${sel?`<th style="width:28px"><input type="checkbox" id="cselAll" title="Select all shown (${list.length})" ${allOn?"checked":""}></th>`:""}<th>Lead code</th><th>Lead date</th><th>Customer</th><th>SM</th><th>Product</th><th>Amount</th><th>Shared by</th><th>With</th><th>Bank</th><th>Status</th><th>Next follow-up</th><th>Last update</th><th></th></tr>
+   ${list.map(c=>`<tr${sel&&S2.has(c.code)?' class="selrow"':""}>${sel?`<td><input type="checkbox" data-csel="${esc(c.code)}" ${S2.has(c.code)?"checked":""}></td>`:""}<td class="num" style="white-space:nowrap"><b>${esc(c.code)}</b></td><td class="small num" style="white-space:nowrap">${esc(c["Lead Date"])}</td>
      <td><b>${esc(c["Customer Name"])}</b><div class="small mute num" style="white-space:nowrap">${isLead()?`<a class="lnk" href="${telHref(c["Contact Number"])}">${esc(c["Contact Number"])}</a>`:esc(c["Contact Number"])}</div></td>
      <td class="small" style="white-space:nowrap">${c["SM Name"]?`<span class="smtag">${esc(c["SM Name"])}</span>`:'<span class="mute">—</span>'}</td><td class="small">${esc(c.Product)||'<span class="mute">—</span>'}</td><td class="num" style="white-space:nowrap">${inr(c["Amount Required"])||'<span class="mute">—</span>'}</td>
      <td class="small">${esc(c["Lead Shared by"])}</td><td class="small" style="white-space:nowrap">${esc(c["Team Lead"])||NA}</td><td class="small">${esc(c["Bank Name"])||'<span class="mute">—</span>'}</td>
      <td>${casePill(c)}</td><td>${fuBadge(c)}</td><td class="small" style="min-width:200px;max-width:280px">${c.upd?fmt(c.upd):""}<div class="mute clip" title="${esc(c.Remarks)}">${esc(c.Remarks)}</div></td>
-     <td><button class="btn sm" data-case="${esc(c.code)}">${canEditCase(c)?"Open":"View"}</button></td></tr>`).join("")||`<tr><td colspan="12"><div class="empty">${empty}</div></td></tr>`}</table></div>`.replace('<td colspan="12">','<td colspan="13">');
+     <td><button class="btn sm" data-case="${esc(c.code)}">${canEditCase(c)?"Open":"View"}</button></td></tr>`).join("")||`<tr><td colspan="12"><div class="empty">${empty}</div></td></tr>`}</table></div>`.replace('<td colspan="12">',`<td colspan="${sel?14:13}">`);
 }
 function bindCases(){document.querySelectorAll("[data-case]").forEach(b=>b.onclick=e=>{e.preventDefault();openCase(b.dataset.case)});
   document.querySelectorAll("[data-mkcase]").forEach(b=>b.onclick=async()=>{const l=S.leads.find(x=>x.id===b.dataset.mkcase)||{},tl=tlOf(l.assignedTo);
@@ -1896,12 +1926,14 @@ function aCases(){
   const f=view.cf||(view.cf={st:"all",mon:"all",q:"",fu:"all",sm:"all"}),q=f.q.toLowerCase(),all=CASES();f.fu=f.fu||"all";f.sm=f.sm||"all";
   // SM buttons: a Team Lead sees only the people in her team (plus one "Other SMs" button); Admin sees every SM
   const teamView=!!ME&&ME.role!=="Admin"&&isTL(),teamNames=teamView?(S.employees||[]).map(e=>e.name):[],nk=s=>String(s||"").trim().toLowerCase();
-  const smOf=c=>{const s=String(c["SM Name"]||"").trim();if(!teamView)return s||"(no SM)";const m=teamNames.find(n=>nk(n)===nk(s));return m||"__other"};
+  const crmEmps=(S.allEmps&&S.allEmps.length?S.allEmps:S.employees||[]).filter(e=>e.active!==false&&e.role!=="Admin"),inCRM=s=>crmEmps.some(e=>nk(e.name)===nk(s));
+  const smCanon=new Map();all.forEach(c=>{const s=String(c["SM Name"]||"").trim().replace(/\s+/g," ");if(s&&!smCanon.has(nk(s)))smCanon.set(nk(s),s)});
+  const smOf=c=>{const s=String(c["SM Name"]||"").trim();if(!teamView){const e=crmEmps.find(e=>nk(e.name)===nk(s));return e?e.name:(smCanon.get(nk(s.replace(/\s+/g," ")))||"(no SM)")}const m=teamNames.find(n=>nk(n)===nk(s));return m||"__other"};
   const smCnt={};if(teamView)teamNames.forEach(n=>smCnt[n]=0);all.forEach(c=>{const k=smOf(c);smCnt[k]=(smCnt[k]||0)+1});
   const smList=Object.entries(smCnt).filter(([k,n])=>k!=="__other"||n).sort((a,b)=>(a[0]==="__other")-(b[0]==="__other")||b[1]-a[1]);
   const smLabel=k=>k==="__other"?"Other SMs":k;
   const months=[...new Set(all.map(c=>c.Monthly).filter(Boolean))];
-  const list=all.filter(c=>(f.sm==="all"||smOf(c)===f.sm)&&(f.fu==="all"||fuState(c)===f.fu)&&(f.st==="all"||c.Status===f.st)&&(f.mon==="all"||c.Monthly===f.mon)&&(!q||(c["Customer Name"]+c["Contact Number"]+c.code+c["Bank Name"]+c["Lead Shared by"]+c["SM Name"]).toLowerCase().includes(q))).sort((a,b)=>(b.at||0)-(a.at||0));
+  const list=all.filter(c=>(f.sm==="all"||(f.sm==="__notcrm"?!inCRM(smOf(c)):smOf(c)===f.sm))&&(f.fu==="all"||fuState(c)===f.fu)&&(f.st==="all"||c.Status===f.st)&&(f.mon==="all"||c.Monthly===f.mon)&&(!q||(c["Customer Name"]+c["Contact Number"]+c.code+c["Bank Name"]+c["Lead Shared by"]+c["SM Name"]).toLowerCase().includes(q))).sort((a,b)=>(b.at||0)-(a.at||0));
   const ofType=t=>all.filter(c=>stType(c.Status)===t),disb=ofType("disb"),closed=ofType("closed").length,newN=ofType("new").length,cnt=st=>st==="New"?newN:all.filter(c=>c.Status===st).length;
   const amt=disb.reduce((s,c)=>s+(parseFloat(String(c["Amount Required"]).replace(/[^\d.]/g,""))||0),0);
   let h=`<div class="stats sm"><div class="card stat"><span>Lead cases</span><b>${all.length}</b><div class="small mute">${cnt("New")} new – not yet followed up</div></div>
@@ -1912,13 +1944,26 @@ function aCases(){
     <select id="cst"><option value="all">All statuses</option>${[...new Set([...caseOpts("Status"),...all.map(c=>c.Status).filter(Boolean)])].map(x=>`<option ${f.st===x?"selected":""}>${x}</option>`).join("")}</select>
     <select id="cmon"><option value="all">All months</option>${months.map(m=>`<option ${f.mon===m?"selected":""}>${esc(m)}</option>`).join("")}</select>
     <span class="small mute">${list.length} case${list.length===1?"":"s"}</span></div>
-    ${smList.length>1?`<div class="chips" style="margin:10px 0 0"><span class="small mute" style="align-self:center">${teamView?"My team":"SM"}:</span><button class="chip ${f.sm==="all"?"on":""}" data-csm="all">All · ${all.length}</button>${smList.map(([k,n])=>`<button class="chip ${f.sm===k?"on":""}" data-csm="${esc(k)}" ${k==="__other"?'title="Cases with you whose SM is not in your team"':""}>${esc(smLabel(k))} · ${n}</button>`).join("")}</div>`:""}
+    ${teamView?(smList.length>1?`<div class="chips" style="margin:10px 0 0"><span class="small mute" style="align-self:center">My team:</span><button class="chip ${f.sm==="all"?"on":""}" data-csm="all">All · ${all.length}</button>${smList.map(([k,n])=>`<button class="chip ${f.sm===k?"on":""}" data-csm="${esc(k)}" ${k==="__other"?'title="Cases with you whose SM is not in your team"':""}>${esc(smLabel(k))} · ${n}</button>`).join("")}</div>`:""):(()=>{
+      const inL=smList.filter(([k])=>inCRM(k)),outL=smList.filter(([k])=>!inCRM(k)),outN=outL.reduce((s,[,n])=>s+n,0),eid=k=>(crmEmps.find(e=>nk(e.name)===nk(k))||{}).id||"";
+      return `<div class="chips smrow" style="margin:10px 0 0"><span class="smlab">In CRM</span><button class="chip ${f.sm==="all"?"on":""}" data-csm="all">All · ${all.length}</button>${inL.map(([k,n])=>`<button class="chip ${f.sm===k?"on":""}" data-csm="${esc(k)}">${esc(k)} <span class="mute">${eid(k)}</span> · ${n}</button>`).join("")}</div>
+      ${outL.length?`<div class="chips smrow" style="margin:6px 0 0"><span class="smlab out">Not in CRM</span><button class="chip ${f.sm==="__notcrm"?"on":""}" data-csm="__notcrm" title="Cases whose SM has left or was never added as an employee">All · ${outN}</button>${outL.map(([k,n])=>`<button class="chip ${f.sm===k?"on":""}" data-csm="${esc(k)}">${esc(k)} · ${n}</button>`).join("")}</div>`:""}`})()}
     <div class="chips" style="margin:10px 0 0"><span class="small mute" style="align-self:center">Follow-up:</span>${FU_F.map(([k,l])=>{const n=k==="all"?all.length:all.filter(c=>fuState(c)===k).length;return `<button class="chip ${f.fu===k?"on":""}" data-cfu="${k}" ${k==="over"&&n?'style="color:#c0392b"':""}>${l} · ${n}</button>`}).join("")}</div>
     <div class="row" style="margin-top:10px;justify-content:space-between"><div class="small mute" style="flex:1;min-width:260px">Cases come from the <b>lead form</b> (filled by the SM) or open by themselves when a telecaller marks a customer <b>Interested</b>. The person a case is <b>with</b> follows up; whoever sent it can still see the updates.</div><button class="btn pri sm" data-newcase>➕ New lead case</button></div>${ME&&ME.role==="Admin"?`<div class="small" style="margin-top:6px;padding:8px 10px;background:var(--brand-soft);border-radius:8px">➕ <b>New status, product, bank or other choice?</b> Type it at the bottom of its column in the <b>Lists</b> tab of the sheet${SHEET_URL?` (<a class="lnk" href="${esc(SHEET_URL)}" target="_blank" rel="noopener">Open sheet ↗</a>)`:""}, then press <b>⟳ Refresh</b> here. For a new status, also fill <b>Counts as</b>: New, In progress, Disbursed or Closed.</div>`:""}</div>`;
-  return h+casesTable(list,{empty:all.length?"No cases match these filters.":"No lead cases yet – they appear when a customer is marked Interested."});
+  const bulk=can("caseTransfer")&&(S.transferTo||[]).length>0;view.casesShown=list.map(c=>c.code);
+  if(bulk){if(!view.csel)view.csel=new Set();const shown=new Set(view.casesShown);[...view.csel].forEach(x=>{if(!shown.has(x))view.csel.delete(x)});const n=view.csel.size;
+    if(n)h+=`<div class="card pad bulkbar"><b>${n} case${n===1?"":"s"} selected</b><span class="small mute">Transfer to</span><select id="bkTo"><option value="">Choose a person…</option>${peopleOptions(S.transferTo)}</select><button class="btn pri sm" id="bkGo">Transfer ${n} case${n===1?"":"s"}</button><button class="btn sm" id="bkClr">Clear selection</button><span class="small mute">SM Name stays the same – only “With” changes.</span></div>`}
+  return h+casesTable(list,{empty:all.length?"No cases match these filters.":"No lead cases yet – they appear when a customer is marked Interested.",sel:bulk});
 }
 function bindCasesTab(){const q=$("#cq");if(!q)return;
-  $("#cst").onchange=e=>{view.cf.st=e.target.value;render()};document.querySelectorAll("[data-newcase]").forEach(b=>b.onclick=()=>openNewCase());document.querySelectorAll("[data-cfu]").forEach(b=>b.onclick=()=>{view.cf.fu=b.dataset.cfu;render()});document.querySelectorAll("[data-csm]").forEach(b=>b.onclick=()=>{view.cf.sm=b.dataset.csm;render()});$("#cmon").onchange=e=>{view.cf.mon=e.target.value;render()};
+  $("#cst").onchange=e=>{view.cf.st=e.target.value;render()};document.querySelectorAll("[data-newcase]").forEach(b=>b.onclick=()=>openNewCase());document.querySelectorAll("[data-cfu]").forEach(b=>b.onclick=()=>{view.cf.fu=b.dataset.cfu;render()});document.querySelectorAll("[data-csm]").forEach(b=>b.onclick=()=>{view.cf.sm=b.dataset.csm;render()});
+  document.querySelectorAll("[data-csel]").forEach(x=>x.onchange=()=>{x.checked?view.csel.add(x.dataset.csel):view.csel.delete(x.dataset.csel);render()});
+  const ca=$("#cselAll");if(ca)ca.onchange=()=>{(view.casesShown||[]).forEach(k=>ca.checked?view.csel.add(k):view.csel.delete(k));render()};
+  const bc=$("#bkClr");if(bc)bc.onclick=()=>{view.csel.clear();render()};
+  const bg=$("#bkGo");if(bg)bg.onclick=async()=>{const to=$("#bkTo").value,codes=[...view.csel];if(!to)return toast("Choose who the cases should go to");
+    const nm=(S.transferTo.find(x=>x.id===to)||{}).name||to,pick=CASES().filter(c=>view.csel.has(c.code)),bySm={};pick.forEach(c=>{const k=c["SM Name"]||"—";bySm[k]=(bySm[k]||0)+1});
+    if(!await askOk({title:`Transfer ${codes.length} case${codes.length===1?"":"s"} to ${nm}?`,ok:"Yes, transfer",body:`<ul>${Object.entries(bySm).map(([k,n])=>`<li>SM <b>${esc(k)}</b>: ${n} case${n===1?"":"s"}</li>`).join("")}</ul><p class="small mute">“With” becomes <b>${esc(nm)}</b> and each case gets the remark “Transferred … to ${esc(nm)} by ${esc(ME.name)}”. SM Name does not change.</p>`}))return;
+    let res=null;if(await write(async api=>{res=await api.transferCases(codes,to)},`${codes.length} cases transferred to ${nm}`,`Transferring ${codes.length} cases…`)){view.csel.clear();if(res&&res.skipped)toast(`${res.done} transferred · ${res.skipped} skipped (already with ${nm})`);render()}};$("#cmon").onchange=e=>{view.cf.mon=e.target.value;render()};
   q.oninput=e=>{view.cf.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#cq");n.focus();n.setSelectionRange(p,p)};}
 function leadRow(l){
   const last=lastOf(l);

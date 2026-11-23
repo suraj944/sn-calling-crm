@@ -131,7 +131,8 @@ function doPost(e) {
         case "createCase": can_(me, "caseEdit"); return createCaseFor_(me, b.leadId);
         case "removeCase": can_(me, "caseRemove"); return removeCase_(me, b.code);
         case "removeLogs": if (me.role !== "Admin") throw new Error("Only Admin can remove call logs"); return removeLogs_(me, b.ids || []);
-        case "transferCase": return transferCase_(me, b.code, b.to, b.note);   // Admin (caseTransfer) or the SM who filled the case, while it's still with them
+        case "transferCase": return transferCase_(me, b.code, b.to, b.note);
+        case "transferCases": return transferCases_(me, b.codes || [], b.to);   // Admin (caseTransfer) or the SM who filled the case, while it's still with them
     case "saveTargets": can_(me, "targetEdit"); return saveTargets_(me, b.month, b.list);
         case "setPerms":   need_(me, "Admin"); return setPerms_(me, b.id, b.perms || []);
         default: throw new Error("Unknown action: " + b.action);
@@ -784,6 +785,30 @@ function transferCase_(me, code, to, note) {
   row[C_["Last updated"]] = now_(); row[C_["Updated by"]] = me.name;
   sh.getRange(i + 2, 1, 1, CASE_COLS).setValues([row]);
   return { saved: true, to: t.name };
+}
+// Admin: move many cases to one person at once (e.g. the open cases of an SM who left). SM Name never changes.
+function transferCases_(me, codes, to) {
+  if (!perms_(me).has("caseTransfer")) throw new Error("Only Admin can transfer many cases at once");
+  const want = new Set((codes || []).map(x => String(x).trim()).filter(Boolean));
+  if (!want.size) throw new Error("Choose the cases to transfer");
+  if (want.size > 500) throw new Error("Transfer at most 500 cases at a time");
+  const sh = caseSheet_(), rows = caseRows_(), emps = emps_(), team = teamFor_(me, emps);
+  const t = transferTargets_(me, emps).find(x => x.id === to);
+  if (!t) throw new Error("Choose someone from the list");
+  const d = Utilities.formatDate(new Date(), "Asia/Kolkata", "d-MM"), at = now_();
+  let done = 0, skipped = 0;
+  rows.forEach((r, i) => {
+    if (!want.has(String(r[C_["Unique Lead Code"]]).trim())) return;
+    if (!canSeeCase_(me, r, emps, team)) { skipped++; return; }
+    if (tlMatch_(r[C_["Team Lead"]], t)) { skipped++; return; }
+    const row = r.slice(), holder = String(row[C_["Team Lead"]] || "").trim(), filler = emps.find(x => x.id === String(row[C_["Telecaller ID"]]).trim());
+    const from = holder || (filler ? filler.name : "Not assigned"), old = String(row[C_["Remarks"]] || "").trim();
+    row[C_["Team Lead"]] = t.name;
+    row[C_["Remarks"]] = (d + " Transferred from " + from + " to " + t.name + " by " + me.name + (old ? " // " + old : "")).slice(0, 2000);
+    row[C_["Last updated"]] = at; row[C_["Updated by"]] = me.name;
+    sh.getRange(i + 2, 1, 1, CASE_COLS).setValues([row]); done++;
+  });
+  return { saved: true, done, skipped, to: t.name };
 }
 // Admin only: take wrong call logs out of CallLogs. The rows are kept in the "Removed Calls" tab (with who removed them and when),
 // so nothing is lost. A contact whose latest call was removed goes back to its latest remaining call (or to "not called yet").
