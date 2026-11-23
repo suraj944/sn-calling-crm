@@ -224,14 +224,16 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .eod-pc i.good{background:#16a34a}.eod-pc i.mid{background:#d97706}.eod-pc i.low{background:#dc2626}.eod-pc s{width:70px}
 .eod-st>div{display:flex;flex-direction:column;gap:3px}
 .eod-pkb{all:unset;cursor:pointer;align-self:center;display:inline-flex;gap:6px;align-items:center;font-size:13px;font-weight:600;color:#1f2a44;background:#f3f5f9;border:1px solid #dfe3ea;border-radius:8px;padding:7px 12px}.eod-pkb:hover{background:#e9edf4}.eod-pkb:focus-visible{outline:2px solid #2453d6;outline-offset:2px}.eod-pkb span{font-size:11px;color:#6b7280}.eod-pkb.on{background:#fff7e6;border-color:#f2c76b;color:#7a4b00}
-.eod-hidn{margin:-4px 16px 10px;font-size:12.5px;color:#7a4b00;background:#fff7e6;border:1px solid #f6dca2;border-radius:8px;padding:7px 10px}
+.eod-fbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 12px}.eod-hidn{font-size:12.5px;color:#7a4b00;background:#fff7e6;border:1px solid #f6dca2;border-radius:8px;padding:6px 10px}
+.eod-pk-g{font-size:11.5px;font-weight:700;color:#6b7280;padding:8px 8px 2px}
 .eod-lnk{all:unset;cursor:pointer;color:#1d4ed8;font-weight:600;font-size:12.5px}.eod-lnk:hover{text-decoration:underline}.eod-lnk:focus-visible{outline:2px solid #2453d6;outline-offset:2px;border-radius:3px}
 .eod-pick{position:fixed;z-index:60;background:#fff;border:1px solid #dfe3ea;border-radius:12px;box-shadow:0 12px 32px rgba(15,42,92,.18);display:flex;flex-direction:column;overflow:hidden;color:#1f2a44}
 .eod-pk-h{padding:12px 14px 6px;display:flex;flex-direction:column;gap:2px}.eod-pk-q{display:flex;flex-wrap:wrap;gap:4px 14px;padding:4px 14px 8px;border-bottom:1px solid #eef0f4}
 .eod-pk-l{overflow:auto;padding:4px 6px;flex:1 1 auto}.eod-pk-l label{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;cursor:pointer}.eod-pk-l label:hover{background:#f5f7fb}
 .eod-pk-l input{width:17px;height:17px;accent-color:#2453d6;flex:none}.eod-pk-l span{display:flex;flex-direction:column;flex:1;min-width:0}.eod-pk-l small{color:#6b7280;font-size:11.5px}.eod-pk-l em{font-style:normal;font-size:11.5px;color:#6b7280;white-space:nowrap}
 .eod-pk-f{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid #eef0f4}.eod-pk-f span{flex:1}
-@media print{.eod-pkb,.eod-hidn .eod-lnk{display:none}}.eod-none .eod-st{padding:14px 16px;align-items:center}.eod-nb{font-size:12.5px;font-weight:600;color:#6b7280;background:#f3f4f6;border-radius:999px;padding:4px 10px}
+@media print{.eod-pkb,.eod-hidn .eod-lnk{display:none}}
+@media print{#printArea .eod-fbar>.small{display:none}}.eod-none .eod-st{padding:14px 16px;align-items:center}.eod-nb{font-size:12.5px;font-weight:600;color:#6b7280;background:#f3f4f6;border-radius:999px;padding:4px 10px}
 .eod-k>b.eod-k0{color:#c3c8d2}.eod-k em{display:flex;flex-direction:column;gap:1px}.eod-k em span{font-size:11.5px;color:#8a909c}.eod-k em b{font-size:14px}
 .eod-drbg{position:fixed;inset:0;background:rgba(15,25,45,.38);display:none;z-index:80;justify-content:flex-end}.eod-drbg.show{display:flex}
 .eod-dr-p{background:#fff;width:min(980px,100%);height:100%;overflow:auto;box-shadow:-8px 0 30px rgba(0,0,0,.15);padding:18px 20px}
@@ -2222,7 +2224,8 @@ function eodData(dayTs){
   logs.forEach(g=>{if(!byP.has(g.by))byP.set(g.by,[]);byP.get(g.by).push(g)});
   const st=L=>{const u=uniqN(L),c=uniqConn(L),I=L.filter(g=>g.outcome==="int"||g.outcome==="conv");return{calls:u,total:L.length,conn:c,pct:u?Math.round(c/u*100):0,int:uniqN(I),L,CL:L.filter(g=>CONNECTED(g.outcome)),IL:I}};
   const callAll=[...byP].map(([id,L])=>({id,name:empName(id),role:((S.allEmps||[]).find(e=>e.id===id)||{}).role||"",d:st(L.filter(g=>inD(g.at))),m:st(L)})).sort((a,b)=>b.m.calls-a.m.calls||a.name.localeCompare(b.name));
-  const hid=eodHid(),calling=callAll.filter(r=>!hid.has(r.id));   // people unticked in "Show people" are left out of the table, totals, WhatsApp text and Excel
+  const hid=eodHid(),calling=callAll.filter(r=>!hid.has(r.id));   // people unticked in "Show people" are left out of every table, totals, WhatsApp text and Excel
+  const nk=n=>String(n||"").trim().toLowerCase().replace(/\s+/g," "),empByN=new Map((S.allEmps||S.employees||[]).map(e=>[nk(e.name),e])),keyOf=n=>{const e=empByN.get(nk(n));return e?e.id:"nm:"+nk(n)};
   const sumC=k=>{const o={L:[],CL:[],IL:[]};calling.forEach(r=>{["L","CL","IL"].forEach(f=>o[f]=o[f].concat(r[k][f]))});   // team totals: each mobile number once, same as the lists behind them
     o.calls=uniqN(o.L);o.total=o.L.length;o.conn=uniqN(o.CL);o.int=uniqN(o.IL);o.pct=o.calls?Math.round(o.conn/o.calls*100):0;return o};
   const names=lcSmMap(CASES()),blank=()=>({lead:[0,0,[]],inq:[0,0,[]],login:[0,0,[]],sanc:[0,0,[]],disb:[0,0,[]]}),pipe={d:new Map(),m:new Map()};
@@ -2230,9 +2233,12 @@ function eodData(dayTs){
       add=(k,f,t)=>{[["d",inD],["m",inM]].forEach(([w,fn])=>{if(!fn(t))return;const M=pipe[w];if(!M.has(sm))M.set(sm,blank());const r=M.get(sm)[f];r[0]++;r[1]+=amt;r[2].push(c)})};
     add(0,lt.startsWith("inq")?"inq":"lead",c.leadD);add(0,"login",c.login);add(0,"sanc",c.sanc);if(stType(c.Status)==="disb")add(0,"disb",c.disbD)});
   const smAll=[...new Set([...pipe.m.keys()])].sort((a,b)=>{const x=pipe.m.get(a),y=pipe.m.get(b);return (y.lead[0]+y.inq[0])-(x.lead[0]+x.inq[0])||a.localeCompare(b)});
-  const rowsOf=w=>smAll.map(n=>({name:n,...(pipe[w].get(n)||blank())})),tot=rows=>{const o=blank();rows.forEach(r=>Object.keys(o).forEach(k=>{o[k][0]+=r[k][0];o[k][1]+=r[k][1];o[k][2]=o[k][2].concat(r[k][2])}));return o};
+  const smShow=smAll.filter(n=>!hid.has(keyOf(n)));
+  const people=callAll.map(r=>({key:r.id,name:r.name,role:r.role,crm:true,calls:r.m.calls,leads:0})),pk=new Map(people.map(x=>[x.key,x]));
+  smAll.forEach(n=>{const k=keyOf(n),r=pipe.m.get(n),l=r.lead[0]+r.inq[0];if(pk.has(k)){pk.get(k).leads+=l;return}const e=empByN.get(nk(n)),x={key:k,name:e?e.name:n,role:e?e.role||"":"",crm:!!e,calls:0,leads:l};people.push(x);pk.set(k,x)});
+  const rowsOf=w=>smShow.map(n=>({name:n,...(pipe[w].get(n)||blank())})),tot=rows=>{const o=blank();rows.forEach(r=>Object.keys(o).forEach(k=>{o[k][0]+=r[k][0];o[k][1]+=r[k][1];o[k][2]=o[k][2].concat(r[k][2])}));return o};
   const pd=rowsOf("d"),pm=rowsOf("m");
-  return {d0,m0,calling,callAll,cd:sumC("d"),cm:sumC("m"),pd,pm,td:tot(pd),tm:tot(pm)};
+  return {d0,m0,calling,callAll,people,cd:sumC("d"),cm:sumC("m"),pd,pm,td:tot(pd),tm:tot(pm)};
 }
 const PIPE_COLS=[["lead","Leads generated"],["inq","Inquiries"],["login","Login done"],["sanc","Sanction done"],["disb","Disbursed"]];
 function eodHTML(E){view.eodDr=[];const DR=(n,title,kind,items,cls,label)=>{if(!n)return '<span class="eod-z">–</span>';view.eodDr.push({title,kind,items});return `<button class="eod-dr ${cls||""}" data-dr="${view.eodDr.length-1}" title="See the list">${label||n}</button>`};
@@ -2240,7 +2246,10 @@ function eodHTML(E){view.eodDr=[];const DR=(n,title,kind,items,cls,label)=>{if(!
     ml=new Date(E.m0).toLocaleDateString("en-IN",{day:"numeric"})+"–"+new Date(E.d0).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});
   const kpi=(l,a,b,sub,dA,dB)=>`<div class="eod-k${dA||dB?" eod-kc":""}"><span>${l}</span><b class="${a?"":"eod-k0"}">${a?dA||a:0}</b><small>${a?sub||"":"today"}</small><em><span>Month to date</span><b>${b&&b!=="0"?dB||b:0}</b></em></div>`;
   const money=x=>x[0]?`${x[0]} · ₹${crore(x[1])} Cr`:"0";
-  let h=`<div class="eod-kpis">
+  const hidP=E.people.filter(x=>eodHid().has(x.key)),NP=E.people.length;
+  let h=`<div class="eod-fbar"><button class="eod-pkb${hidP.length?" on":""}" id="eodPickB" aria-haspopup="true">👥 ${hidP.length?`Showing ${NP-hidP.length} of ${NP} people`:`All ${NP} people`} <span>▾</span></button>
+   ${hidP.length?`<span class="eod-hidn">Hidden from this report: ${hidP.map(x=>esc(x.name)).join(", ")} · <button class="eod-lnk" id="eodShowAll">Show everyone</button></span>`:`<span class="small mute">Choose who appears in the calling and lead pipeline tables</span>`}</div>
+  <div class="eod-kpis">
     ${kpi("Calls",E.cd.calls,E.cm.calls,E.cd.total>E.cd.calls?`${E.cd.total} dials incl. repeats`:"different numbers",DR(E.cd.calls,"Calls today","calls",E.cd.L),DR(E.cm.calls,"Calls – month to date","calls",E.cm.L))}
     ${kpi("Connected",E.cd.conn,E.cm.conn,`${E.cd.pct}% of calls · MTD ${E.cm.pct}%`,DR(E.cd.conn,"Connected calls today","calls",E.cd.CL),DR(E.cm.conn,"Connected calls – month to date","calls",E.cm.CL))}
     ${PIPE_COLS.map(([k,l])=>kpi(l,E.td[k][0],money(E.tm[k]),E.td[k][0]?`₹${crore(E.td[k][1])} Cr`:"—",DR(E.td[k][0],l+" – today","cases",E.td[k][2]),DR(E.tm[k][0],l+" – month to date","cases",E.tm[k][2],"",money(E.tm[k])))).join("")}</div>`;
@@ -2260,9 +2269,7 @@ function eodHTML(E){view.eodDr=[];const DR=(n,title,kind,items,cls,label)=>{if(!
     ${mrow("Connect rate",d.calls?`<span class="eod-rt ${tone(d.pct)}">${d.pct}%</span>`:'<span class="eod-z">–</span>',m.calls?`<span class="eod-rt ${tone(m.pct)}">${m.pct}%</span>`:'<span class="eod-z">–</span>')}
     ${mrow("Interested",DR(d.int,`${nm} – interested today`,"calls",d.IL),DR(m.int,`${nm} – interested month to date`,"calls",m.IL))}</div></div>`};
   const sub=g=>`<th class="num eod-gs">Calls</th><th class="num">Connected</th><th>Connect rate</th><th class="num">Interested</th>`;
-  h+=`<div class="eod-sec"><div class="eod-st"><div><h3>Calling – pre-sales</h3><span class="small mute">Calls count each mobile number once · Connected = the customer picked up · Click any blue number to see the calls</span></div>
-   <button class="eod-pkb${E.calling.length<E.callAll.length?" on":""}" id="eodPickB" aria-haspopup="true">👥 ${E.calling.length<E.callAll.length?`Showing ${E.calling.length} of ${E.callAll.length} people`:`All ${E.callAll.length} people`} <span>▾</span></button></div>
-   ${E.calling.length<E.callAll.length?`<div class="eod-hidn">${E.callAll.length-E.calling.length} hidden: ${E.callAll.filter(r=>!E.calling.includes(r)).map(r=>esc(r.name)).join(", ")} · <button class="eod-lnk" id="eodShowAll">Show everyone</button></div>`:""}
+  h+=`<div class="eod-sec"><div class="eod-st"><div><h3>Calling – pre-sales</h3><span class="small mute">Calls count each mobile number once · Connected = the customer picked up · Click any blue number to see the calls</span></div></div>
    <div class="tw"><table class="eod-t eod-call"><colgroup><col class="c-name">${'<col class="c-n"><col class="c-n"><col class="c-bar"><col class="c-n">'.repeat(2)}</colgroup>
    <thead><tr><th rowspan="2" class="eod-n">Pre-sales</th><th colspan="4" class="eod-grp eod-g1">Today<small>${esc(dl)}</small></th><th colspan="4" class="eod-grp eod-g2">Month to date<small>${esc(ml)}</small></th></tr>
    <tr class="eod-sub">${sub()}${sub()}</tr></thead>
@@ -2318,19 +2325,97 @@ function eodDrill(i){const d=(view.eodDr||[])[i];if(!d)return;let bg=$("#eodDrBg
   bg.classList.add("show");$("#eodDrX").onclick=()=>bg.classList.remove("show");if(isPhone())mobileCards(bg);
   bg.querySelectorAll("[data-ocase]").forEach(tr=>tr.onclick=()=>{bg.classList.remove("show");openCase(tr.dataset.ocase)});
   bg.querySelectorAll("[data-olead]").forEach(tr=>tr.onclick=()=>{bg.classList.remove("show");tr.dataset.ocode?openCase(tr.dataset.ocode):openLead(tr.dataset.olead)})}
+// ---- EOD Excel with a Dashboard sheet (ExcelJS: colours, charts as pictures) ----
+let xljsLoading=null;
+function loadExcelJS(){if(window.ExcelJS)return Promise.resolve();return xljsLoading||(xljsLoading=new Promise((ok,no)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js";s.onload=ok;s.onerror=()=>{xljsLoading=null;no(new Error("Couldn't load the Excel library"))};document.head.appendChild(s)}))}
+function eodChart(kind,E){const W=1280,H=600,cv=document.createElement("canvas");cv.width=W;cv.height=H;const g=cv.getContext("2d");
+  g.fillStyle="#fff";g.fillRect(0,0,W,H);g.textBaseline="middle";const F=(w,s)=>`${w} ${s}px Arial, Helvetica, sans-serif`;
+  const rr=(x,y,w,h,r)=>{r=Math.min(r,h/2,w/2);g.beginPath();g.moveTo(x,y);g.lineTo(x+w-r,y);g.arcTo(x+w,y,x+w,y+r,r);g.lineTo(x+w,y+h-r);g.arcTo(x+w,y+h,x+w-r,y+h,r);g.lineTo(x,y+h);g.closePath();g.fill()};
+  const empty=t=>{g.fillStyle="#6b7280";g.font=F(400,28);g.textAlign="center";g.fillText(t,W/2,H/2);return cv.toDataURL("image/png")};
+  const L0=250,R0=W-150;
+  if(kind==="calls"){const P=E.calling.filter(r=>r.m.calls).sort((a,b)=>b.m.calls-a.m.calls).slice(0,8);if(!P.length)return empty("No calls this month");
+    const mx=Math.max(...P.map(r=>r.m.calls)),top=70,rowH=(H-top-20)/P.length,bh=Math.min(22,rowH*0.3);
+    [["Calls (different numbers)","#2453d6"],["Connected","#16a34a"]].forEach(([t,c],i)=>{const x=L0+i*330;g.fillStyle=c;rr(x,26,22,22,4);g.fillStyle="#374151";g.font=F(400,24);g.textAlign="left";g.fillText(t,x+32,38)});
+    g.strokeStyle="#e5e7eb";g.lineWidth=2;g.beginPath();g.moveTo(L0,top-6);g.lineTo(L0,H-14);g.stroke();
+    P.forEach((r,i)=>{const y=top+i*rowH+rowH/2;g.fillStyle="#1f2a44";g.font=F(600,24);g.textAlign="right";g.fillText(r.name.length>18?r.name.slice(0,17)+"…":r.name,L0-16,y);
+      [[r.m.calls,"#2453d6",-bh/2-3],[r.m.conn,"#16a34a",bh/2+3]].forEach(([v,c,dy])=>{const w=Math.max(v?4:0,(R0-L0)*v/mx);g.fillStyle=c;if(w)rr(L0,y+dy-bh/2,w,bh,6);g.fillStyle="#374151";g.font=F(600,21);g.textAlign="left";g.fillText(String(v),L0+w+10,y+dy)})});
+    return cv.toDataURL("image/png")}
+  const S=PIPE_COLS.map(([k,l])=>({l,n:E.tm[k][0],a:E.tm[k][1]}));if(!S.some(x=>x.n))return empty("Nothing in the lead pipeline this month");
+  const mx=Math.max(...S.map(x=>x.n)),top=30,rowH=(H-top-20)/S.length,bh=Math.min(56,rowH*0.62),cols=["#9db4ee","#6d8fe4","#3f6ad8","#2453d6","#16357f"];
+  g.strokeStyle="#e5e7eb";g.lineWidth=2;g.beginPath();g.moveTo(L0,top);g.lineTo(L0,H-14);g.stroke();
+  S.forEach((x,i)=>{const y=top+i*rowH+rowH/2,w=Math.max(x.n?4:0,(R0-L0-60)*x.n/mx);g.fillStyle="#1f2a44";g.font=F(600,24);g.textAlign="right";g.fillText(x.l,L0-16,y);
+    g.fillStyle=cols[i];if(w)rr(L0,y-bh/2,w,bh,8);g.fillStyle="#1f2a44";g.font=F(700,24);g.textAlign="left";g.fillText(x.n?`${x.n}  ·  ₹${crore(x.a)} Cr`:"0",L0+w+12,y)});
+  return cv.toDataURL("image/png")}
+async function eodWorkbook(E){await loadExcelJS();const wb=new ExcelJS.Workbook();wb.creator="SN Calling CRM";wb.created=new Date();
+  const NAVY="FF0F2A5C",BLUE="FF2453D6",GREEN="FF16A34A",INK="FF1F2A44",MUTE="FF6B7280",LINE="FFE3E6EC",TINT="FFF3F6FB",fill=c=>({type:"pattern",pattern:"solid",fgColor:{argb:c}}),
+    thin={style:"thin",color:{argb:LINE}},box={top:thin,left:thin,bottom:thin,right:thin};
+  const dl=new Date(E.d0).toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"}),ml=new Date(E.m0).toLocaleDateString("en-IN",{day:"numeric"})+"–"+new Date(E.d0).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});
+  const hidP=(E.people||[]).filter(x=>eodHid().has(x.key)),team=isTL()&&ME?`${ME.name}'s team`:"All teams";
+  const ws=wb.addWorksheet("Dashboard",{views:[{showGridLines:false}],pageSetup:{orientation:"landscape",fitToPage:true,fitToWidth:1,fitToHeight:0,paperSize:9}});
+  ws.columns=[{width:2},...Array(14).fill(0).map(()=>({width:12.5})),{width:2}];
+  const cell=(a,v,st)=>{const c=ws.getCell(a);c.value=v;if(st)Object.assign(c,st);return c};
+  const band=(r,c1,c2,f)=>{for(let c=c1;c<=c2;c++)ws.getRow(r).getCell(c).fill=fill(f)};
+  // title
+  band(2,2,15,NAVY);band(3,2,15,NAVY);ws.getRow(2).height=30;ws.getRow(3).height=20;
+  ws.mergeCells("B2:O2");cell("B2","SN Financial Services – End-of-day report",{font:{bold:true,size:18,color:{argb:"FFFFFFFF"}},alignment:{vertical:"middle",indent:1}});
+  ws.mergeCells("B3:O3");cell("B3",`${dl}  ·  ${team}  ·  as of ${new Date(lastSync||Date.now()).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}${hidP.length?`  ·  Not shown: ${hidP.map(x=>x.name).join(", ")}`:""}`,{font:{size:11,color:{argb:"FFC9D6F6"}},alignment:{vertical:"middle",indent:1}});
+  // KPI tiles
+  const money=x=>x[0]?`${x[0]}  ·  ₹${crore(x[1])} Cr`:"0";
+  const K=[["Calls",E.cd.calls,E.cm.calls,BLUE],["Connected",E.cd.conn,`${E.cm.conn}  (${E.cm.pct}%)`,GREEN],...PIPE_COLS.map(([k,l])=>[l,E.td[k][0],money(E.tm[k]),NAVY])];
+  ws.getRow(5).height=20;ws.getRow(6).height=34;ws.getRow(7).height=16;ws.getRow(8).height=20;
+  K.forEach(([l,a,b,col],i)=>{const c1=2+i*2,c2=c1+1,A=n=>ws.getRow(n).getCell(c1).address,B=n=>ws.getRow(n).getCell(c2).address;
+    for(let r=5;r<=8;r++){band(r,c1,c2,TINT)}
+    [5,6,7,8].forEach(r=>ws.mergeCells(`${A(r)}:${B(r)}`));
+    const gap={style:"thick",color:{argb:"FFFFFFFF"}};[5,6,7,8].forEach(r=>{ws.getRow(r).getCell(c1).border={left:gap,right:gap,...(r===5?{top:{style:"thick",color:{argb:col}}}:{})}});
+    cell(A(5),l,{font:{size:10,color:{argb:MUTE}},alignment:{indent:1,vertical:"bottom"}});
+    cell(A(6),a||0,{font:{bold:true,size:22,color:{argb:a?INK:"FFB0B6C3"}},alignment:{indent:1,vertical:"middle",horizontal:"left"}});
+    cell(A(7),"today",{font:{size:9,color:{argb:MUTE}},alignment:{indent:1}});
+    cell(A(8),`MTD  ${b}`,{font:{bold:true,size:10,color:{argb:BLUE}},alignment:{indent:1,vertical:"top"}})});
+  // charts
+  let r=10;const sec=(row,c1,c2,t,sub)=>{ws.mergeCells(row,c1,row,c2);const c=ws.getRow(row).getCell(c1);c.value={richText:[{text:t,font:{name:"Calibri",bold:true,size:13,color:{argb:INK}}},...(sub?[{text:"   "+sub,font:{name:"Calibri",size:9,color:{argb:MUTE}}}]:[])]};ws.getRow(row).height=22};
+  sec(r,2,8,"Calls by person – month to date",ml);sec(r,9,15,"Lead pipeline – month to date",ml);
+  const i1=wb.addImage({base64:eodChart("calls",E),extension:"png"}),i2=wb.addImage({base64:eodChart("pipe",E),extension:"png"});
+  ws.addImage(i1,{tl:{col:1.1,row:r+0.2},ext:{width:620,height:290}});ws.addImage(i2,{tl:{col:8.1,row:r+0.2},ext:{width:620,height:290}});
+  r+=17;
+  // calling table
+  const hdr=(row,c1,vals,f)=>vals.forEach((v,i)=>{const c=ws.getRow(row).getCell(c1+i);c.value=v;c.font={bold:true,size:10,color:{argb:f?"FFFFFFFF":MUTE}};c.fill=fill(f||"FFF5F7FA");c.border=box;const ctr=c1+i>2;c.alignment={horizontal:ctr?"center":"left",vertical:"middle",wrapText:true,indent:ctr?0:1}});
+  sec(r,2,15,"Calling – pre-sales","Calls count each mobile number once · Connected = the customer picked up");r++;
+  ws.mergeCells(r,2,r+1,3);hdr(r,2,["Pre-sales"]);ws.mergeCells(r,4,r,7);hdr(r,4,["Today"],BLUE);ws.mergeCells(r,8,r,11);hdr(r,8,["Month to date"],GREEN);hdr(r+1,4,["Calls","Connected","Connect rate","Interested","Calls","Connected","Connect rate","Interested"]);
+  ws.getRow(r+1).height=18;r+=2;const cs=r;
+  const crow=(x,tot)=>{ws.mergeCells(r,2,r,3);const vals=[x.name,null,x.d.calls,x.d.conn,x.d.calls?x.d.pct/100:null,x.d.int,x.m.calls,x.m.conn,x.m.calls?x.m.pct/100:null,x.m.int];
+    vals.forEach((v,i)=>{if(i===1)return;const c=ws.getRow(r).getCell(2+i);c.value=v===0?"–":v;c.border=box;c.font={bold:!!tot,size:11,color:{argb:v===0?"FFB0B6C3":INK}};c.alignment={horizontal:i?"center":"left",indent:i?0:1,vertical:"middle"};if(i===4||i===8)c.numFmt="0%";if(tot)c.fill=fill(TINT)});ws.getRow(r).height=20;r++};
+  E.calling.forEach(x=>crow(x));const ce=r-1;crow({name:"Total",d:E.cd,m:E.cm},1);
+  if(ce>=cs)[`F${cs}:F${ce}`,`J${cs}:J${ce}`].forEach(ref=>ws.addConditionalFormatting({ref,rules:[{type:"dataBar",gradient:false,cfvo:[{type:"num",value:0},{type:"num",value:1}],color:{argb:"FF86C79A"}}]}));
+  r++;
+  // pipeline tables
+  const ptab=(rows,T,label,col)=>{sec(r,2,15,"Lead pipeline – "+label,"By SM (who filled the lead form) · amounts in ₹ crore");r++;
+    ws.mergeCells(r,2,r+1,3);hdr(r,2,["Pre-sales"]);PIPE_COLS.forEach(([k,l],i)=>{ws.mergeCells(r,4+i*2,r,5+i*2);hdr(r,4+i*2,[l],col);hdr(r+1,4+i*2,["No.","₹ Cr"])});r+=2;
+    const prow=(x,tot)=>{ws.mergeCells(r,2,r,3);const c0=ws.getRow(r).getCell(2);c0.value=x.name;c0.border=box;c0.font={bold:!!tot,size:11,color:{argb:INK}};c0.alignment={indent:1,vertical:"middle"};if(tot)c0.fill=fill(TINT);
+      PIPE_COLS.forEach(([k],i)=>[[x[k][0],null],[x[k][0]?+crore(x[k][1]):null,"0.00"]].forEach(([v,nf],j)=>{const c=ws.getRow(r).getCell(4+i*2+j);c.value=v||"–";c.border=box;c.alignment={horizontal:"center",vertical:"middle"};c.font={bold:!!tot,size:11,color:{argb:v?(j?"FF4B5563":INK):"FFB0B6C3"}};if(nf&&v)c.numFmt=nf;if(tot)c.fill=fill(TINT)}));ws.getRow(r).height=20;r++};
+    if(!rows.length){ws.mergeCells(r,2,r,15);const c=ws.getRow(r).getCell(2);c.value=label==="today"?"Nothing saved yet today":"Nothing this month yet";c.font={italic:true,color:{argb:MUTE}};c.alignment={indent:1};r++}
+    rows.forEach(x=>prow(x));prow({name:"Total",...T},1);r++};
+  ptab(E.pd.filter(x=>PIPE_COLS.some(([k])=>x[k][0])),E.td,"today",BLUE);ptab(E.pm,E.tm,"month to date",GREEN);
+  ws.mergeCells(r,2,r,15);cell(ws.getRow(r).getCell(2).address,"Leads generated and Inquiries are counted on the lead date; Login, Sanction and Disbursed on the day the case reached that step.",{font:{size:9,italic:true,color:{argb:MUTE}},alignment:{indent:1}});
+  ws.eachRow({includeEmpty:true},row=>row.eachCell({includeEmpty:true},c=>{c.font={name:"Calibri",...(c.font||{})}}));
+  // plain data sheets (same as before, with a styled header)
+  eodSheets(E).forEach(([n,rows])=>{const s=wb.addWorksheet(n,{views:[{state:"frozen",ySplit:1}]});rows.forEach(x=>s.addRow(x));
+    s.columns.forEach((c,i)=>{c.width=Math.min(40,Math.max(11,...rows.map(x=>String(x[i]??"").length+2)))});
+    s.getRow(1).eachCell(c=>{c.font={name:"Calibri",bold:true,color:{argb:"FFFFFFFF"}};c.fill=fill(NAVY);c.alignment={wrapText:true,vertical:"middle"}});s.getRow(1).height=32;
+    s.lastRow.eachCell(c=>{c.font={name:"Calibri",bold:true};c.fill=fill(TINT)})});
+  return wb.xlsx.writeBuffer()}
 // "Show people" dropdown on the EOD calling table
 function eodPicker(btn){let pp=$("#eodPick");if(pp){pp.remove();return}
-  const all=(view.eod&&view.eod.callAll)||[],hid=eodHid();
+  const all=(view.eod&&view.eod.people)||[],hid=eodHid();
   pp=document.createElement("div");pp.id="eodPick";pp.className="eod-pick";pp.setAttribute("role","dialog");pp.setAttribute("aria-label","Choose who to show");
-  pp.innerHTML=`<div class="eod-pk-h"><b>Show in report</b><span class="small mute">Untick anyone you don't want in the table, totals, WhatsApp text and Excel.</span></div>
-   <div class="eod-pk-q"><button class="eod-lnk" data-q="all">Tick all</button><button class="eod-lnk" data-q="none">Untick all</button><button class="eod-lnk" data-q="act">Only people with calls this month</button></div>
-   <div class="eod-pk-l">${all.map(r=>`<label><input type="checkbox" value="${esc(r.id)}"${hid.has(r.id)?"":" checked"}><span><b>${esc(r.name)}</b><small>${esc(r.role||"")}</small></span><em>${r.m.calls?r.m.calls+" calls MTD":"no calls"}</em></label>`).join("")}</div>
+  pp.innerHTML=`<div class="eod-pk-h"><b>Show in report</b><span class="small mute">Untick anyone you don't want in the calling and lead pipeline tables, totals, WhatsApp text and Excel.</span></div>
+   <div class="eod-pk-q"><button class="eod-lnk" data-q="all">Tick all</button><button class="eod-lnk" data-q="none">Untick all</button><button class="eod-lnk" data-q="act">Only people with work this month</button></div>
+   <div class="eod-pk-l">${[["In CRM",all.filter(x=>x.crm)],["Not in CRM – SM name on the lead form",all.filter(x=>!x.crm)]].filter(g=>g[1].length).map(([t,L])=>`<div class="eod-pk-g">${t}</div>`+L.map(r=>{const w=[r.calls?r.calls+" calls":"",r.leads?r.leads+" lead"+(r.leads===1?"":"s"):""].filter(Boolean).join(" · ");return `<label><input type="checkbox" value="${esc(r.key)}"${hid.has(r.key)?"":" checked"}><span><b>${esc(r.name)}</b><small>${esc(r.role||"")}</small></span><em>${w?w+" MTD":"nothing this month"}</em></label>`}).join("")).join("")}</div>
    <div class="eod-pk-f"><span class="small mute" id="eodPkN"></span><button class="btn sm" id="eodPkC">Cancel</button><button class="btn sm pri" id="eodPkA">Apply</button></div>`;
   document.body.appendChild(pp);
   const place=()=>{const r=btn.getBoundingClientRect(),w=Math.min(340,innerWidth-16);pp.style.width=w+"px";pp.style.left=Math.max(8,Math.min(r.right-w,innerWidth-w-8))+"px";pp.style.top=(r.bottom+6)+"px";pp.style.maxHeight=Math.max(240,innerHeight-r.bottom-20)+"px"};place();
   const boxes=[...pp.querySelectorAll("input[type=checkbox]")],cnt=()=>{const n=boxes.filter(b=>b.checked).length;$("#eodPkN").textContent=`${n} of ${boxes.length} ticked`;$("#eodPkA").disabled=!n};cnt();
   boxes.forEach(b=>b.onchange=cnt);
-  pp.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{const q=b.dataset.q;boxes.forEach(x=>{const r=all.find(y=>y.id===x.value);x.checked=q==="all"?true:q==="none"?false:!!(r&&r.m.calls)});cnt()});
+  pp.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{const q=b.dataset.q;boxes.forEach(x=>{const r=all.find(y=>y.key===x.value);x.checked=q==="all"?true:q==="none"?false:!!(r&&(r.calls||r.leads))});cnt()});
   const close=()=>{pp.remove();document.removeEventListener("mousedown",out,true);window.removeEventListener("scroll",close,true)};
   const out=e=>{if(!pp.contains(e.target)&&e.target!==btn&&!btn.contains(e.target))close()};
   setTimeout(()=>{document.addEventListener("mousedown",out,true);window.addEventListener("scroll",e=>{if(!pp.contains(e.target))close()},true)},0);
@@ -2347,8 +2432,9 @@ function bindEOD(){const on=(s,ev,f)=>{const el=$(s);if(el)el[ev]=f};
   on("#eodPickB","onclick",e=>{e.stopPropagation();eodPicker(e.currentTarget)});
   const ws=$("#eodWaSend");if(ws)ws.href="https://wa.me/?text="+encodeURIComponent(eodText(view.eod));
   on("#eodWa","onclick",async()=>{const t=eodText(view.eod);try{await navigator.clipboard.writeText(t);toast("Copied – paste it in WhatsApp")}catch(e){askOk({title:"Copy this text",ok:"Done",body:`<textarea style="width:100%;height:260px">${esc(t)}</textarea>`})}});
-  on("#eodXl","onclick",async()=>{toast("Preparing Excel file…");await loadXLSX();const wb=XLSX.utils.book_new();eodSheets(view.eod).forEach(([n,rows])=>XLSX.utils.book_append_sheet(wb,sheetFrom(rows),n));
-    const f="SNFS EOD report "+view.eodDay+".xlsx";XLSX.writeFile(wb,f);toast("Downloaded "+f)});
+  on("#eodXl","onclick",async()=>{toast("Preparing Excel file…");const f="SNFS EOD report "+view.eodDay+".xlsx";
+    try{const buf=await eodWorkbook(view.eod),url=URL.createObjectURL(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})),a=document.createElement("a");a.href=url;a.download=f;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);toast("Downloaded "+f+" – opens on the Dashboard sheet")}
+    catch(e){console.warn(e);await loadXLSX();const wb=XLSX.utils.book_new();eodSheets(view.eod).forEach(([n,rows])=>XLSX.utils.book_append_sheet(wb,sheetFrom(rows),n));XLSX.writeFile(wb,f);toast("Downloaded "+f+" (without dashboard)")}});
   on("#eodPdf","onclick",()=>{let pa=$("#printArea");if(!pa){pa=document.createElement("div");pa.id="printArea";document.body.appendChild(pa)}
     pa.innerHTML=`<div class="eod eod-print">${$(".eod").innerHTML}</div>`;pa.querySelectorAll(".eod-act").forEach(x=>x.remove());
     document.body.classList.add("printing");const done=()=>{document.body.classList.remove("printing");window.removeEventListener("afterprint",done)};window.addEventListener("afterprint",done);
