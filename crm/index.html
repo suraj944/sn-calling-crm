@@ -879,7 +879,7 @@ if(!view.lsel)view.lsel=new Set();
 function aLeadsTab(){
   const f=view.lf,q=f.q.toLowerCase();
   const all=leadsIn();
-  const list=all.filter(l=>(f.who==="all"||(f.who==="none"?!l.assignedTo:l.assignedTo===f.who))&&(f.st==="all"||l.status===f.st)&&(!q||(l.name+l.phone+l.city).toLowerCase().includes(q)))
+  const list=all.filter(l=>(f.who==="all"||(f.who==="none"?!l.assignedTo:l.assignedTo===f.who))&&(f.st==="all"||l.status===f.st)&&srch(q,[l.name,l.city],[l.phone]))
     .sort((a,b)=>(leadAt(b)||0)-(leadAt(a)||0));
   let h=rangeBar();
   h+=`<div class="card pad" style="margin-bottom:12px"><div class="row">
@@ -1218,6 +1218,13 @@ function bindSmReport(){document.querySelectorAll(".smrep [data-dr]").forEach(b=
     const f="SNFS cases by SM "+ymd(Date.now())+".xlsx";XLSX.writeFile(wb,f);toast("Downloaded "+f)}}
 /* ---------- LEAD CASES REPORT: SM wise – summary, daily, monthly, case list ---------- */
 if(!view.lcv)view.lcv="sum";if(!view.lcSm)view.lcSm="all";if(!view.lcSt)view.lcSt="all";if(!view.lcM)view.lcM="6";if(!view.lcMet)view.lcMet="n";
+// Search boxes: a number matches with or without spaces, +91 or a leading 0 ("7021774063" = "70217 74063");
+// words match in any order and skip middle names ("vaibhav chavan" finds "Vaibhav Bhagavan Chavan")
+function srch(q,texts,phones){q=String(q||"").trim().toLowerCase();if(!q)return true;
+  if(/^[\d\s+()\-]+$/.test(q)&&q.replace(/\D/g,"").length>=3){let d=q.replace(/\D/g,"");if(d.length===12&&d.startsWith("91"))d=d.slice(2);else if(d.length===11&&d.startsWith("0"))d=d.slice(1);
+    return(phones||[]).some(p=>String(p||"").replace(/\D/g,"").includes(d))||(texts||[]).some(v=>String(v||"").replace(/\D/g,"").includes(d)&&/\d{3}/.test(String(v||"")))}
+  const t=[...(texts||[]),...(phones||[])].map(v=>String(v||"").toLowerCase()).join(" ").replace(/\s+/g," ");
+  return q.split(/\s+/).every(w=>t.includes(w))}
 const lcSmKey=c=>{const v=String(c["SM Name"]||"").trim().replace(/\s+/g," ");return v||"Not recorded"};
 function lcSmMap(list){const m=new Map();list.forEach(c=>{const k=lcSmKey(c),lk=k.toLowerCase();if(!m.has(lk))m.set(lk,k)});return m}
 const lcSmOf=(c,names)=>names.get(lcSmKey(c).toLowerCase())||lcSmKey(c);
@@ -1357,7 +1364,7 @@ function meetingsInView(){
   const q=view.mq.toLowerCase();
   const pe=view.who!=="admin"&&emp(view.who);   // viewing one person's page
   return (S.meetings||[]).filter(m=>inRange(m.at)&&(!pe||m.smId===pe.id||normName(m.sm)===normName(pe.name))&&(view.mSm==="all"||view.who!=="admin"||m.sm===view.mSm)&&(view.mEnt==="all"||m.ent===view.mEnt)&&(view.mType==="all"||m.type===view.mType)&&(view.mInt==="all"||(view.mInt==="none"?!m.interest:m.interest===view.mInt))
-    &&(!q||[m.person,m.entity,m.phone,m.purpose,m.outcome,m.remarks,m.feedback,m.sm,m.tieupWith].join(" ").toLowerCase().includes(q)));
+    &&srch(q,[m.person,m.entity,m.purpose,m.outcome,m.remarks,m.feedback,m.sm,m.tieupWith],[m.phone]));
 }
 const entCls=w=>({Customer:"s-int",Banker:"s-conv",Connector:"s-cb",Developer:"s-na",CP:"s-wn"})[w]||"s-new";
 const yesCls=v=>v==="Yes"?"s-int":v==="No"?"s-ni":v?"s-cb":"";
@@ -1472,7 +1479,7 @@ const empOpts=()=>S.employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)
 const asgOpts=(sel)=>S.employees.filter(e=>e.role!=="Sales Manager"&&e.role!=="Admin").map(e=>`<option value="${esc(e.id)}" ${sel===e.id?"selected":""}>${esc(e.name)} (${esc(e.role)})</option>`).join("");
 function aAssign(){
   const f=view.assignFilter,q=view.q.toLowerCase();
-  const list=S.leads.filter(l=>(f==="all"||(f==="none"?!l.assignedTo:l.assignedTo===f))&&(!q||(l.name+l.phone+l.city).toLowerCase().includes(q)));
+  const list=S.leads.filter(l=>(f==="all"||(f==="none"?!l.assignedTo:l.assignedTo===f))&&srch(q,[l.name,l.city],[l.phone]));
   let h=`<div class="card pad" style="margin-bottom:12px"><div class="row">
    <input id="q" placeholder="Search name, number, city" value="${esc(view.q)}" style="flex:1;min-width:180px">
    <select id="af"><option value="all">All contacts</option>${isTL()?"":`<option value="none">Unassigned</option>`}${empOpts()}</select>
@@ -1759,7 +1766,7 @@ function buildConns(rows){return(Array.isArray(rows)?rows:[]).map(r=>{const g=i=
 const cnm=x=>String(x||"").trim().toLowerCase().replace(/\s+/g," "),connMine=(k,e)=>k.smId===e.id||cnm(k.sm)===cnm(e.name);
 function aConn(whoId){const all=S.conns||[],who=whoId?emp(whoId):null,base=who?all.filter(k=>connMine(k,who)):all;
   const f=view.connF||(view.connF={q:"",sm:"",sig:""}),q=f.q.trim().toLowerCase(),qd=q.replace(/\D/g,"");
-  const L=base.filter(k=>(!f.sm||k.sm===f.sm)&&(!f.sig||(f.sig==="Yes"?k.signed==="Yes":k.signed!=="Yes"))&&(!q||[k.name,k.area,k.connType,k.sm,k.id].some(v=>String(v||"").toLowerCase().includes(q))||(qd.length>=3&&String(k.phone).replace(/\D/g,"").includes(qd))))
+  const L=base.filter(k=>(!f.sm||k.sm===f.sm)&&(!f.sig||(f.sig==="Yes"?k.signed==="Yes":k.signed!=="Yes"))&&srch(q,[k.name,k.area,k.connType,k.sm,k.id],[k.phone]))
     .sort((a,b)=>(b.dateT-a.dateT)||String(b.id).localeCompare(String(a.id),undefined,{numeric:true}));
     const ck=k=>String(k.phone).replace(/\D/g,"").slice(-10)||k.name.toLowerCase(),uq=list=>new Set(list.map(ck)).size;
   const latest=list=>{const m=new Map();[...list].sort((a,b)=>b.dateT-a.dateT).forEach(k=>{if(!m.has(ck(k)))m.set(ck(k),k)});return[...m.values()]};   // a connector met twice counts once (latest meeting)
@@ -1928,7 +1935,7 @@ function renderEmp(){
           <td class="small num">${g.followUp?fmt(g.followUp):"—"}</td><td><button class="btn sm" data-open="${esc(g.lead.id)}">Open</button></td></tr>`).join("")}</table></div></div>`).join("");}
   }else{
     const f=view.filter,q=view.q.toLowerCase();
-    const list=mine.filter(l=>(f==="all"||l.status===f)&&(!q||(l.name+l.phone+l.city).toLowerCase().includes(q))).sort((a,b)=>(a.status==="new"?0:1)-(b.status==="new"?0:1));
+    const list=mine.filter(l=>(f==="all"||l.status===f)&&srch(q,[l.name,l.city],[l.phone])).sort((a,b)=>(a.status==="new"?0:1)-(b.status==="new"?0:1));
     if(due.length)h+=`<div class="card due pad" style="margin-bottom:14px"><h3 style="color:var(--amber)">⏰ Callbacks due now (${due.length})</h3>${due.map(l=>leadRow(l)).join("")}</div>`;
     const counts=k=>k==="all"?mine.length:mine.filter(l=>l.status===k).length;
     h+=`<div class="row" style="margin-bottom:10px"><input id="eq" placeholder="Search contacts" value="${esc(view.q)}" style="flex:1;min-width:180px"></div>
@@ -2062,7 +2069,7 @@ function aCases(){
   const smList=Object.entries(smCnt).filter(([k,n])=>k!=="__other"||n).sort((a,b)=>(a[0]==="__other")-(b[0]==="__other")||b[1]-a[1]);
   const smLabel=k=>k==="__other"?"Other SMs":k;
   const months=[...new Set(all.map(c=>c.Monthly).filter(Boolean))];
-  const list=all.filter(c=>(f.sm==="all"||(f.sm==="__notcrm"?!inCRM(smOf(c)):smOf(c)===f.sm))&&(f.fu==="all"||fuState(c)===f.fu)&&(f.st==="all"||c.Status===f.st)&&(f.mon==="all"||c.Monthly===f.mon)&&(!q||(c["Customer Name"]+c["Contact Number"]+c.code+c["Bank Name"]+c["Lead Shared by"]+c["SM Name"]).toLowerCase().includes(q))).sort((a,b)=>(b.at||0)-(a.at||0));
+  const list=all.filter(c=>(f.sm==="all"||(f.sm==="__notcrm"?!inCRM(smOf(c)):smOf(c)===f.sm))&&(f.fu==="all"||fuState(c)===f.fu)&&(f.st==="all"||c.Status===f.st)&&(f.mon==="all"||c.Monthly===f.mon)&&(srch(q,[c["Customer Name"],c.code,c["Bank Name"],c["Lead Shared by"],c["SM Name"]],[c["Contact Number"]]))).sort((a,b)=>(b.at||0)-(a.at||0));
   const ofType=t=>all.filter(c=>stType(c.Status)===t),disb=ofType("disb"),closed=ofType("closed").length,newN=ofType("new").length,cnt=st=>st==="New"?newN:all.filter(c=>c.Status===st).length;
   const amt=disb.reduce((s,c)=>s+(parseFloat(String(c["Amount Required"]).replace(/[^\d.]/g,""))||0),0);
   let h=`<div class="stats sm"><div class="card stat"><span>Lead cases</span><b>${all.length}</b><div class="small mute">${cnt("New")} new – not yet followed up</div></div>
