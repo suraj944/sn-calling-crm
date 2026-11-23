@@ -222,7 +222,16 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .eod-empty b{display:block;color:#3b4252;font-size:14px;margin-bottom:4px}.eod-empty span{font-size:12.5px}
 .eod-call col.c-name{width:220px}.eod-call col.c-n{width:96px}.eod-call col.c-bar{width:150px}
 .eod-pc i.good{background:#16a34a}.eod-pc i.mid{background:#d97706}.eod-pc i.low{background:#dc2626}.eod-pc s{width:70px}
-.eod-st>div{display:flex;flex-direction:column;gap:3px}.eod-none .eod-st{padding:14px 16px;align-items:center}.eod-nb{font-size:12.5px;font-weight:600;color:#6b7280;background:#f3f4f6;border-radius:999px;padding:4px 10px}
+.eod-st>div{display:flex;flex-direction:column;gap:3px}
+.eod-pkb{all:unset;cursor:pointer;align-self:center;display:inline-flex;gap:6px;align-items:center;font-size:13px;font-weight:600;color:#1f2a44;background:#f3f5f9;border:1px solid #dfe3ea;border-radius:8px;padding:7px 12px}.eod-pkb:hover{background:#e9edf4}.eod-pkb:focus-visible{outline:2px solid #2453d6;outline-offset:2px}.eod-pkb span{font-size:11px;color:#6b7280}.eod-pkb.on{background:#fff7e6;border-color:#f2c76b;color:#7a4b00}
+.eod-hidn{margin:-4px 16px 10px;font-size:12.5px;color:#7a4b00;background:#fff7e6;border:1px solid #f6dca2;border-radius:8px;padding:7px 10px}
+.eod-lnk{all:unset;cursor:pointer;color:#1d4ed8;font-weight:600;font-size:12.5px}.eod-lnk:hover{text-decoration:underline}.eod-lnk:focus-visible{outline:2px solid #2453d6;outline-offset:2px;border-radius:3px}
+.eod-pick{position:fixed;z-index:60;background:#fff;border:1px solid #dfe3ea;border-radius:12px;box-shadow:0 12px 32px rgba(15,42,92,.18);display:flex;flex-direction:column;overflow:hidden;color:#1f2a44}
+.eod-pk-h{padding:12px 14px 6px;display:flex;flex-direction:column;gap:2px}.eod-pk-q{display:flex;flex-wrap:wrap;gap:4px 14px;padding:4px 14px 8px;border-bottom:1px solid #eef0f4}
+.eod-pk-l{overflow:auto;padding:4px 6px;flex:1 1 auto}.eod-pk-l label{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;cursor:pointer}.eod-pk-l label:hover{background:#f5f7fb}
+.eod-pk-l input{width:17px;height:17px;accent-color:#2453d6;flex:none}.eod-pk-l span{display:flex;flex-direction:column;flex:1;min-width:0}.eod-pk-l small{color:#6b7280;font-size:11.5px}.eod-pk-l em{font-style:normal;font-size:11.5px;color:#6b7280;white-space:nowrap}
+.eod-pk-f{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid #eef0f4}.eod-pk-f span{flex:1}
+@media print{.eod-pkb,.eod-hidn .eod-lnk{display:none}}.eod-none .eod-st{padding:14px 16px;align-items:center}.eod-nb{font-size:12.5px;font-weight:600;color:#6b7280;background:#f3f4f6;border-radius:999px;padding:4px 10px}
 .eod-k>b.eod-k0{color:#c3c8d2}.eod-k em{display:flex;flex-direction:column;gap:1px}.eod-k em span{font-size:11.5px;color:#8a909c}.eod-k em b{font-size:14px}
 .eod-drbg{position:fixed;inset:0;background:rgba(15,25,45,.38);display:none;z-index:80;justify-content:flex-end}.eod-drbg.show{display:flex}
 .eod-dr-p{background:#fff;width:min(980px,100%);height:100%;overflow:auto;box-shadow:-8px 0 30px rgba(0,0,0,.15);padding:18px 20px}
@@ -2202,6 +2211,9 @@ function printReport(p){
 
 /* ---------- EOD REPORT (end of day: calling + lead pipeline, today and month to date) ---------- */
 const crore=n=>n?(n/1e7).toFixed(2):"0.00";
+// EOD "Show people" choice – remembered on this computer/phone
+function eodHid(){try{return new Set(JSON.parse(localStorage.getItem("snEodHide")||"[]"))}catch(e){return new Set()}}
+function eodSetHid(set){try{localStorage.setItem("snEodHide",JSON.stringify([...set]))}catch(e){}}
 function eodData(dayTs){
   const d0=sod(dayTs),d1=d0+DAY-1,m=new Date(d0);m.setDate(1);const m0=m.getTime();
   const inD=t=>t&&t>=d0&&t<=d1,inM=t=>t&&t>=m0&&t<=d1;
@@ -2209,7 +2221,8 @@ function eodData(dayTs){
   (S.employees||[]).filter(e=>e.active!==false&&!/^(admin|manager|sales manager|team lead)$/i.test(e.role||"")).forEach(e=>byP.set(e.id,[]));   // calling staff always listed (0 if no calls); others only when they called
   logs.forEach(g=>{if(!byP.has(g.by))byP.set(g.by,[]);byP.get(g.by).push(g)});
   const st=L=>{const u=uniqN(L),c=uniqConn(L),I=L.filter(g=>g.outcome==="int"||g.outcome==="conv");return{calls:u,total:L.length,conn:c,pct:u?Math.round(c/u*100):0,int:uniqN(I),L,CL:L.filter(g=>CONNECTED(g.outcome)),IL:I}};
-  const calling=[...byP].map(([id,L])=>({id,name:empName(id),role:((S.allEmps||[]).find(e=>e.id===id)||{}).role||"",d:st(L.filter(g=>inD(g.at))),m:st(L)})).sort((a,b)=>b.m.calls-a.m.calls||a.name.localeCompare(b.name));
+  const callAll=[...byP].map(([id,L])=>({id,name:empName(id),role:((S.allEmps||[]).find(e=>e.id===id)||{}).role||"",d:st(L.filter(g=>inD(g.at))),m:st(L)})).sort((a,b)=>b.m.calls-a.m.calls||a.name.localeCompare(b.name));
+  const hid=eodHid(),calling=callAll.filter(r=>!hid.has(r.id));   // people unticked in "Show people" are left out of the table, totals, WhatsApp text and Excel
   const sumC=k=>{const o={L:[],CL:[],IL:[]};calling.forEach(r=>{["L","CL","IL"].forEach(f=>o[f]=o[f].concat(r[k][f]))});   // team totals: each mobile number once, same as the lists behind them
     o.calls=uniqN(o.L);o.total=o.L.length;o.conn=uniqN(o.CL);o.int=uniqN(o.IL);o.pct=o.calls?Math.round(o.conn/o.calls*100):0;return o};
   const names=lcSmMap(CASES()),blank=()=>({lead:[0,0,[]],inq:[0,0,[]],login:[0,0,[]],sanc:[0,0,[]],disb:[0,0,[]]}),pipe={d:new Map(),m:new Map()};
@@ -2219,7 +2232,7 @@ function eodData(dayTs){
   const smAll=[...new Set([...pipe.m.keys()])].sort((a,b)=>{const x=pipe.m.get(a),y=pipe.m.get(b);return (y.lead[0]+y.inq[0])-(x.lead[0]+x.inq[0])||a.localeCompare(b)});
   const rowsOf=w=>smAll.map(n=>({name:n,...(pipe[w].get(n)||blank())})),tot=rows=>{const o=blank();rows.forEach(r=>Object.keys(o).forEach(k=>{o[k][0]+=r[k][0];o[k][1]+=r[k][1];o[k][2]=o[k][2].concat(r[k][2])}));return o};
   const pd=rowsOf("d"),pm=rowsOf("m");
-  return {d0,m0,calling,cd:sumC("d"),cm:sumC("m"),pd,pm,td:tot(pd),tm:tot(pm)};
+  return {d0,m0,calling,callAll,cd:sumC("d"),cm:sumC("m"),pd,pm,td:tot(pd),tm:tot(pm)};
 }
 const PIPE_COLS=[["lead","Leads generated"],["inq","Inquiries"],["login","Login done"],["sanc","Sanction done"],["disb","Disbursed"]];
 function eodHTML(E){view.eodDr=[];const DR=(n,title,kind,items,cls,label)=>{if(!n)return '<span class="eod-z">–</span>';view.eodDr.push({title,kind,items});return `<button class="eod-dr ${cls||""}" data-dr="${view.eodDr.length-1}" title="See the list">${label||n}</button>`};
@@ -2247,7 +2260,9 @@ function eodHTML(E){view.eodDr=[];const DR=(n,title,kind,items,cls,label)=>{if(!
     ${mrow("Connect rate",d.calls?`<span class="eod-rt ${tone(d.pct)}">${d.pct}%</span>`:'<span class="eod-z">–</span>',m.calls?`<span class="eod-rt ${tone(m.pct)}">${m.pct}%</span>`:'<span class="eod-z">–</span>')}
     ${mrow("Interested",DR(d.int,`${nm} – interested today`,"calls",d.IL),DR(m.int,`${nm} – interested month to date`,"calls",m.IL))}</div></div>`};
   const sub=g=>`<th class="num eod-gs">Calls</th><th class="num">Connected</th><th>Connect rate</th><th class="num">Interested</th>`;
-  h+=`<div class="eod-sec"><div class="eod-st"><div><h3>Calling – pre-sales</h3><span class="small mute">Calls count each mobile number once · Connected = the customer picked up · Click any blue number to see the calls</span></div></div>
+  h+=`<div class="eod-sec"><div class="eod-st"><div><h3>Calling – pre-sales</h3><span class="small mute">Calls count each mobile number once · Connected = the customer picked up · Click any blue number to see the calls</span></div>
+   <button class="eod-pkb${E.calling.length<E.callAll.length?" on":""}" id="eodPickB" aria-haspopup="true">👥 ${E.calling.length<E.callAll.length?`Showing ${E.calling.length} of ${E.callAll.length} people`:`All ${E.callAll.length} people`} <span>▾</span></button></div>
+   ${E.calling.length<E.callAll.length?`<div class="eod-hidn">${E.callAll.length-E.calling.length} hidden: ${E.callAll.filter(r=>!E.calling.includes(r)).map(r=>esc(r.name)).join(", ")} · <button class="eod-lnk" id="eodShowAll">Show everyone</button></div>`:""}
    <div class="tw"><table class="eod-t eod-call"><colgroup><col class="c-name">${'<col class="c-n"><col class="c-n"><col class="c-bar"><col class="c-n">'.repeat(2)}</colgroup>
    <thead><tr><th rowspan="2" class="eod-n">Pre-sales</th><th colspan="4" class="eod-grp eod-g1">Today<small>${esc(dl)}</small></th><th colspan="4" class="eod-grp eod-g2">Month to date<small>${esc(ml)}</small></th></tr>
    <tr class="eod-sub">${sub()}${sub()}</tr></thead>
@@ -2303,12 +2318,33 @@ function eodDrill(i){const d=(view.eodDr||[])[i];if(!d)return;let bg=$("#eodDrBg
   bg.classList.add("show");$("#eodDrX").onclick=()=>bg.classList.remove("show");if(isPhone())mobileCards(bg);
   bg.querySelectorAll("[data-ocase]").forEach(tr=>tr.onclick=()=>{bg.classList.remove("show");openCase(tr.dataset.ocase)});
   bg.querySelectorAll("[data-olead]").forEach(tr=>tr.onclick=()=>{bg.classList.remove("show");tr.dataset.ocode?openCase(tr.dataset.ocode):openLead(tr.dataset.olead)})}
+// "Show people" dropdown on the EOD calling table
+function eodPicker(btn){let pp=$("#eodPick");if(pp){pp.remove();return}
+  const all=(view.eod&&view.eod.callAll)||[],hid=eodHid();
+  pp=document.createElement("div");pp.id="eodPick";pp.className="eod-pick";pp.setAttribute("role","dialog");pp.setAttribute("aria-label","Choose who to show");
+  pp.innerHTML=`<div class="eod-pk-h"><b>Show in report</b><span class="small mute">Untick anyone you don't want in the table, totals, WhatsApp text and Excel.</span></div>
+   <div class="eod-pk-q"><button class="eod-lnk" data-q="all">Tick all</button><button class="eod-lnk" data-q="none">Untick all</button><button class="eod-lnk" data-q="act">Only people with calls this month</button></div>
+   <div class="eod-pk-l">${all.map(r=>`<label><input type="checkbox" value="${esc(r.id)}"${hid.has(r.id)?"":" checked"}><span><b>${esc(r.name)}</b><small>${esc(r.role||"")}</small></span><em>${r.m.calls?r.m.calls+" calls MTD":"no calls"}</em></label>`).join("")}</div>
+   <div class="eod-pk-f"><span class="small mute" id="eodPkN"></span><button class="btn sm" id="eodPkC">Cancel</button><button class="btn sm pri" id="eodPkA">Apply</button></div>`;
+  document.body.appendChild(pp);
+  const place=()=>{const r=btn.getBoundingClientRect(),w=Math.min(340,innerWidth-16);pp.style.width=w+"px";pp.style.left=Math.max(8,Math.min(r.right-w,innerWidth-w-8))+"px";pp.style.top=(r.bottom+6)+"px";pp.style.maxHeight=Math.max(240,innerHeight-r.bottom-20)+"px"};place();
+  const boxes=[...pp.querySelectorAll("input[type=checkbox]")],cnt=()=>{const n=boxes.filter(b=>b.checked).length;$("#eodPkN").textContent=`${n} of ${boxes.length} ticked`;$("#eodPkA").disabled=!n};cnt();
+  boxes.forEach(b=>b.onchange=cnt);
+  pp.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{const q=b.dataset.q;boxes.forEach(x=>{const r=all.find(y=>y.id===x.value);x.checked=q==="all"?true:q==="none"?false:!!(r&&r.m.calls)});cnt()});
+  const close=()=>{pp.remove();document.removeEventListener("mousedown",out,true);window.removeEventListener("scroll",close,true)};
+  const out=e=>{if(!pp.contains(e.target)&&e.target!==btn&&!btn.contains(e.target))close()};
+  setTimeout(()=>{document.addEventListener("mousedown",out,true);window.addEventListener("scroll",e=>{if(!pp.contains(e.target))close()},true)},0);
+  $("#eodPkC").onclick=close;
+  $("#eodPkA").onclick=()=>{const h=new Set(boxes.filter(b=>!b.checked).map(b=>b.value));eodSetHid(h);close();render();toast(h.size?`Hiding ${h.size} ${h.size===1?"person":"people"}`:"Showing everyone")};
+  pp.addEventListener("keydown",e=>{if(e.key==="Escape"){close();btn.focus()}});boxes[0]&&boxes[0].focus()}
 // the lead case for a called contact: linked by contact, else the latest case with the same mobile number
 function eodCaseFor(lead){if(!lead)return null;const c=caseOf(lead.id);if(c)return c;const k=phoneKey(lead.phone);if(!validMob(k))return null;
   const m=CASES().filter(x=>phoneKey(x["Contact Number"])===k);return m.sort((a,b)=>(b.leadD||0)-(a.leadD||0))[0]||null}
 function bindEOD(){const on=(s,ev,f)=>{const el=$(s);if(el)el[ev]=f};
   document.querySelectorAll(".eod [data-dr]").forEach(b=>b.onclick=e=>{e.stopPropagation();eodDrill(+b.dataset.dr)});
   on("#eodDay","onchange",e=>{if(e.target.value){view.eodDay=e.target.value;render()}});
+  on("#eodShowAll","onclick",()=>{eodSetHid(new Set());render();toast("Showing everyone")});
+  on("#eodPickB","onclick",e=>{e.stopPropagation();eodPicker(e.currentTarget)});
   const ws=$("#eodWaSend");if(ws)ws.href="https://wa.me/?text="+encodeURIComponent(eodText(view.eod));
   on("#eodWa","onclick",async()=>{const t=eodText(view.eod);try{await navigator.clipboard.writeText(t);toast("Copied – paste it in WhatsApp")}catch(e){askOk({title:"Copy this text",ok:"Done",body:`<textarea style="width:100%;height:260px">${esc(t)}</textarea>`})}});
   on("#eodXl","onclick",async()=>{toast("Preparing Excel file…");await loadXLSX();const wb=XLSX.utils.book_new();eodSheets(view.eod).forEach(([n,rows])=>XLSX.utils.book_append_sheet(wb,sheetFrom(rows),n));
