@@ -225,6 +225,10 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .eod-st>div{display:flex;flex-direction:column;gap:3px}
 .eod-pkb{all:unset;cursor:pointer;align-self:center;display:inline-flex;gap:6px;align-items:center;font-size:13px;font-weight:600;color:#1f2a44;background:#f3f5f9;border:1px solid #dfe3ea;border-radius:8px;padding:7px 12px}.eod-pkb:hover{background:#e9edf4}.eod-pkb:focus-visible{outline:2px solid #2453d6;outline-offset:2px}.eod-pkb span{font-size:11px;color:#6b7280}.eod-pkb.on{background:#fff7e6;border-color:#f2c76b;color:#7a4b00}
 .eod-fbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 12px}.eod-hidn{font-size:12.5px;color:#7a4b00;background:#fff7e6;border:1px solid #f6dca2;border-radius:8px;padding:6px 10px}
+.conn-hd{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-start;justify-content:space-between}.conn-btns{display:flex;gap:8px;align-items:center}
+.conn-stats{margin:14px 0 4px}.conn-flt{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.conn-flt input{flex:1 1 240px;min-width:0}.conn-flt select{flex:0 1 200px}
+.conn-t tbody tr{cursor:pointer}.conn-t tbody tr:hover{background:#f6f8fc}.conn-t tbody tr:focus-visible{outline:2px solid #2453d6;outline-offset:-2px}
+.pill.conn-y{background:#e7f6ec;color:#166534}.pill.conn-n{background:#fff4e5;color:#92400e}
 .eod-pk-g{font-size:11.5px;font-weight:700;color:#6b7280;padding:8px 8px 2px}
 .eod-lnk{all:unset;cursor:pointer;color:#1d4ed8;font-weight:600;font-size:12.5px}.eod-lnk:hover{text-decoration:underline}.eod-lnk:focus-visible{outline:2px solid #2453d6;outline-offset:2px;border-radius:3px}
 .eod-pick{position:fixed;z-index:60;background:#fff;border:1px solid #dfe3ea;border-radius:12px;box-shadow:0 12px 32px rgba(15,42,92,.18);display:flex;flex-direction:column;overflow:hidden;color:#1f2a44}
@@ -465,12 +469,12 @@ const empName=id=>id==="ADMIN_LOG"?"Admin":(emp(id)?.name||id||"—");
 const isLead=()=>!ME||rank(ME.role)<=rank("Team Lead")||TAB_KEYS.some(k=>can(k));
 /* ---- Permission levels (same lists as the server). Role defaults + per-person ticks set by Admin. ---- */
 const SCOPE_OPTS=[["own","Only their own","their own contacts, calls & cases"],["team","Their team","everyone under the same Team Lead"],["all","Everyone","the whole company"]];
-const PERM_DEF=[["Tabs they can see",[["dash","Dashboard"],["lead","Interested"],["cases","Lead Cases"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],["team","Employees / My Team"],["logs","Call Logs"],["meet","Field Work"],["reports","Reports & downloads"],["perf","Performance & targets"]]],
+const PERM_DEF=[["Tabs they can see",[["dash","Dashboard"],["lead","Interested"],["cases","Lead Cases"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],["team","Employees / My Team"],["logs","Call Logs"],["meet","Field Work"],["conn","Connectors"],["reports","Reports & downloads"],["perf","Performance & targets"]]],
   ["What they can do",[["doAssign","Assign contacts & share out"],["caseEdit","Open & edit lead cases"],["caseTL","Move a case to another Team Lead"],["caseTransfer","Transfer a case (Admin by default)"],["caseRemove","Remove lead cases"],["empEdit","Add, edit & remove employees"],["pinReset","Reset PINs"],["sheet","Open the Google Sheet"],["viewAs","Open anyone's page (Viewing as)"],["targetEdit","Set monthly targets"]]]];
 const PERM_KEYS=[...PERM_DEF.flatMap(g=>g[1].map(x=>x[0])),"scopeTeam","scopeAll"];
 const TAB_KEYS=PERM_DEF[0][1].map(x=>x[0]);
-const ROLE_PERMS={"Manager":["dash","lead","cases","byemp","assign","import","team","logs","meet","reports","doAssign","caseEdit","caseTL","empEdit","pinReset","scopeAll"],
-  "Team Lead":["dash","lead","cases","byemp","assign","import","team","logs","meet","doAssign","caseEdit","pinReset","scopeTeam"],"Sales Manager":[],"Telecaller Executive":[]};
+const ROLE_PERMS={"Manager":["dash","lead","cases","byemp","assign","import","team","logs","meet","conn","reports","doAssign","caseEdit","caseTL","empEdit","pinReset","scopeAll"],
+  "Team Lead":["dash","lead","cases","byemp","assign","import","team","logs","meet","conn","doAssign","caseEdit","pinReset","scopeTeam"],"Sales Manager":[],"Telecaller Executive":[]};
 const NOT_EMP=PERM_KEYS.filter(k=>k!=="empEdit");
 const PERM_ALLOWED={"Manager":PERM_KEYS,"Team Lead":NOT_EMP,"Sales Manager":NOT_EMP,"Telecaller Executive":NOT_EMP.filter(k=>k!=="pinReset")};
 const basePerms=r=>ROLE_PERMS[r]||[],allowedPerms=r=>PERM_ALLOWED[r]||PERM_ALLOWED["Telecaller Executive"];
@@ -584,7 +588,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu,by,form,force){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -600,6 +604,8 @@ const Script={
   async removeCase(code){await this.req("removeCase",{code})},
   async removeLogs(ids){await this.req("removeLogs",{ids})},
   async transferCase(code,to,note){await this.req("transferCase",{code,to,note})},
+  async saveConnector(c,force){return await this.req("saveConnector",{c,force:!!force})},
+  async removeConnector(id){return await this.req("removeConnector",{id})},
   async transferCases(codes,to){try{return await this.req("transferCases",{codes,to})}catch(e){if(!/unknown action/i.test(e.message))throw e;   // server not updated yet: one by one
     let done=0,skipped=0;try{for(const [i,c] of codes.entries()){this.quiet=i<codes.length-1;try{await this.req("transferCase",{code:c,to});done++}catch(x){if(/already with/i.test(x.message))skipped++;else throw x}}}finally{this.quiet=false}return{done,skipped}}},
   async setPerms(id,perms){await this.req("setPerms",{id,perms})},
@@ -776,7 +782,7 @@ function render(){
 function renderAdmin(){
   if(!S.srv2&&(view.tab==="cases"||view.tab==="myteam"))view.tab="dash";
   const dueN=CASES().filter(c=>{const x=fuState(c);return x==="over"||x==="today"}).length;
-  const tabs=[["today","Today"+(dueN?" · "+dueN:"")],["dash","Dashboard"],["lead","Interested"],...(S.srv2?[["cases","Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine",ME.role==="Sales Manager"?"My page":"My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],["eod","📋 EOD Report"],["perf","📈 Performance"],["reports","⬇ Reports"]]
+  const tabs=[["today","Today"+(dueN?" · "+dueN:"")],["dash","Dashboard"],["lead","Interested"],...(S.srv2?[["cases","Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine",ME.role==="Sales Manager"?"My page":"My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(S.connSrv?[["conn","🤝 Connectors"]]:[]),["eod","📋 EOD Report"],["perf","📈 Performance"],["reports","⬇ Reports"]]
     .filter(([k])=>k==="mine"||k==="today"||can(k==="myteam"?"team":k==="eod"?"reports":k));   /* tabs this person is allowed to see */
   if(!tabs.length)tabs.push(["mine","My calls"]);
   if(!tabs.some(t=>t[0]===view.tab))view.tab=tabs[0][0];
@@ -786,11 +792,11 @@ function renderAdmin(){
       <select id="teamSel"><option value="all">All teams</option>${TLs.map(e=>`<option value="${esc(e.id)}" ${view.team===e.id?"selected":""}>${esc(e.name)}'s team</option>`).join("")}<option value="none" ${view.team==="none"?"selected":""}>No team</option></select></label>
       ${view.team&&view.team!=="all"?`<span class="small mute">Showing only ${esc(teamName(view.team))}${view.team!=="none"?" ("+RAW.allEmps.filter(e=>e.active&&teamOf(e)===view.team).length+" people)":""}</span>`:""}</div>`;
   else if(isTL()||(ME&&rank(ME.role)>rank("Team Lead")))h+=`<div class="small mute" style="margin:-4px 0 12px">${S.employees.length>1?"Showing your team: "+esc(S.employees.map(e=>e.name).join(", ")):"Showing only your own contacts, calls and cases"}</div>`;
-  h+=({today:aToday,perf:aPerf,dash:aDash,lead:aLeadsTab,cases:aCases,byemp:aByEmp,myteam:aMyTeam,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings,eod:aEOD})[view.tab]();
+  h+=({today:aToday,perf:aPerf,dash:aDash,lead:aLeadsTab,cases:aCases,byemp:aByEmp,myteam:aMyTeam,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings,eod:aEOD,conn:()=>aConn(null)})[view.tab]();
   $("#app").innerHTML=h;
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{if(b.dataset.tab==="mine"){view.who=ME.id;view.etab="leads";render();return}view.tab=b.dataset.tab;render()});
   const ts=$("#teamSel");if(ts)ts.onchange=()=>{view.team=ts.value;view.sel.clear();if(view.lsel)view.lsel.clear();render()};
-  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();bindCasesTab();bindCases();bindToday();bindPerf();bindMonthly();if(view.tab==="eod")bindEOD();if(view.tab==="reports")bindSmReport();
+  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();bindCasesTab();bindCases();bindToday();bindPerf();bindMonthly();if(view.tab==="eod")bindEOD();if(view.tab==="reports")bindSmReport();if(view.tab==="conn")bindConn();
 }
 /* ---------- MY TEAM (Team Leads): members' details + reset PIN ---------- */
 function aMyTeam(){
@@ -1735,19 +1741,97 @@ function openChangePin(){
     const o=$("#fO").value.trim(),n=$("#fN1").value.trim();if(!validPin(n))return "PIN must be 4 digits";if(n!==$("#fN2").value.trim())return "New PINs don't match";
     try{await Script.changePin(o,n);toast("PIN changed ✓");return true}catch(e){if(e.auth){showLogin(e.message);return true}return e.message}})}
 
+/* ---------- CONNECTORS: connectors met by each SM (sheet tab "Connectors") ---------- */
+const CONN_DEF={"Meeting Type":["First meeting","Follow-up meeting","Phone call","Video call"],"Connector Type":["DSA","Sub-DSA","Chartered Accountant (CA)","Builder / Developer","Real estate agent","Insurance agent","Tax consultant","Other"],"Payout from?":["Bank","NBFC","Another DSA","Aggregator","None"]};
+const connOpts=h=>{const L=S.lists&&S.lists[h];return L&&L.length?L:CONN_DEF[h]||[]};
+function buildConns(rows){return(Array.isArray(rows)?rows:[]).map(r=>({id:r[0],date:r[1],dateT:r[1]?new Date(String(r[1]).slice(0,10)+"T12:00").getTime()||0:0,sm:r[2],meetType:r[3],connType:r[4],name:r[5],phone:String(r[6]||"").replace(/^'/,""),business:numOf(r[7]),files:numOf(r[8]),area:r[9],curPayout:r[10],payoutFrom:r[11],expPayout:r[12],signed:r[13],smId:r[14],addedBy:r[15],addedAt:r[16],updated:r[17],updatedBy:r[18]}))}
+const cnm=x=>String(x||"").trim().toLowerCase().replace(/\s+/g," "),connMine=(k,e)=>k.smId===e.id||cnm(k.sm)===cnm(e.name);
+function aConn(whoId){const all=S.conns||[],who=whoId?emp(whoId):null,base=who?all.filter(k=>connMine(k,who)):all;
+  const f=view.connF||(view.connF={q:"",sm:"",sig:""}),q=f.q.trim().toLowerCase(),qd=q.replace(/\D/g,"");
+  const L=base.filter(k=>(!f.sm||k.sm===f.sm)&&(!f.sig||(f.sig==="Yes"?k.signed==="Yes":k.signed!=="Yes"))&&(!q||[k.name,k.area,k.connType,k.sm,k.id].some(v=>String(v||"").toLowerCase().includes(q))||(qd.length>=3&&String(k.phone).replace(/\D/g,"").includes(qd))))
+    .sort((a,b)=>(b.dateT-a.dateT)||String(b.id).localeCompare(String(a.id),undefined,{numeric:true}));
+  const sms=[...new Set(base.map(k=>k.sm).filter(Boolean))].sort(),sig=L.filter(k=>k.signed==="Yes").length,biz=L.reduce((s,k)=>s+k.business,0),fl=L.reduce((s,k)=>s+k.files,0);
+  const own=who&&ME&&who.id===ME.id,title=who?(own?"My connectors":who.name+"'s connectors"):isTL()?"Connectors – my team":"Connectors";
+  const dt=d=>d?new Date(d).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}):"—";
+  let h=`<div class="card pad conn-top"><div class="conn-hd"><div><h3 style="margin:0">${esc(title)}</h3><div class="small mute">Every connector met – who they are, how much business they do and the payout talk. Click a row to edit.</div></div>
+    <div class="conn-btns"><button class="btn sm" id="connXl">⬇ Excel</button><button class="btn pri" id="connAdd">+ Add connector</button></div></div>
+   <div class="stats conn-stats"><div class="card stat"><span>Connectors</span><b>${L.length}</b><div class="small mute">${L.length!==base.length?"of "+base.length+" in total":"in the list"}</div></div>
+    <div class="card stat"><span>Contract signed</span><b>${sig}</b><div class="small mute">${L.length?Math.round(sig/L.length*100)+"% of them":"—"}</div></div>
+    <div class="card stat"><span>Their business / month</span><b>${fmtL(biz)}</b><div class="small mute">total of what they told us</div></div>
+    <div class="card stat"><span>Files / month</span><b>${fl}</b><div class="small mute">total</div></div></div>
+   <div class="conn-flt"><input id="connQ" type="search" placeholder="Search name, number, area, type…" value="${esc(f.q)}">
+    ${who?"":`<select id="connSm"><option value="">All SMs</option>${sms.map(n=>`<option ${f.sm===n?"selected":""}>${esc(n)}</option>`).join("")}</select>`}
+    <select id="connSig"><option value="">Contract: all</option><option value="Yes" ${f.sig==="Yes"?"selected":""}>Contract signed</option><option value="No" ${f.sig==="No"?"selected":""}>Not signed yet</option></select></div></div>`;
+  if(!base.length)return h+`<div class="card pad empty"><b>No connectors yet</b><div class="small mute" style="margin-top:4px">Press <b>+ Add connector</b> after you meet one – it's saved in the "Connectors" tab of the Google Sheet.</div></div>`;
+  h+=`<div class="card tw"><table class="conn-t"><thead><tr><th>Date</th>${who?"":"<th>SM Name</th>"}<th>Meeting type</th><th>Connector type</th><th>Connector</th><th class="num">Business / month</th><th class="num">Files / month</th><th>Area of operation</th><th>Current payout</th><th>Payout from</th><th>Expected payout</th><th>Contract signed</th></tr></thead><tbody>
+   ${L.length?L.map(k=>`<tr data-conn="${esc(k.id)}" tabindex="0"><td class="small" style="white-space:nowrap">${dt(k.dateT)}</td>${who?"":`<td>${esc(k.sm)}</td>`}<td>${esc(k.meetType)||'<span class="mute">—</span>'}</td><td>${esc(k.connType)||'<span class="mute">—</span>'}</td>
+     <td><b>${esc(k.name)}</b><div class="small mute">${esc(k.phone)||"no number"}</div></td><td class="num">${k.business?fmtL(k.business):'<span class="mute">—</span>'}</td><td class="num">${k.files||'<span class="mute">—</span>'}</td>
+     <td>${esc(k.area)||'<span class="mute">—</span>'}</td><td>${esc(k.curPayout)||'<span class="mute">—</span>'}</td><td>${esc(k.payoutFrom)||'<span class="mute">—</span>'}</td><td>${esc(k.expPayout)||'<span class="mute">—</span>'}</td>
+     <td>${k.signed==="Yes"?'<span class="pill conn-y">✓ Signed</span>':k.signed==="No"?'<span class="pill conn-n">Not yet</span>':'<span class="mute">—</span>'}</td></tr>`).join(""):`<tr><td colspan="12" class="mute">No connector matches – change the search or filters.</td></tr>`}</tbody></table></div>`;
+  view.connL=L;return h}
+function bindConn(){const on=(s,ev,f)=>{const el=$(s);if(el)el[ev]=f},f=view.connF||{};
+  on("#connAdd","onclick",()=>openConn(null));
+  on("#connQ","oninput",e=>{f.q=e.target.value;clearTimeout(bindConn._t);bindConn._t=setTimeout(()=>{const p=e.target.selectionStart;render();const q=$("#connQ");if(q){q.focus();try{q.setSelectionRange(p,p)}catch(x){}}},250)});
+  on("#connSm","onchange",e=>{f.sm=e.target.value;render()});on("#connSig","onchange",e=>{f.sig=e.target.value;render()});
+  document.querySelectorAll("[data-conn]").forEach(tr=>{tr.onclick=()=>openConn(tr.dataset.conn);tr.onkeydown=e=>{if(e.key==="Enter")openConn(tr.dataset.conn)}});
+  on("#connXl","onclick",async()=>{const L=view.connL||[];if(!L.length){toast("Nothing to download");return}await loadXLSX();const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,sheetFrom([["Date","SM Name","Meeting Type","Connector Type","Name of The Connector","Contact no of the Connector","Current business per month (Value)","No of Files per month","Area of Operation","Current Payout","Payout from?","Expected payout","Contract form Signed","Connector ID"],
+      ...L.map(k=>[k.date,k.sm,k.meetType,k.connType,k.name,k.phone,k.business||"",k.files||"",k.area,k.curPayout,k.payoutFrom,k.expPayout,k.signed,k.id])]),"Connectors");
+    const fn="SNFS connectors "+ymd(Date.now())+".xlsx";XLSX.writeFile(wb,fn);toast("Downloaded "+fn)})}
+function openConn(id){const k=id?(S.conns||[]).find(x=>x.id===id):null;if(id&&!k){toast("Connector not found – press Refresh");return}
+  const v=x=>esc(k?k[x]:""),canPick=!!ME&&(isLead()||ME.role==="Admin")&&S.employees.length>1,curSm=k?k.sm:(view.who&&view.who!=="admin"&&emp(view.who)?emp(view.who).name:ME?ME.name:"");
+  const dl=(id2,h)=>`<datalist id="${id2}">${connOpts(h).map(o=>`<option>${esc(o)}</option>`).join("")}</datalist>`;
+  const d=k&&k.date?String(k.date).slice(0,10):ymd(Date.now());
+  $("#modal").style.maxWidth="640px";$("#modal").innerHTML=`<div class="mh"><div><div style="font-weight:700">${k?"Edit connector":"Add connector"}</div>${k?`<div class="small mute">${esc(k.id)} · added by ${esc(k.addedBy||"—")}${k.updated?" · last updated "+esc(k.updated)+(k.updatedBy?" by "+esc(k.updatedBy):""):""}</div>`:`<div class="small mute">Saved in the "Connectors" tab of the Google Sheet</div>`}</div><button class="x" id="mx">×</button></div>
+  <form id="kfm"><div class="mb mform">
+   <div class="g2"><div><label class="f">Date</label><input type="date" id="k_date" value="${d}" max="${ymd(Date.now())}" style="width:100%"></div>
+     <div><label class="f">SM Name</label>${canPick?`<select id="k_sm" style="width:100%">${S.employees.filter(e=>e.active!==false).map(e=>e.name).concat(curSm&&!S.employees.some(e=>e.name===curSm)?[curSm]:[]).map(n=>`<option ${n===curSm?"selected":""}>${esc(n)}</option>`).join("")}</select>`:`<input value="${esc(curSm)}" disabled style="width:100%">`}</div></div>
+   <div class="g2"><div><label class="f">Meeting Type</label><input id="k_mt" list="dl_kmt" value="${v("meetType")}" placeholder="Choose or type" style="width:100%" maxlength="60"></div>
+     <div><label class="f">Connector Type</label><input id="k_ct" list="dl_kct" value="${v("connType")}" placeholder="Choose or type" style="width:100%" maxlength="60"></div></div>
+   <div class="g2"><div><label class="f">Name of The Connector *</label><input id="k_name" value="${v("name")}" placeholder="e.g. Rohan Patil" style="width:100%" maxlength="120"></div>
+     <div><label class="f">Contact no of the Connector</label><input id="k_ph" inputmode="tel" value="${v("phone")}" placeholder="98XXX XXXXX" style="width:100%" maxlength="40"></div></div>
+   <div class="g2"><div><label class="f">Current business per month (Value, ₹)</label><input id="k_biz" inputmode="decimal" value="${k&&k.business?k.business:""}" placeholder="e.g. 5000000 for ₹50 L" style="width:100%" maxlength="15"><div class="small mute" id="k_bizL"></div></div>
+     <div><label class="f">No of Files per month</label><input id="k_files" inputmode="numeric" value="${k&&k.files?k.files:""}" placeholder="e.g. 4" style="width:100%" maxlength="6"></div></div>
+   <label class="f">Area of Operation</label><input id="k_area" value="${v("area")}" placeholder="e.g. Thane, Kalyan, Navi Mumbai" style="width:100%" maxlength="120">
+   <div class="g3"><div><label class="f">Current Payout</label><input id="k_cp" value="${v("curPayout")}" placeholder="e.g. 1.2%" style="width:100%" maxlength="60"></div>
+     <div><label class="f">Payout from?</label><input id="k_pf" list="dl_kpf" value="${v("payoutFrom")}" placeholder="Choose or type" style="width:100%" maxlength="80"></div>
+     <div><label class="f">Expected payout</label><input id="k_ep" value="${v("expPayout")}" placeholder="e.g. 1.5%" style="width:100%" maxlength="60"></div></div>
+   <label class="f">Contract form Signed</label><div class="seg" data-seg="k_sig">${["Yes","No"].map(t=>`<button type="button" class="${k&&k.signed===t?"on":""}">${t}</button>`).join("")}</div>
+   ${dl("dl_kmt","Meeting Type")}${dl("dl_kct","Connector Type")}${dl("dl_kpf","Payout from?")}
+   <div id="kErr" class="small" style="color:var(--red);margin-top:8px"></div>
+  </div><div class="mf">${k&&ME&&ME.role==="Admin"?`<button type="button" class="btn" id="kDel" style="margin-right:auto;color:var(--red)">Remove</button>`:""}<button type="button" class="btn" id="kc">Cancel</button><button class="btn pri" id="kok">${k?"Save changes":"Add connector"}</button></div></form>`;
+  $("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#kc").onclick=close;
+  const segVal=()=>{const b=document.querySelector('[data-seg="k_sig"] button.on');return b?b.textContent:""};
+  document.querySelectorAll('[data-seg="k_sig"] button').forEach(b=>b.onclick=()=>{const was=b.classList.contains("on");document.querySelectorAll('[data-seg="k_sig"] button').forEach(x=>x.classList.remove("on"));if(!was)b.classList.add("on")});
+  const bizL=()=>{const n=numOf($("#k_biz").value);$("#k_bizL").textContent=n?"= "+fmtL(n)+" a month":""};$("#k_biz").oninput=bizL;bizL();
+  $("#k_name").addEventListener("blur",e=>{e.target.value=properName(e.target.value)});["#k_area","#k_cp","#k_ep","#k_mt","#k_ct","#k_pf"].forEach(s=>$(s).addEventListener("blur",e=>{e.target.value=tidyText(e.target.value)}));
+  if($("#kDel"))$("#kDel").onclick=async()=>{if(!await askOk({title:`Remove ${k.name}?`,ok:"Yes, remove",danger:true,body:`It moves to the "Removed Connectors" tab of the sheet, so it can be brought back.`}))return;
+    if(await write(api=>api.removeConnector(k.id),k.name+" removed","Removing…"))close()};
+  setTimeout(()=>$("#k_name").focus(),30);
+  $("#kfm").onsubmit=async e=>{e.preventDefault();const err=m=>{$("#kErr").textContent=m};
+    const rec={id:k?k.id:"",date:$("#k_date").value,sm:canPick?$("#k_sm").value:curSm,meetType:$("#k_mt").value,connType:$("#k_ct").value,name:properName($("#k_name").value),phone:$("#k_ph").value.trim(),
+      business:numOf($("#k_biz").value)||"",files:numOf($("#k_files").value)||"",area:$("#k_area").value,curPayout:$("#k_cp").value,payoutFrom:$("#k_pf").value,expPayout:$("#k_ep").value,signed:segVal()};
+    if(rec.name.length<2)return err("Enter the name of the connector.");
+    if(rec.phone&&rec.phone.replace(/\D/g,"").length<10)return err("The contact number looks too short – enter 10 digits or leave it empty.");
+    let res=null,force=false;
+    for(;;){const ok=await write(async api=>{res=await api.saveConnector(rec,force)},k?"Connector updated":rec.name+" added",k?"Saving…":"Adding connector…");if(!ok)return;
+      if(res&&res.dup&&!force){if(!await askOk({title:"This number is already saved",ok:"Save anyway",body:`<b>${esc(res.dup.name)}</b> (${esc(res.dup.id)}) has the same number (SM: ${esc(res.dup.sm||"—")}, date ${esc(res.dup.date?new Date(String(res.dup.date).slice(0,10)+"T12:00").toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}):"—")}).<br><br>Save this connector as well?`}))return;force=true;continue}
+      break}
+    close()}}
 /* ---------- EMPLOYEE VIEW ---------- */
 const lastOf=l=>l.logs[0]||(l.lastRemark||l.lastAt?{remark:l.lastRemark,at:l.lastAt}:null);
 // Which sections a person's page has: Sales Managers = field work only, Telecaller Executives = leads only, others = both
 const pageKind=e=>!e?"both":e.role==="Sales Manager"?"field":e.role==="Telecaller Executive"?"leads":"both";
-const showEtabs=()=>!!ME&&view.who!=="admin"&&(view.who===ME.id||isLead())&&pageKind(emp(view.who))==="both";
-const etabs=()=>showEtabs()?`<div class="tabs">${(ME&&view.who===ME.id?[["leads","My calls"],["meet","My field work"]]:[["leads","Calls"],["meet","Field work"]]).map(([k,l])=>`<button class="tab ${(view.etab||"leads")===k?"on":""}" data-etab="${k}">${l}</button>`).join("")}</div>`:"";
+const showEtabs=()=>!!ME&&view.who!=="admin"&&(view.who===ME.id||isLead())&&(pageKind(emp(view.who))==="both"||!!S.connSrv);
+const etabs=()=>showEtabs()?`<div class="tabs">${(ME&&view.who===ME.id?[["leads","My calls"],["meet","My field work"],["conn","🤝 My connectors"]]:[["leads","Calls"],["meet","Field work"],["conn","🤝 Connectors"]]).filter(([k])=>(k!=="meet"||pageKind(emp(view.who))==="both")&&(k!=="conn"||S.connSrv)).map(([k,l])=>`<button class="tab ${(view.etab||"leads")===k?"on":""}" data-etab="${k}">${l}</button>`).join("")}</div>`:"";
 function bindEtabs(){document.querySelectorAll("[data-etab]").forEach(b=>b.onclick=()=>{view.etab=b.dataset.etab;render()})}
 function renderEmp(){
   const me=emp(view.who);if(!me){view.who="admin";return render()}
   if(ME&&pageKind(me)==="field"){view.etab="meet";
     $("#app").innerHTML=(view.who!==ME.id?`<div style="margin-bottom:14px"><div class="mute small">Field work of</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>`:`<div style="margin-bottom:14px"><div class="mute small">Good day,</div><div style="font-size:20px;font-weight:700">${esc(me.name)} – my field work</div></div>`)+aMeetings();
     bindRange();bindMeetings();bindTips();return}
-  if(ME&&pageKind(me)==="leads")view.etab="leads";
+  if(ME&&pageKind(me)==="leads"&&view.etab==="meet")view.etab="leads";
+  if(showEtabs()&&view.etab==="conn"){$("#app").innerHTML=etabs()+aConn(me.id);bindEtabs();bindConn();afterRender();return}
   if(showEtabs()&&view.etab==="meet"){$("#app").innerHTML=etabs()+(ME&&view.who!==ME.id?`<div style="margin-bottom:14px"><div class="mute small">Field work of</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>`:"")+aMeetings();bindEtabs();bindRange();bindMeetings();bindTips();return}
   const mine=S.leads.filter(l=>l.assignedTo===me.id);
   const due=mine.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<=Date.now()+30*60e3);

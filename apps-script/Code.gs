@@ -33,12 +33,12 @@
 const ROLES = ["Admin", "Manager", "Team Lead", "Sales Manager", "Telecaller Executive"];
 // ---- Permission levels: each role starts with its defaults; Admin can tick/untick extras per person
 // (saved in Employees column K as e.g. "+reports, -doAssign"). Admin always has everything.
-const PERM_KEYS = ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "reports", "perf",
+const PERM_KEYS = ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "conn", "reports", "perf",
   "doAssign", "caseEdit", "caseTL", "caseRemove", "empEdit", "pinReset", "sheet", "viewAs", "caseTransfer", "targetEdit", "scopeTeam", "scopeAll"];
-const TAB_KEYS = PERM_KEYS.slice(0, 11);
+const TAB_KEYS = PERM_KEYS.slice(0, 12);
 const ROLE_PERMS = {
-  "Manager":   ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "reports", "doAssign", "caseEdit", "caseTL", "empEdit", "pinReset", "scopeAll"],
-  "Team Lead": ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "doAssign", "caseEdit", "pinReset", "scopeTeam"],
+  "Manager":   ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "conn", "reports", "doAssign", "caseEdit", "caseTL", "empEdit", "pinReset", "scopeAll"],
+  "Team Lead": ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "conn", "doAssign", "caseEdit", "pinReset", "scopeTeam"],
   "Sales Manager": [],            // own field work page – Admin can add tabs / actions / wider data
   "Telecaller Executive": []      // own calling page – Admin can add tabs / actions / wider data
 };
@@ -141,8 +141,85 @@ function act_(me, b) {
         case "transferCases": return transferCases_(me, b.codes || [], b.to);   // Admin (caseTransfer) or the SM who filled the case, while it's still with them
     case "saveTargets": can_(me, "targetEdit"); return saveTargets_(me, b.month, b.list);
         case "setPerms":   need_(me, "Admin"); return setPerms_(me, b.id, b.perms || []);
+        case "saveConnector":   return saveConnector_(me, b.c || {}, !!b.force);
+        case "removeConnector": if (me.role !== "Admin") throw new Error("Only Admin can remove a connector"); return removeConnector_(me, b.id);
         default: throw new Error("Unknown action: " + b.action);
       }
+}
+
+/* ---------------- connectors ---------------- */
+// "Connectors" tab: one row per connector met by an SM. Column names follow the team's own sheet.
+const CONN_HDR = ["Connector ID", "Date", "SM Name", "Meeting Type", "Connector Type", "Name of The Connector", "Contact no of the Connector",
+  "Current business per month (Value)", "No of Files per month", "Area of Operation", "Current Payout", "Payout from?", "Expected payout",
+  "Contract form Signed", "SM ID", "Added by", "Added at", "Last updated", "Updated by"];
+const CONN_COLS = CONN_HDR.length, K_ = Object.fromEntries(CONN_HDR.map((h, i) => [h, i]));
+function connSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName("Connectors");
+  if (!sh) { sh = ss.insertSheet("Connectors"); sh.getRange(1, 1, 1, CONN_COLS).setValues([CONN_HDR]); sh.setFrozenRows(1); }
+  return sh;
+}
+function connRows_() {
+  return memo_("conn", () => { const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Connectors"); if (!sh) return [];
+    const n = sh.getLastRow() - 1; return n < 1 ? [] : sh.getRange(2, 1, n, CONN_COLS).getDisplayValues().filter(r => String(r[0]).trim()); });
+}
+// Admin/Manager: all · Team Lead: her team (by SM ID or SM Name) · everyone else: their own
+function canSeeConn_(r, lim, emps) {
+  if (!lim) return true;
+  if (lim.has(String(r[K_["SM ID"]]).trim())) return true;
+  return emps.some(x => lim.has(x.id) && norm_(x.name) === norm_(r[K_["SM Name"]]));
+}
+function connectorsFor_(me, emps) {
+  try { if (me.role === "Sales Manager" && !perms_(me).has("conn")) return [];
+    const lim = limit_(me, emps); return connRows_().filter(r => canSeeConn_(r, lim, emps)); } catch (e) { return []; }
+}
+function saveConnector_(me, k, force) {
+  const c = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "'$&").trim(), t = v => tidyText_(c(v));
+  const name = properName_(c(k.name)).slice(0, 120);
+  if (name.length < 2) throw new Error("Enter the name of the connector");
+  const ph = phoneKey_(k.phone);
+  if (String(k.phone || "").trim() && ph.length < 10) throw new Error("The contact number looks too short – enter 10 digits or leave it empty");
+  const emps = emps_(), lim = limit_(me, emps), sh = connSheet_();
+  const rows = (() => { const n = sh.getLastRow() - 1; return n < 1 ? [] : sh.getRange(2, 1, n, CONN_COLS).getDisplayValues(); })();
+  let idx = -1;
+  if (k.id) {
+    idx = rows.findIndex(r => String(r[0]).trim() === String(k.id));
+    if (idx < 0) throw new Error("Connector " + k.id + " not found – it may have been removed");
+    if (!canSeeConn_(rows[idx], lim, emps)) throw new Error("You can only edit your own connectors");
+  }
+  if (!force && ph.length >= 10) {                       // same number already saved → ask first
+    const d = rows.find((r, i) => i !== idx && phoneKey_(r[K_["Contact no of the Connector"]]) === ph);
+    if (d) return { saved: false, dup: { id: d[0], name: d[K_["Name of The Connector"]], sm: d[K_["SM Name"]], date: d[K_["Date"]] } };
+  }
+  // who it belongs to: Team Leads / Admin can choose anyone they can see; others always themselves
+  let smName = me.name, smId = me.id;
+  if (k.sm && (scope_(me) !== "own" || me.role === "Admin")) {
+    const e = emps.find(x => norm_(x.name) === norm_(k.sm) && (!lim || lim.has(x.id)));
+    if (e) { smName = e.name; smId = e.id; }
+  } else if (idx >= 0) { smName = rows[idx][K_["SM Name"]]; smId = rows[idx][K_["SM ID"]]; }
+  let id = k.id;
+  if (!id) { let max = 0; rows.forEach(r => { const v = parseInt(String(r[0]).replace(/\D/g, ""), 10); if (v > max) max = v; }); id = "CN-" + (max + 1); }
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(k.date || "")) ? k.date : now_().slice(0, 10);
+  const num = v => { const x = String(v == null ? "" : v).replace(/[^\d.]/g, ""); return x ? Number(x) : ""; };
+  const yn = /^(yes|no)$/i.test(String(k.signed || "")) ? (String(k.signed)[0].toUpperCase() + String(k.signed).slice(1).toLowerCase()) : "";
+  const old = idx >= 0 ? rows[idx] : null;
+  const row = [id, date, smName, t(k.meetType).slice(0, 60), t(k.connType).slice(0, 60), name, text_(c(k.phone).slice(0, 40)),
+    num(k.business), num(k.files), t(k.area).slice(0, 120), t(k.curPayout).slice(0, 60), t(k.payoutFrom).slice(0, 80), t(k.expPayout).slice(0, 60), yn,
+    smId, old ? old[K_["Added by"]] : me.name, old ? old[K_["Added at"]] : now_(), now_(), me.name];
+  if (idx >= 0) sh.getRange(idx + 2, 1, 1, CONN_COLS).setValues([row]);
+  else sh.getRange(sh.getLastRow() + 1, 1, 1, CONN_COLS).setValues([row]);
+  return { saved: true, id };
+}
+function removeConnector_(me, id) {
+  const sh = connSheet_(), n = sh.getLastRow() - 1;
+  const rows = n < 1 ? [] : sh.getRange(2, 1, n, CONN_COLS).getValues(), i = rows.findIndex(r => String(r[0]).trim() === String(id));
+  if (i < 0) throw new Error("Connector " + id + " not found");
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let rm = ss.getSheetByName("Removed Connectors");
+  if (!rm) { rm = ss.insertSheet("Removed Connectors"); rm.getRange(1, 1, 1, CONN_COLS + 2).setValues([CONN_HDR.concat(["Removed at", "Removed by"])]); rm.setFrozenRows(1); }
+  rm.getRange(rm.getLastRow() + 1, 1, 1, CONN_COLS + 2).setValues([rows[i].concat([now_(), me.name])]);
+  sh.deleteRow(i + 2);
+  return { removed: id };
 }
 
 /* ---------------- auth ---------------- */
@@ -226,6 +303,7 @@ function loadAll_(me) {
     ...listsOut_(),
     transferTo: perms_(me).has("caseTransfer") ? transferTargets_(me, emps).map(x => [x.id, x.name, x.role]) : [],
     handTo: handTargets_(me, emps).map(x => [x.id, x.name, x.role]),
+    connectors: connectorsFor_(me, emps),
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
   };
