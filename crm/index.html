@@ -227,6 +227,7 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .eod-fbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 12px}.eod-hidn{font-size:12.5px;color:#7a4b00;background:#fff7e6;border:1px solid #f6dca2;border-radius:8px;padding:6px 10px}
 .conn-hd{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-start;justify-content:space-between}.conn-btns{display:flex;gap:8px;align-items:center}
 .conn-stats{margin:14px 0 4px}.conn-flt{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.conn-flt input{flex:1 1 240px;min-width:0}.conn-flt select{flex:0 1 200px}
+.intf{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 8px}.intf-sep{width:1px;height:22px;background:var(--line,#e6e8ee);margin:0 4px}
 .conn-sm tbody tr{cursor:pointer}.conn-sm tbody tr:hover,.conn-sm tbody tr.on{background:#eef3ff}.conn-t tbody tr{cursor:pointer}.conn-t tbody tr:hover{background:#f6f8fc}.conn-t tbody tr:focus-visible{outline:2px solid #2453d6;outline-offset:-2px}
 .pill.conn-y{background:#e7f6ec;color:#166534}.pill.conn-n{background:#fff4e5;color:#92400e}
 .eod-pk-g{font-size:11.5px;font-weight:700;color:#6b7280;padding:8px 8px 2px}
@@ -1861,8 +1862,15 @@ function renderEmp(){
   const t0=sod(Date.now()),cbAll=mine.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<t0+DAY).sort((a,b)=>a.followUp-b.followUp);
   const myLeadsP=leadsIn(mine),myLeads=mine.filter(isLeadC);
   /* Leads tab follows the date chosen above (by lead date) */
-  const intAll=CASES().filter(c=>c["Telecaller ID"]===me.id||(me.role==="Team Lead"&&c.tlId===me.id)),intCases=intAll.filter(c=>inRange(c.leadD||c.at)).sort((a,b)=>(b.leadD||b.at||0)-(a.leadD||a.at||0));
-  const intNoCase=myLeadsP.filter(l=>!caseOf(l.id)),intN=S.srv2?intCases.length+intNoCase.length:myLeadsP.length,intOut=S.srv2?intAll.length-intCases.length:myLeads.length-myLeadsP.length;
+  // Team Leads: Mine (filled by me or with me) · My team (filled by a team member, by ID or SM Name) · All · one member
+  const isMine2=c=>c["Telecaller ID"]===me.id||(me.role==="Team Lead"&&c.tlId===me.id);
+  const tMates=me.role==="Team Lead"?(S.allEmps||[]).filter(e=>e.active!==false&&e.id!==me.id&&teamOf(e)===me.id).sort((a,b)=>a.name.localeCompare(b.name)):[];
+  const mateOf=c=>tMates.find(e=>c["Telecaller ID"]===e.id||normName(c["SM Name"])===normName(e.name));
+  const intF=tMates.length?(view.intF||"mine"):"mine",inP=c=>inRange(c.leadD||c.at),byDate=(a,b)=>(b.leadD||b.at||0)-(a.leadD||a.at||0);
+  const intPool={mine:CASES().filter(isMine2),team:tMates.length?CASES().filter(c=>!isMine2(c)&&mateOf(c)):[]};intPool.all=intPool.mine.concat(intPool.team);
+  tMates.forEach(e=>{intPool[e.id]=intPool.team.filter(c=>mateOf(c)===e)});
+  const intAll=intPool[intF]||intPool.mine,intCases=intAll.filter(inP).sort(byDate);
+  const intNoCase=intF==="mine"||intF==="all"?myLeadsP.filter(l=>!caseOf(l.id)):[],intN=S.srv2?intCases.length+intNoCase.length:myLeadsP.length,intOut=S.srv2?intAll.length-intCases.length:myLeads.length-myLeadsP.length;
   const tlBtn=me.role==="Team Lead"&&isMgr()&&!isTL()&&!own?`<button class="btn sm" id="seeTeam">👥 See ${esc(me.name.split(" ")[0])}'s team view</button>`:"";
   const backBtn=ME&&own&&isLead()&&!canViewAs()?`<button class="btn sm" id="backTeam">← Team overview</button>`:"";
   let h=etabs()+`<div style="margin-bottom:14px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">${backBtn}<div style="flex:1"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>${tlBtn}</div>`;
@@ -1899,7 +1907,10 @@ function renderEmp(){
     if(!S.srv2){h+=`<div class="small mute" style="margin-bottom:10px">Customers ${own?"you":"they"}'ve marked <b>Interested</b> (or Converted), newest first.</div>`;
       h+=`<div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No leads yet – customers marked Interested on a call show up here.</div>`}</div>`;}else{
     h+=`<div class="small mute" style="margin-bottom:10px">When ${own?"you mark":"they mark"} a customer <b>Interested</b>, the lead form opens in the call window and the case goes to the person ${own?"you choose":"they choose"} for further process. ${own&&!isLead()?"You can see every update here.":""}</div>`;
-    h+=casesTable(myCases,{empty:intOut?"No leads on these dates.":"No lead cases yet – mark a customer Interested on a call to open one."});
+    if(tMates.length){const n=k=>intPool[k].filter(inP).length,chip=(k,l)=>`<button class="chip ${intF===k?"on":""}" data-intf="${esc(k)}">${esc(l)} · ${n(k)}</button>`;
+      h+=`<div class="intf"><span class="small mute">Show:</span>${chip("mine",own?"Mine":"Theirs")}${chip("team",(own?"My team":"Team"))}${chip("all","All")}<span class="intf-sep"></span>${tMates.map(e=>chip(e.id,e.name)).join("")}</div>
+       <div class="small mute" style="margin:-4px 0 10px">${intF==="mine"?(own?"Cases you filled, or that are with you now.":"Cases they filled or that are with them."):intF==="all"?"Yours plus every case your team filled.":intF==="team"?"Cases filled by your team (by their login or the SM Name on the form).":"Cases filled by "+esc(empName(intF))+"."}</div>`}
+    h+=casesTable(myCases,{empty:intOut?"No leads on these dates.":intF!=="mine"?"No interested cases from your team in this period.":"No lead cases yet – mark a customer Interested on a call to open one."});
     if(noCase.length)h+=`<h3 style="margin:18px 0 8px">Interested, no case yet</h3><div class="card">${noCase.map(l=>leadRow(l)).join("")}</div>`;}
   }else if(ctab==="calls"){
     const co=view.cOut||"all";const list=calls.filter(g=>co==="all"||g.outcome===co);
@@ -1924,6 +1935,7 @@ function renderEmp(){
   $("#app").innerHTML=h;
   bindEtabs();bindRange();bindTips();
   document.querySelectorAll("[data-ctab]").forEach(b=>b.onclick=()=>{view.ctab=b.dataset.ctab;render()});bindCases();
+  document.querySelectorAll("[data-intf]").forEach(b=>b.onclick=()=>{view.intF=b.dataset.intf;render()});
   const gn=$("#goNew");if(gn)gn.onclick=()=>{view.ctab="leads";view.filter="new";render()};document.querySelectorAll("[data-newcase]").forEach(b=>b.onclick=()=>openNewCase());
   const bt=$("#backTeam");if(bt)bt.onclick=()=>{view.who="admin";view.tab="dash";render()};
   const st=$("#seeTeam");if(st)st.onclick=()=>{view.team=me.id;view.who="admin";view.tab="byemp";render()};
