@@ -576,13 +576,15 @@ const Script={
   async req(action,data){
     const url=apiUrl(),a=stored(AUTH_KEY)||{};let r;
     if(action==="load"){if(!a.token)throw authErr("Please log in");r=await fetch(url+(url.includes("?")?"&":"?")+"token="+encodeURIComponent(a.token))}
-    else r=await fetch(url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({token:a.token,action,...data})});
+    else{const fresh=this.inWrite&&!this.quiet&&!/^(login|logout|checkPhones)$/.test(action);   // server 11.9+: send the fresh data back with the save (one trip instead of two)
+      r=await fetch(url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({token:a.token,action,...data,...(fresh?{andLoad:1}:{})})})}
     let j;try{j=await r.json()}catch(e){throw new Error("The CRM server didn't answer properly. Check the Apps Script deployment (access: Anyone).")}
     if(!j.ok){if(j.auth){store(AUTH_KEY,null);throw authErr(j.error)}throw new Error(j.error||"Request failed")}
+    if(j.fresh){this._fresh=j.fresh;delete j.fresh}
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=await this.req("load");S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu,by,form,force){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -599,7 +601,7 @@ const Script={
   async removeLogs(ids){await this.req("removeLogs",{ids})},
   async transferCase(code,to,note){await this.req("transferCase",{code,to,note})},
   async transferCases(codes,to){try{return await this.req("transferCases",{codes,to})}catch(e){if(!/unknown action/i.test(e.message))throw e;   // server not updated yet: one by one
-    let done=0,skipped=0;for(const c of codes){try{await this.req("transferCase",{code:c,to});done++}catch(x){if(/already with/i.test(x.message))skipped++;else throw x}}return{done,skipped}}},
+    let done=0,skipped=0;try{for(const [i,c] of codes.entries()){this.quiet=i<codes.length-1;try{await this.req("transferCase",{code:c,to});done++}catch(x){if(/already with/i.test(x.message))skipped++;else throw x}}}finally{this.quiet=false}return{done,skipped}}},
   async setPerms(id,perms){await this.req("setPerms",{id,perms})},
   async saveTargets(month,list){await this.req("saveTargets",{month,list})},
   async newCase(c,force,to){return await this.req("newCase",{c,force,to})},
@@ -693,9 +695,9 @@ function showProc(t){$("#procT").textContent=t||"Saving…";$("#procS").textCont
 function hideProc(){clearTimeout(procT);$("#proc").classList.remove("show")}
 async function write(fn,okMsg,busyMsg){
   if(BUSY&&!SILENT){toast("Please wait – still saving…");return false}
-  SILENT=false;WRITING=true;BUSY=true;setSync();showProc(busyMsg);
-  try{await fn(API());if(MODE==="live"){await LIVE.load();toast(okMsg+" · saved ✓")}else{await Demo.load();toast(okMsg+" (demo – not saved)")}BUSY=false;WRITING=false;hideProc();render();return true}
-  catch(e){BUSY=false;WRITING=false;hideProc();setSync();if(e&&e.auth){showLogin(e.message);return false}
+  SILENT=false;WRITING=true;BUSY=true;setSync();showProc(busyMsg);Script._fresh=null;Script.inWrite=true;
+  try{await fn(API());Script.inWrite=false;if(MODE==="live"){await LIVE.load();toast(okMsg+" · saved ✓")}else{await Demo.load();toast(okMsg+" (demo – not saved)")}BUSY=false;WRITING=false;hideProc();render();return true}
+  catch(e){Script.inWrite=false;Script._fresh=null;BUSY=false;WRITING=false;hideProc();setSync();if(e&&e.auth){showLogin(e.message);return false}
     toast("Not saved: "+explain(e).slice(0,140));if(MODE==="live")reload();return false}
 }
 function setSync(){
@@ -1624,7 +1626,7 @@ function bindAdmin(){
   on("#auto","onclick",async()=>{const un=S.leads.filter(l=>!l.assignedTo).map(l=>l.id);if(!un.length)return toast("No unassigned contacts");
     const plan=distributePlan(un);
     if(!await askOk({title:"Share out "+un.length+" contacts?",ok:"Yes, share out",body:`<ul>${Object.entries(plan).map(([eid,ids])=>`<li><b>${esc(empName(eid))}</b>: ${ids.length}</li>`).join("")}</ul>`}))return;
-    await write(async api=>{for(const [eid,ids] of Object.entries(plan))await api.assign(ids,eid)},`${un.length} contacts distributed`,"Sharing out "+un.length+" contacts…")});
+    await write(async api=>{const P=Object.entries(plan);try{for(const [i,[eid,ids]] of P.entries()){Script.quiet=i<P.length-1;await api.assign(ids,eid)}}finally{Script.quiet=false}},`${un.length} contacts distributed`,"Sharing out "+un.length+" contacts…")});
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false));
   const nPh=$("#nPhone");
   const nDupMsg=()=>{const el=$("#nDup");if(!el)return null;const k=phoneKey(nPh.value),nm=($("#nName")||{}).value||"";let w=null;

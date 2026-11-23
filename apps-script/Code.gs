@@ -113,7 +113,13 @@ function doPost(e) {
     if (b.action === "logout") { PropertiesService.getScriptProperties().deleteProperty("s:" + b.token); return {}; }
     const lock = LockService.getScriptLock();
     lock.waitLock(20000);
-    try {
+    let res;
+    try { res = act_(me, b); } finally { lock.releaseLock(); }
+    if (b.andLoad) res = Object.assign({}, res && typeof res === "object" ? res : {}, { fresh: load_(me) });   // send the fresh data back with the save – one trip instead of two
+    return res;
+  });
+}
+function act_(me, b) {
       switch (b.action) {
         case "logCall":   return logCall_(me, b);
         case "assign":    can_(me, "doAssign"); if (!b.to) throw new Error("Choose a telecaller"); return assign_(b.ids || [], b.to, me);
@@ -137,8 +143,6 @@ function doPost(e) {
         case "setPerms":   need_(me, "Admin"); return setPerms_(me, b.id, b.perms || []);
         default: throw new Error("Unknown action: " + b.action);
       }
-    } finally { lock.releaseLock(); }
-  });
 }
 
 /* ---------------- auth ---------------- */
@@ -198,7 +202,11 @@ function canManage_(me, targetRole) { // Managers can't create/edit Admins or ot
 }
 
 /* ---------------- data ---------------- */
-function load_(me) {
+// While building one load, each tab is read once and reused (Lead Cases was read 3 times, Lists twice)
+let MEMO_ = null;
+function memo_(k, f) { if (!MEMO_) return f(); if (!(k in MEMO_)) MEMO_[k] = f(); return MEMO_[k]; }
+function load_(me) { MEMO_ = {}; try { return loadAll_(me); } finally { MEMO_ = null; } }
+function loadAll_(me) {
   const emps = emps_(), isLead = hasDesk_(me), lim = limit_(me, emps);
   let leads = rows_("Leads", 12), logs = rows_("CallLogs", 10), people = isLead ? emps : [me];
   const allLogs = logs;
@@ -488,6 +496,8 @@ function caseSheet_() {
 let caseColsOk_ = false;
 // Unique Lead Code: SNFS-1, SNFS-2 … always one more than the highest code in the sheet
 function fillCodesSafe_() {
+  if (!caseRows_().some(r => !String(r[C_["Unique Lead Code"]]).trim() && String(r[C_["Customer Name"]]).trim())) return;   // nothing to fill (the usual case) – no lock, no writes
+  MEMO_ && delete MEMO_.cases;
   const lk = LockService.getScriptLock();
   if (!lk.tryLock(5000)) return;
   try { fillCodes_(); } catch (e) {} finally { lk.releaseLock(); }
@@ -523,7 +533,8 @@ function perfOut_(me, emps, logs) {
   } catch (e) { return { targets: [], board: {}, perfError: String(e.message || e) }; }
 }
 function listsOut_() { const L = lists_(); return { lists: L.lists, statusType: L.statusType, banks: L.lists["Bank Name"] || [] }; }
-function lists_() {
+function lists_() { return memo_("lists", listsRead_); }
+function listsRead_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet(), sh = ss.getSheetByName("Lists"), lists = {}, statusType = {};
   if (sh && sh.getLastRow() >= 1) {
     const d = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getDisplayValues(), hdr = d[0].map(h => String(h).trim()), ti = hdr.indexOf("Counts as");
@@ -624,7 +635,8 @@ function saveTargets_(me, month, list) {
   return { saved: true, count: add.length };
 }
 
-function caseRows_() { try { const sh = caseSheet_(), n = sh.getLastRow() - 1; return n < 1 ? [] : sh.getRange(2, 1, n, CASE_COLS).getDisplayValues(); } catch (e) { return []; } }
+function caseRows_() { return memo_("cases", caseRowsRead_); }
+function caseRowsRead_() { try { const sh = caseSheet_(), n = sh.getLastRow() - 1; return n < 1 ? [] : sh.getRange(2, 1, n, CASE_COLS).getDisplayValues(); } catch (e) { return []; } }
 // the Team Lead a case belongs to: the contact's telecaller's Team Lead (or the telecaller, if they lead a team)
 function caseTL_(emps, assigneeId, me) {
   const a = emps.find(x => x.id === assigneeId);
@@ -924,7 +936,8 @@ function properName_(s){let i=0;return String(s==null?"":s).replace(/\s+/g," ").
 // Tidy free text: capital first letter, "1cr" -> "1 CR"
 function tidyText_(s){s=String(s==null?"":s).replace(/[ \t]+/g," ").trim().replace(/(\d+(?:\.\d+)?)\s*cr\b/gi,"$1 CR");return s?s[0].toUpperCase()+s.slice(1):s}
 
-function emps_() {
+function emps_() { return memo_("emps", empsRead_); }
+function empsRead_() {
   const sh = sheet_("Employees"), n = sh.getLastRow() - 1;
   if (n < 1) return [];
   const nc = Math.min(11, sh.getMaxColumns());
