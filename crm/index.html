@@ -227,7 +227,7 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .eod-fbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 12px}.eod-hidn{font-size:12.5px;color:#7a4b00;background:#fff7e6;border:1px solid #f6dca2;border-radius:8px;padding:6px 10px}
 .conn-hd{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-start;justify-content:space-between}.conn-btns{display:flex;gap:8px;align-items:center}
 .conn-stats{margin:14px 0 4px}.conn-flt{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.conn-flt input{flex:1 1 240px;min-width:0}.conn-flt select{flex:0 1 200px}
-.conn-t tbody tr{cursor:pointer}.conn-t tbody tr:hover{background:#f6f8fc}.conn-t tbody tr:focus-visible{outline:2px solid #2453d6;outline-offset:-2px}
+.conn-sm tbody tr{cursor:pointer}.conn-sm tbody tr:hover,.conn-sm tbody tr.on{background:#eef3ff}.conn-t tbody tr{cursor:pointer}.conn-t tbody tr:hover{background:#f6f8fc}.conn-t tbody tr:focus-visible{outline:2px solid #2453d6;outline-offset:-2px}
 .pill.conn-y{background:#e7f6ec;color:#166534}.pill.conn-n{background:#fff4e5;color:#92400e}
 .eod-pk-g{font-size:11.5px;font-weight:700;color:#6b7280;padding:8px 8px 2px}
 .eod-lnk{all:unset;cursor:pointer;color:#1d4ed8;font-weight:600;font-size:12.5px}.eod-lnk:hover{text-decoration:underline}.eod-lnk:focus-visible{outline:2px solid #2453d6;outline-offset:2px;border-radius:3px}
@@ -1742,41 +1742,58 @@ function openChangePin(){
     try{await Script.changePin(o,n);toast("PIN changed ✓");return true}catch(e){if(e.auth){showLogin(e.message);return true}return e.message}})}
 
 /* ---------- CONNECTORS: connectors met by each SM (sheet tab "Connectors") ---------- */
-const CONN_DEF={"Meeting Type":["First meeting","Follow-up meeting","Phone call","Video call"],"Connector Type":["DSA","Sub-DSA","Chartered Accountant (CA)","Builder / Developer","Real estate agent","Insurance agent","Tax consultant","Other"],"Payout from?":["Bank","NBFC","Another DSA","Aggregator","None"]};
-const connOpts=h=>{const L=S.lists&&S.lists[h];return L&&L.length?L:CONN_DEF[h]||[]};
-function buildConns(rows){return(Array.isArray(rows)?rows:[]).map(r=>({id:r[0],date:r[1],dateT:r[1]?new Date(String(r[1]).slice(0,10)+"T12:00").getTime()||0:0,sm:r[2],meetType:r[3],connType:r[4],name:r[5],phone:String(r[6]||"").replace(/^'/,""),business:numOf(r[7]),files:numOf(r[8]),area:r[9],curPayout:r[10],payoutFrom:r[11],expPayout:r[12],signed:r[13],smId:r[14],addedBy:r[15],addedAt:r[16],updated:r[17],updatedBy:r[18]}))}
+// dropdown choices: the Lists tab column if Admin added one, else what the team already uses, else these
+const CONN_DEF={"Meeting Type":["Physical","Call"],"Connector Type":["CP","Developer"],"Payout from?":["Bank"]},CONN_KEY={"Meeting Type":"meetType","Connector Type":"connType","Payout from?":"payoutFrom"};
+const connOpts=h=>{const L=S.lists&&S.lists[h];if(L&&L.length)return L;const seen=new Map();[...CONN_DEF[h]||[],...(S.conns||[]).map(k=>k[CONN_KEY[h]])].forEach(v=>{v=String(v||"").trim();if(v&&!seen.has(v.toLowerCase()))seen.set(v.toLowerCase(),v)});return[...seen.values()]};
+const conn0=v=>{v=String(v==null?"":v).replace(/^'/,"").trim();return /^0+(\.0+)?%?$/.test(v)?"":v};   // "0" / "00" in the old sheet = not known
+// "75,00,000" → 7500000 · "1.50cr" → 15000000 · "2-4cr" → 20000000 (lower figure of a range) · "50 L" → 5000000
+function connAmt(v){v=conn0(v).toLowerCase().replace(/,/g,"").replace(/₹|rs\.?/g,"");if(!v)return 0;const m=v.match(/\d+(\.\d+)?/);if(!m)return 0;let n=+m[0];
+  if(/cr|crore/.test(v))n*=1e7;else if(/\b(l|lac|lakh|lakhs)\b|\dl\b/.test(v))n*=1e5;return n}
+const connFiles=v=>{const a=(conn0(v).match(/\d+/g)||[]).map(Number);return a.length?Math.min(...a):0};
+function connDate(v){v=String(v||"").replace(/^'/,"").trim();let m=v.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return new Date(+m[1],m[2]-1,+m[3],12).getTime();
+  m=v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);if(m)return new Date(+m[3],m[1]-1,+m[2],12).getTime();const t=Date.parse(v);return isFinite(t)?t:0}
+function buildConns(rows){return(Array.isArray(rows)?rows:[]).map(r=>{const g=i=>String(r[i]==null?"":r[i]).replace(/^'/,"").trim();
+  return{ts:g(0),date:g(1),dateT:connDate(g(1))||connDate(g(0)),sm:g(2),meetType:conn0(g(3)),connType:conn0(g(4)),name:g(5),phone:g(6),business:conn0(g(7)),bizN:connAmt(g(7)),files:conn0(g(8)),filesN:connFiles(g(8)),
+    area:conn0(g(9)),curPayout:conn0(g(10)),payoutFrom:conn0(g(11)),expPayout:conn0(g(12)),signed:g(13),id:g(14),smId:g(15),addedBy:g(16),updated:g(17),updatedBy:g(18)}})}
 const cnm=x=>String(x||"").trim().toLowerCase().replace(/\s+/g," "),connMine=(k,e)=>k.smId===e.id||cnm(k.sm)===cnm(e.name);
 function aConn(whoId){const all=S.conns||[],who=whoId?emp(whoId):null,base=who?all.filter(k=>connMine(k,who)):all;
   const f=view.connF||(view.connF={q:"",sm:"",sig:""}),q=f.q.trim().toLowerCase(),qd=q.replace(/\D/g,"");
   const L=base.filter(k=>(!f.sm||k.sm===f.sm)&&(!f.sig||(f.sig==="Yes"?k.signed==="Yes":k.signed!=="Yes"))&&(!q||[k.name,k.area,k.connType,k.sm,k.id].some(v=>String(v||"").toLowerCase().includes(q))||(qd.length>=3&&String(k.phone).replace(/\D/g,"").includes(qd))))
     .sort((a,b)=>(b.dateT-a.dateT)||String(b.id).localeCompare(String(a.id),undefined,{numeric:true}));
-  const sms=[...new Set(base.map(k=>k.sm).filter(Boolean))].sort(),sig=L.filter(k=>k.signed==="Yes").length,biz=L.reduce((s,k)=>s+k.business,0),fl=L.reduce((s,k)=>s+k.files,0);
-  const own=who&&ME&&who.id===ME.id,title=who?(own?"My connectors":who.name+"'s connectors"):isTL()?"Connectors – my team":"Connectors";
+    const ck=k=>String(k.phone).replace(/\D/g,"").slice(-10)||k.name.toLowerCase(),uq=list=>new Set(list.map(ck)).size;
+  const latest=list=>{const m=new Map();[...list].sort((a,b)=>b.dateT-a.dateT).forEach(k=>{if(!m.has(ck(k)))m.set(ck(k),k)});return[...m.values()]};   // a connector met twice counts once (latest meeting)
+  const bizOf=list=>latest(list).reduce((s,k)=>s+k.bizN,0),filesOf=list=>latest(list).reduce((s,k)=>s+k.filesN,0);
+  const sms=[...new Set(base.map(k=>k.sm).filter(Boolean))].sort(),sig=L.filter(k=>k.signed==="Yes").length,biz=bizOf(L),fl=filesOf(L);
+  const own=who&&ME&&who.id===ME.id,title=who?(own?"My connectors":who.name+"'s connectors"):"Connectors – all SMs";
   const dt=d=>d?new Date(d).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}):"—";
   let h=`<div class="card pad conn-top"><div class="conn-hd"><div><h3 style="margin:0">${esc(title)}</h3><div class="small mute">Every connector met – who they are, how much business they do and the payout talk. Click a row to edit.</div></div>
     <div class="conn-btns"><button class="btn sm" id="connXl">⬇ Excel</button><button class="btn pri" id="connAdd">+ Add connector</button></div></div>
-   <div class="stats conn-stats"><div class="card stat"><span>Connectors</span><b>${L.length}</b><div class="small mute">${L.length!==base.length?"of "+base.length+" in total":"in the list"}</div></div>
+   <div class="stats conn-stats"><div class="card stat"><span>Connectors</span><b>${uq(L)}</b><div class="small mute">${L.length} meeting${L.length===1?"":"s"}${L.length!==base.length?" · of "+base.length+" in total":""}</div></div>
     <div class="card stat"><span>Contract signed</span><b>${sig}</b><div class="small mute">${L.length?Math.round(sig/L.length*100)+"% of them":"—"}</div></div>
-    <div class="card stat"><span>Their business / month</span><b>${fmtL(biz)}</b><div class="small mute">total of what they told us</div></div>
-    <div class="card stat"><span>Files / month</span><b>${fl}</b><div class="small mute">total</div></div></div>
+    <div class="card stat"><span>Their business / month</span><b>${fmtL(biz)}</b><div class="small mute">each connector once · lower figure of a range</div></div>
+    <div class="card stat"><span>Files / month</span><b>${fl}</b><div class="small mute">total · lower figure of a range</div></div></div>
    <div class="conn-flt"><input id="connQ" type="search" placeholder="Search name, number, area, type…" value="${esc(f.q)}">
     ${who?"":`<select id="connSm"><option value="">All SMs</option>${sms.map(n=>`<option ${f.sm===n?"selected":""}>${esc(n)}</option>`).join("")}</select>`}
     <select id="connSig"><option value="">Contract: all</option><option value="Yes" ${f.sig==="Yes"?"selected":""}>Contract signed</option><option value="No" ${f.sig==="No"?"selected":""}>Not signed yet</option></select></div></div>`;
+  if(!who&&base.length&&sms.length>1){const R=sms.map(n=>{const x=base.filter(k=>k.sm===n),e=(S.allEmps||[]).find(y=>cnm(y.name)===cnm(n));return{n,id:e?e.id:"",x,last:Math.max(0,...x.map(k=>k.dateT))}}).sort((a,b)=>b.x.length-a.x.length||a.n.localeCompare(b.n));
+    h+=`<div class="card tw" style="margin-bottom:12px"><div class="small" style="font-weight:700;padding:12px 14px 0">SM-wise</div><table class="conn-sm"><thead><tr><th>SM Name</th><th>Emp ID</th><th class="num">Connectors</th><th class="num">Meetings</th><th class="num">Contract signed</th><th class="num">Their business / month</th><th>Last meeting</th></tr></thead><tbody>
+     ${R.map(r=>`<tr data-connsm="${esc(r.n)}" class="${f.sm===r.n?"on":""}" tabindex="0" title="Show only ${esc(r.n)}"><td><b>${esc(r.n)}</b></td><td>${r.id?esc(r.id):'<span class="mute small">not in CRM</span>'}</td><td class="num">${uq(r.x)}</td><td class="num">${r.x.length}</td><td class="num">${r.x.filter(k=>k.signed==="Yes").length||'<span class="mute">0</span>'}</td><td class="num">${fmtL(bizOf(r.x))}</td><td class="small">${r.last?dt(r.last):"—"}</td></tr>`).join("")}</tbody></table></div>`}
   if(!base.length)return h+`<div class="card pad empty"><b>No connectors yet</b><div class="small mute" style="margin-top:4px">Press <b>+ Add connector</b> after you meet one – it's saved in the "Connectors" tab of the Google Sheet.</div></div>`;
   h+=`<div class="card tw"><table class="conn-t"><thead><tr><th>Date</th>${who?"":"<th>SM Name</th>"}<th>Meeting type</th><th>Connector type</th><th>Connector</th><th class="num">Business / month</th><th class="num">Files / month</th><th>Area of operation</th><th>Current payout</th><th>Payout from</th><th>Expected payout</th><th>Contract signed</th></tr></thead><tbody>
    ${L.length?L.map(k=>`<tr data-conn="${esc(k.id)}" tabindex="0"><td class="small" style="white-space:nowrap">${dt(k.dateT)}</td>${who?"":`<td>${esc(k.sm)}</td>`}<td>${esc(k.meetType)||'<span class="mute">—</span>'}</td><td>${esc(k.connType)||'<span class="mute">—</span>'}</td>
-     <td><b>${esc(k.name)}</b><div class="small mute">${esc(k.phone)||"no number"}</div></td><td class="num">${k.business?fmtL(k.business):'<span class="mute">—</span>'}</td><td class="num">${k.files||'<span class="mute">—</span>'}</td>
+     <td><b>${esc(k.name)}</b><div class="small mute">${esc(k.phone)||"no number"}</div></td><td class="num">${k.business?(/^[\d.,\s]+$/.test(k.business)&&k.bizN?fmtL(k.bizN):esc(k.business)):'<span class="mute">—</span>'}</td><td class="num">${esc(k.files)||'<span class="mute">—</span>'}</td>
      <td>${esc(k.area)||'<span class="mute">—</span>'}</td><td>${esc(k.curPayout)||'<span class="mute">—</span>'}</td><td>${esc(k.payoutFrom)||'<span class="mute">—</span>'}</td><td>${esc(k.expPayout)||'<span class="mute">—</span>'}</td>
      <td>${k.signed==="Yes"?'<span class="pill conn-y">✓ Signed</span>':k.signed==="No"?'<span class="pill conn-n">Not yet</span>':'<span class="mute">—</span>'}</td></tr>`).join(""):`<tr><td colspan="12" class="mute">No connector matches – change the search or filters.</td></tr>`}</tbody></table></div>`;
   view.connL=L;return h}
 function bindConn(){const on=(s,ev,f)=>{const el=$(s);if(el)el[ev]=f},f=view.connF||{};
   on("#connAdd","onclick",()=>openConn(null));
   on("#connQ","oninput",e=>{f.q=e.target.value;clearTimeout(bindConn._t);bindConn._t=setTimeout(()=>{const p=e.target.selectionStart;render();const q=$("#connQ");if(q){q.focus();try{q.setSelectionRange(p,p)}catch(x){}}},250)});
-  on("#connSm","onchange",e=>{f.sm=e.target.value;render()});on("#connSig","onchange",e=>{f.sig=e.target.value;render()});
+  on("#connSm","onchange",e=>{f.sm=e.target.value;render()});
+  document.querySelectorAll("[data-connsm]").forEach(tr=>{const go=()=>{f.sm=f.sm===tr.dataset.connsm?"":tr.dataset.connsm;render()};tr.onclick=go;tr.onkeydown=e=>{if(e.key==="Enter")go()}});on("#connSig","onchange",e=>{f.sig=e.target.value;render()});
   document.querySelectorAll("[data-conn]").forEach(tr=>{tr.onclick=()=>openConn(tr.dataset.conn);tr.onkeydown=e=>{if(e.key==="Enter")openConn(tr.dataset.conn)}});
   on("#connXl","onclick",async()=>{const L=view.connL||[];if(!L.length){toast("Nothing to download");return}await loadXLSX();const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,sheetFrom([["Date","SM Name","Meeting Type","Connector Type","Name of The Connector","Contact no of the Connector","Current business per month (Value)","No of Files per month","Area of Operation","Current Payout","Payout from?","Expected payout","Contract form Signed","Connector ID"],
-      ...L.map(k=>[k.date,k.sm,k.meetType,k.connType,k.name,k.phone,k.business||"",k.files||"",k.area,k.curPayout,k.payoutFrom,k.expPayout,k.signed,k.id])]),"Connectors");
+      ...L.map(k=>[k.date,k.sm,k.meetType,k.connType,k.name,k.phone,k.business,k.files,k.area,k.curPayout,k.payoutFrom,k.expPayout,k.signed,k.id])]),"Connectors");
     const fn="SNFS connectors "+ymd(Date.now())+".xlsx";XLSX.writeFile(wb,fn);toast("Downloaded "+fn)})}
 function openConn(id){const k=id?(S.conns||[]).find(x=>x.id===id):null;if(id&&!k){toast("Connector not found – press Refresh");return}
   const v=x=>esc(k?k[x]:""),canPick=!!ME&&(isLead()||ME.role==="Admin")&&S.employees.length>1,curSm=k?k.sm:(view.who&&view.who!=="admin"&&emp(view.who)?emp(view.who).name:ME?ME.name:"");
@@ -1790,8 +1807,8 @@ function openConn(id){const k=id?(S.conns||[]).find(x=>x.id===id):null;if(id&&!k
      <div><label class="f">Connector Type</label><input id="k_ct" list="dl_kct" value="${v("connType")}" placeholder="Choose or type" style="width:100%" maxlength="60"></div></div>
    <div class="g2"><div><label class="f">Name of The Connector *</label><input id="k_name" value="${v("name")}" placeholder="e.g. Rohan Patil" style="width:100%" maxlength="120"></div>
      <div><label class="f">Contact no of the Connector</label><input id="k_ph" inputmode="tel" value="${v("phone")}" placeholder="98XXX XXXXX" style="width:100%" maxlength="40"></div></div>
-   <div class="g2"><div><label class="f">Current business per month (Value, ₹)</label><input id="k_biz" inputmode="decimal" value="${k&&k.business?k.business:""}" placeholder="e.g. 5000000 for ₹50 L" style="width:100%" maxlength="15"><div class="small mute" id="k_bizL"></div></div>
-     <div><label class="f">No of Files per month</label><input id="k_files" inputmode="numeric" value="${k&&k.files?k.files:""}" placeholder="e.g. 4" style="width:100%" maxlength="6"></div></div>
+   <div class="g2"><div><label class="f">Current business per month (Value)</label><input id="k_biz" value="${v("business")}" placeholder="e.g. 1 Cr, 50 L or 5000000" style="width:100%" maxlength="40"><div class="small mute" id="k_bizL"></div></div>
+     <div><label class="f">No of Files per month</label><input id="k_files" value="${v("files")}" placeholder="e.g. 3 or 2-3" style="width:100%" maxlength="20"></div></div>
    <label class="f">Area of Operation</label><input id="k_area" value="${v("area")}" placeholder="e.g. Thane, Kalyan, Navi Mumbai" style="width:100%" maxlength="120">
    <div class="g3"><div><label class="f">Current Payout</label><input id="k_cp" value="${v("curPayout")}" placeholder="e.g. 1.2%" style="width:100%" maxlength="60"></div>
      <div><label class="f">Payout from?</label><input id="k_pf" list="dl_kpf" value="${v("payoutFrom")}" placeholder="Choose or type" style="width:100%" maxlength="80"></div>
@@ -1803,14 +1820,14 @@ function openConn(id){const k=id?(S.conns||[]).find(x=>x.id===id):null;if(id&&!k
   $("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#kc").onclick=close;
   const segVal=()=>{const b=document.querySelector('[data-seg="k_sig"] button.on');return b?b.textContent:""};
   document.querySelectorAll('[data-seg="k_sig"] button').forEach(b=>b.onclick=()=>{const was=b.classList.contains("on");document.querySelectorAll('[data-seg="k_sig"] button').forEach(x=>x.classList.remove("on"));if(!was)b.classList.add("on")});
-  const bizL=()=>{const n=numOf($("#k_biz").value);$("#k_bizL").textContent=n?"= "+fmtL(n)+" a month":""};$("#k_biz").oninput=bizL;bizL();
+  const bizL=()=>{const n=connAmt($("#k_biz").value);$("#k_bizL").textContent=n?"= "+fmtL(n)+" a month":""};$("#k_biz").oninput=bizL;bizL();
   $("#k_name").addEventListener("blur",e=>{e.target.value=properName(e.target.value)});["#k_area","#k_cp","#k_ep","#k_mt","#k_ct","#k_pf"].forEach(s=>$(s).addEventListener("blur",e=>{e.target.value=tidyText(e.target.value)}));
   if($("#kDel"))$("#kDel").onclick=async()=>{if(!await askOk({title:`Remove ${k.name}?`,ok:"Yes, remove",danger:true,body:`It moves to the "Removed Connectors" tab of the sheet, so it can be brought back.`}))return;
     if(await write(api=>api.removeConnector(k.id),k.name+" removed","Removing…"))close()};
   setTimeout(()=>$("#k_name").focus(),30);
   $("#kfm").onsubmit=async e=>{e.preventDefault();const err=m=>{$("#kErr").textContent=m};
     const rec={id:k?k.id:"",date:$("#k_date").value,sm:canPick?$("#k_sm").value:curSm,meetType:$("#k_mt").value,connType:$("#k_ct").value,name:properName($("#k_name").value),phone:$("#k_ph").value.trim(),
-      business:numOf($("#k_biz").value)||"",files:numOf($("#k_files").value)||"",area:$("#k_area").value,curPayout:$("#k_cp").value,payoutFrom:$("#k_pf").value,expPayout:$("#k_ep").value,signed:segVal()};
+      business:$("#k_biz").value.trim(),files:$("#k_files").value.trim(),area:$("#k_area").value,curPayout:$("#k_cp").value,payoutFrom:$("#k_pf").value,expPayout:$("#k_ep").value,signed:segVal()};
     if(rec.name.length<2)return err("Enter the name of the connector.");
     if(rec.phone&&rec.phone.replace(/\D/g,"").length<10)return err("The contact number looks too short – enter 10 digits or leave it empty.");
     let res=null,force=false;

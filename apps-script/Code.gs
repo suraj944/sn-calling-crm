@@ -148,10 +148,10 @@ function act_(me, b) {
 }
 
 /* ---------------- connectors ---------------- */
-// "Connectors" tab: one row per connector met by an SM. Column names follow the team's own sheet.
-const CONN_HDR = ["Connector ID", "Date", "SM Name", "Meeting Type", "Connector Type", "Name of The Connector", "Contact no of the Connector",
+// "Connectors" tab: one row per connector meeting. Columns A–N follow the team's own connector sheet; O–S are filled by the CRM.
+const CONN_HDR = ["Timestamp", "Date", "SM Name", "Meeting Type", "Connector Type", "Name of The Connector", "Contact no of the Connector",
   "Current business per month (Value)", "No of Files per month", "Area of Operation", "Current Payout", "Payout from?", "Expected payout",
-  "Contract form Signed", "SM ID", "Added by", "Added at", "Last updated", "Updated by"];
+  "Contract form Signed", "Connector ID", "SM ID", "Added by", "Last updated", "Updated by"];
 const CONN_COLS = CONN_HDR.length, K_ = Object.fromEntries(CONN_HDR.map((h, i) => [h, i]));
 function connSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -159,11 +159,16 @@ function connSheet_() {
   if (!sh) { sh = ss.insertSheet("Connectors"); sh.getRange(1, 1, 1, CONN_COLS).setValues([CONN_HDR]); sh.setFrozenRows(1); }
   return sh;
 }
-function connRows_() {
-  return memo_("conn", () => { const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Connectors"); if (!sh) return [];
-    const n = sh.getLastRow() - 1; return n < 1 ? [] : sh.getRange(2, 1, n, CONN_COLS).getDisplayValues().filter(r => String(r[0]).trim()); });
+// rows typed straight into the sheet without an ID get "R<row number>" so they can still be opened and saved
+function connAll_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Connectors"); if (!sh) return [];
+  const n = sh.getLastRow() - 1; if (n < 1) return [];
+  return sh.getRange(2, 1, n, CONN_COLS).getDisplayValues().map((r, i) => { if (!String(r[K_["Connector ID"]]).trim()) r[K_["Connector ID"]] = "R" + (i + 2); return r; })
+    .filter(r => String(r[K_["Name of The Connector"]]).trim() || String(r[K_["Contact no of the Connector"]]).trim());
 }
-// Admin/Manager: all · Team Lead: her team (by SM ID or SM Name) · everyone else: their own
+function connRows_() { return memo_("conn", connAll_); }
+// Admin, Manager and Team Leads see every connector; everyone else sees their own (by SM ID or SM Name)
+function connScope_(me, emps) { return me.role === "Admin" || me.role === "Team Lead" || scope_(me) === "all" ? null : limit_(me, emps); }
 function canSeeConn_(r, lim, emps) {
   if (!lim) return true;
   if (lim.has(String(r[K_["SM ID"]]).trim())) return true;
@@ -171,54 +176,62 @@ function canSeeConn_(r, lim, emps) {
 }
 function connectorsFor_(me, emps) {
   try { if (me.role === "Sales Manager" && !perms_(me).has("conn")) return [];
-    const lim = limit_(me, emps); return connRows_().filter(r => canSeeConn_(r, lim, emps)); } catch (e) { return []; }
+    const lim = connScope_(me, emps); return connRows_().filter(r => canSeeConn_(r, lim, emps)); } catch (e) { return []; }
 }
 function saveConnector_(me, k, force) {
-  const c = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "'$&").trim(), t = v => tidyText_(c(v));
+  const c = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@']+/, "").replace(/\s+/g, " ").trim(), t = v => tidyText_(c(v));
+  const txt = v => { v = c(v); return v ? "'" + v : ""; };   // kept exactly as typed ("2-3" must not turn into a date, "40%" not into 0.4)
   const name = properName_(c(k.name)).slice(0, 120);
   if (name.length < 2) throw new Error("Enter the name of the connector");
   const ph = phoneKey_(k.phone);
   if (String(k.phone || "").trim() && ph.length < 10) throw new Error("The contact number looks too short – enter 10 digits or leave it empty");
-  const emps = emps_(), lim = limit_(me, emps), sh = connSheet_();
-  const rows = (() => { const n = sh.getLastRow() - 1; return n < 1 ? [] : sh.getRange(2, 1, n, CONN_COLS).getDisplayValues(); })();
-  let idx = -1;
+  const emps = emps_(), lim = connScope_(me, emps), sh = connSheet_(), rows = connAll_();
+  let idx = -1, rowNo = 0;
   if (k.id) {
-    idx = rows.findIndex(r => String(r[0]).trim() === String(k.id));
+    idx = rows.findIndex(r => String(r[K_["Connector ID"]]).trim() === String(k.id));
     if (idx < 0) throw new Error("Connector " + k.id + " not found – it may have been removed");
     if (!canSeeConn_(rows[idx], lim, emps)) throw new Error("You can only edit your own connectors");
+    rowNo = /^R\d+$/.test(k.id) ? +k.id.slice(1) : 0;
+    if (!rowNo) { const ids = sh.getRange(2, K_["Connector ID"] + 1, sh.getLastRow() - 1, 1).getDisplayValues(); rowNo = ids.findIndex(r => String(r[0]).trim() === String(k.id)) + 2; }
   }
   if (!force && ph.length >= 10) {                       // same number already saved → ask first
     const d = rows.find((r, i) => i !== idx && phoneKey_(r[K_["Contact no of the Connector"]]) === ph);
-    if (d) return { saved: false, dup: { id: d[0], name: d[K_["Name of The Connector"]], sm: d[K_["SM Name"]], date: d[K_["Date"]] } };
+    if (d) return { saved: false, dup: { id: d[K_["Connector ID"]], name: d[K_["Name of The Connector"]], sm: d[K_["SM Name"]], date: d[K_["Date"]] } };
   }
-  // who it belongs to: Team Leads / Admin can choose anyone they can see; others always themselves
-  let smName = me.name, smId = me.id;
-  if (k.sm && (scope_(me) !== "own" || me.role === "Admin")) {
-    const e = emps.find(x => norm_(x.name) === norm_(k.sm) && (!lim || lim.has(x.id)));
-    if (e) { smName = e.name; smId = e.id; }
-  } else if (idx >= 0) { smName = rows[idx][K_["SM Name"]]; smId = rows[idx][K_["SM ID"]]; }
-  let id = k.id;
-  if (!id) { let max = 0; rows.forEach(r => { const v = parseInt(String(r[0]).replace(/\D/g, ""), 10); if (v > max) max = v; }); id = "CN-" + (max + 1); }
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(k.date || "")) ? k.date : now_().slice(0, 10);
-  const num = v => { const x = String(v == null ? "" : v).replace(/[^\d.]/g, ""); return x ? Number(x) : ""; };
-  const yn = /^(yes|no)$/i.test(String(k.signed || "")) ? (String(k.signed)[0].toUpperCase() + String(k.signed).slice(1).toLowerCase()) : "";
   const old = idx >= 0 ? rows[idx] : null;
-  const row = [id, date, smName, t(k.meetType).slice(0, 60), t(k.connType).slice(0, 60), name, text_(c(k.phone).slice(0, 40)),
-    num(k.business), num(k.files), t(k.area).slice(0, 120), t(k.curPayout).slice(0, 60), t(k.payoutFrom).slice(0, 80), t(k.expPayout).slice(0, 60), yn,
-    smId, old ? old[K_["Added by"]] : me.name, old ? old[K_["Added at"]] : now_(), now_(), me.name];
-  if (idx >= 0) sh.getRange(idx + 2, 1, 1, CONN_COLS).setValues([row]);
+  // who it belongs to: Admin / Team Leads can choose; others always themselves
+  let smName = me.name, smId = me.id;
+  if (k.sm && (me.role === "Admin" || me.role === "Team Lead" || scope_(me) !== "own")) {
+    const e = emps.find(x => norm_(x.name) === norm_(k.sm));
+    smName = e ? e.name : properName_(c(k.sm)).slice(0, 60); smId = e ? e.id : "";
+  } else if (old) { smName = old[K_["SM Name"]]; smId = old[K_["SM ID"]]; }
+  let id = old && !/^R\d+$/.test(old[K_["Connector ID"]]) ? old[K_["Connector ID"]] : "";
+  if (!id) { let max = 0; rows.forEach(r => { const m = String(r[K_["Connector ID"]]).match(/^CN-(\d+)$/); if (m && +m[1] > max) max = +m[1]; }); id = "CN-" + (max + 1); }
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(k.date || "")) ? k.date : now_().slice(0, 10);
+  const yn = /^(yes|no)$/i.test(String(k.signed || "")) ? (String(k.signed)[0].toUpperCase() + String(k.signed).slice(1).toLowerCase()) : "";
+  const o = {
+    "Timestamp": old ? "'" + old[K_["Timestamp"]] : "'" + now_(), "Date": "'" + date, "SM Name": smName, "Meeting Type": t(k.meetType).slice(0, 60),
+    "Connector Type": t(k.connType).slice(0, 60), "Name of The Connector": name, "Contact no of the Connector": text_(c(k.phone).slice(0, 40)),
+    "Current business per month (Value)": txt(k.business).slice(0, 40), "No of Files per month": txt(k.files).slice(0, 20), "Area of Operation": t(k.area).slice(0, 120),
+    "Current Payout": txt(k.curPayout).slice(0, 40), "Payout from?": t(k.payoutFrom).slice(0, 80), "Expected payout": txt(k.expPayout).slice(0, 40),
+    "Contract form Signed": yn, "Connector ID": id, "SM ID": smId, "Added by": old && old[K_["Added by"]] ? old[K_["Added by"]] : me.name,
+    "Last updated": "'" + now_(), "Updated by": me.name };
+  const row = CONN_HDR.map(h => o[h]);
+  if (rowNo >= 2) sh.getRange(rowNo, 1, 1, CONN_COLS).setValues([row]);
   else sh.getRange(sh.getLastRow() + 1, 1, 1, CONN_COLS).setValues([row]);
   return { saved: true, id };
 }
 function removeConnector_(me, id) {
-  const sh = connSheet_(), n = sh.getLastRow() - 1;
-  const rows = n < 1 ? [] : sh.getRange(2, 1, n, CONN_COLS).getValues(), i = rows.findIndex(r => String(r[0]).trim() === String(id));
-  if (i < 0) throw new Error("Connector " + id + " not found");
+  const sh = connSheet_(), rows = connAll_(), r = rows.find(x => String(x[K_["Connector ID"]]).trim() === String(id));
+  if (!r) throw new Error("Connector " + id + " not found");
+  let rowNo = /^R\d+$/.test(id) ? +id.slice(1) : 0;
+  if (!rowNo) { const ids = sh.getRange(2, K_["Connector ID"] + 1, sh.getLastRow() - 1, 1).getDisplayValues(); rowNo = ids.findIndex(x => String(x[0]).trim() === String(id)) + 2; }
+  if (rowNo < 2) throw new Error("Connector " + id + " not found");
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let rm = ss.getSheetByName("Removed Connectors");
   if (!rm) { rm = ss.insertSheet("Removed Connectors"); rm.getRange(1, 1, 1, CONN_COLS + 2).setValues([CONN_HDR.concat(["Removed at", "Removed by"])]); rm.setFrozenRows(1); }
-  rm.getRange(rm.getLastRow() + 1, 1, 1, CONN_COLS + 2).setValues([rows[i].concat([now_(), me.name])]);
-  sh.deleteRow(i + 2);
+  rm.getRange(rm.getLastRow() + 1, 1, 1, CONN_COLS + 2).setValues([r.map(v => /^[=+\-@]|^\d/.test(String(v)) ? "'" + v : v).concat(["'" + now_(), me.name])]);
+  sh.deleteRow(rowNo);
   return { removed: id };
 }
 
