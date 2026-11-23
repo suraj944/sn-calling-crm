@@ -1867,7 +1867,8 @@ function renderEmp(){
   const tMates=me.role==="Team Lead"?(S.allEmps||[]).filter(e=>e.active!==false&&e.id!==me.id&&teamOf(e)===me.id).sort((a,b)=>a.name.localeCompare(b.name)):[];
   const mateOf=c=>tMates.find(e=>c["Telecaller ID"]===e.id||normName(c["SM Name"])===normName(e.name));
   const intF=tMates.length?(view.intF||"mine"):"mine",inP=c=>inRange(c.leadD||c.at),byDate=(a,b)=>(b.leadD||b.at||0)-(a.leadD||a.at||0);
-  const intPool={mine:CASES().filter(isMine2),team:tMates.length?CASES().filter(c=>!isMine2(c)&&mateOf(c)):[]};intPool.all=intPool.mine.concat(intPool.team);
+  // a case counts for the team member who filled it even after it was sent to the Team Lead (it then shows under Mine too)
+  const intPool={mine:CASES().filter(isMine2),team:tMates.length?CASES().filter(c=>!!mateOf(c)):[]};intPool.all=CASES().filter(c=>isMine2(c)||!!mateOf(c));
   tMates.forEach(e=>{intPool[e.id]=intPool.team.filter(c=>mateOf(c)===e)});
   const intAll=intPool[intF]||intPool.mine,intCases=intAll.filter(inP).sort(byDate);
   const intNoCase=intF==="mine"||intF==="all"?myLeadsP.filter(l=>!caseOf(l.id)):[],intN=S.srv2?intCases.length+intNoCase.length:myLeadsP.length,intOut=S.srv2?intAll.length-intCases.length:myLeads.length-myLeadsP.length;
@@ -1909,7 +1910,7 @@ function renderEmp(){
     h+=`<div class="small mute" style="margin-bottom:10px">When ${own?"you mark":"they mark"} a customer <b>Interested</b>, the lead form opens in the call window and the case goes to the person ${own?"you choose":"they choose"} for further process. ${own&&!isLead()?"You can see every update here.":""}</div>`;
     if(tMates.length){const n=k=>intPool[k].filter(inP).length,chip=(k,l)=>`<button class="chip ${intF===k?"on":""}" data-intf="${esc(k)}">${esc(l)} · ${n(k)}</button>`;
       h+=`<div class="intf"><span class="small mute">Show:</span>${chip("mine",own?"Mine":"Theirs")}${chip("team",(own?"My team":"Team"))}${chip("all","All")}<span class="intf-sep"></span>${tMates.map(e=>chip(e.id,e.name)).join("")}</div>
-       <div class="small mute" style="margin:-4px 0 10px">${intF==="mine"?(own?"Cases you filled, or that are with you now.":"Cases they filled or that are with them."):intF==="all"?"Yours plus every case your team filled.":intF==="team"?"Cases filled by your team (by their login or the SM Name on the form).":"Cases filled by "+esc(empName(intF))+"."}</div>`}
+       <div class="small mute" style="margin:-4px 0 10px">${intF==="mine"?(own?"Cases you filled, or that are with you now.":"Cases they filled or that are with them."):intF==="all"?"Yours plus every case your team filled (each case once).":intF==="team"?"Cases filled by your team (by their login or the SM Name on the form) – also the ones they sent to you.":"Cases filled by "+esc(empName(intF))+" – also the ones sent on to someone else."}</div>`}
     h+=casesTable(myCases,{empty:intOut?"No leads on these dates.":intF!=="mine"?"No interested cases from your team in this period.":"No lead cases yet – mark a customer Interested on a call to open one."});
     if(noCase.length)h+=`<h3 style="margin:18px 0 8px">Interested, no case yet</h3><div class="card">${noCase.map(l=>leadRow(l)).join("")}</div>`;}
   }else if(ctab==="calls"){
