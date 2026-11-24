@@ -34,10 +34,12 @@ const ROLES = ["Admin", "Manager", "Team Lead", "Sales Manager", "Telecaller Exe
 // ---- Permission levels: each role starts with its defaults; Admin can tick/untick extras per person
 // (saved in Employees column K as e.g. "+reports, -doAssign"). Admin always has everything.
 const PERM_KEYS = ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "conn", "reports", "perf",
-  "doAssign", "caseEdit", "caseTL", "caseRemove", "empEdit", "pinReset", "sheet", "viewAs", "caseTransfer", "targetEdit", "scopeTeam", "scopeAll"];
-const TAB_KEYS = PERM_KEYS.slice(0, 12);
+  "doAssign", "caseEdit", "caseTL", "caseRemove", "empEdit", "pinReset", "sheet", "viewAs", "caseTransfer", "targetEdit", "scopeTeam", "scopeAll",
+  "today", "eod", "pDay", "pList", "pInt", "pLoan", "pCalls", "pMeet", "pConn"];   // 11.15: Today, EOD Report and each tab of a person's own page
+const PAGE_KEYS = ["pDay", "pList", "pInt", "pLoan", "pCalls", "pMeet", "pConn"];  // on for everyone unless Admin switches one off
+const TAB_KEYS = PERM_KEYS.slice(0, 12).concat(["eod"]);
 const ROLE_PERMS = {
-  "Manager":   ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "conn", "reports", "doAssign", "caseEdit", "caseTL", "empEdit", "pinReset", "scopeAll"],
+  "Manager":   ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "conn", "reports", "eod", "doAssign", "caseEdit", "caseTL", "empEdit", "pinReset", "scopeAll"],
   "Team Lead": ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "conn", "doAssign", "caseEdit", "pinReset", "scopeTeam"],
   "Sales Manager": [],            // own field work page – Admin can add tabs / actions / wider data
   "Telecaller Executive": []      // own calling page – Admin can add tabs / actions / wider data
@@ -55,7 +57,7 @@ function teamOf_(e, emps) {
 // null = can see everyone; otherwise the set of employee IDs this person may see / work with
 function limit_(me, emps) { const sc = scope_(me); return sc === "all" ? null : sc === "team" ? teamOf_(me, emps) : new Set([me.id]); }
 // Designations typed by Admin (e.g. "Operations Executive") work like a Telecaller: own page, then Admin adds access with Permissions
-const basePerms_ = role => ROLE_PERMS[role] || [];
+const basePerms_ = role => (ROLE_PERMS[role] || []).concat(["today"], PAGE_KEYS);
 const allowedPerms_ = role => PERM_ALLOWED[role] || PERM_ALLOWED["Telecaller Executive"];
 const isCustomRole_ = role => ROLES.indexOf(role) < 0;
 function roleOf_(raw) {                       // what's in the sheet → role
@@ -73,7 +75,9 @@ function perms_(e) {
   if (!e) return new Set();
   if (e.role === "Admin") return new Set(PERM_KEYS);
   const set = new Set(basePerms_(e.role)), ok = new Set(allowedPerms_(e.role));
-  String(e.permRaw || "").split(/[,\s]+/).forEach(t => { const k = t.slice(1); if (!ok.has(k)) return; if (t[0] === "+") set.add(k); else if (t[0] === "-") set.delete(k); });
+  const raw = String(e.permRaw || "").split(/[,\s]+/);
+  raw.forEach(t => { const k = t.slice(1); if (!ok.has(k)) return; if (t[0] === "+") set.add(k); else if (t[0] === "-") set.delete(k); });
+  if (set.has("reports") && raw.indexOf("-eod") < 0) set.add("eod");   // EOD Report came with "Reports" before it had its own tick
   return set;
 }
 function can_(me, key) { if (!perms_(me).has(key)) throw new Error("You don't have permission to do that – ask Admin"); }
@@ -318,7 +322,8 @@ function loadAll_(me) {
     transferTo: perms_(me).has("caseTransfer") ? transferTargets_(me, emps).map(x => [x.id, x.name, x.role]) : [],
     handTo: handTargets_(me, emps).map(x => [x.id, x.name, x.role]),
     connectors: connectorsFor_(me, emps),
-    cpData: true,                                     // this server knows "CP data" contacts (11.13+)
+    cpData: true,
+    pagePerms: true,                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
     stages: true,                                     // case window can save login / sanction dates and amounts (11.14+)
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
@@ -868,6 +873,7 @@ function setPerms_(me, id, list) {
   if (e.role === "Admin") throw new Error("Admin always has full access");
   const ok = allowedPerms_(e.role), want = new Set(list.filter(k => ok.indexOf(k) >= 0)), base = new Set(basePerms_(e.role));
   const diff = ok.filter(k => want.has(k) !== base.has(k)).map(k => (want.has(k) ? "+" : "-") + k);
+  if (want.has("reports") && !want.has("eod") && diff.indexOf("-eod") < 0) diff.push("-eod");   // keep EOD off even though Reports is on
   const sh = sheet_("Employees");
   if (sh.getMaxColumns() < 11) sh.insertColumnsAfter(sh.getMaxColumns(), 11 - sh.getMaxColumns());
   if (!String(sh.getRange(1, 11).getDisplayValues()[0][0]).trim()) sh.getRange(1, 11).setValues([["Permissions (set in CRM)"]]);

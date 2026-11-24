@@ -137,6 +137,13 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .pmf{flex-wrap:wrap;align-items:center}.pmf .sp{flex:1}
 @media(max-width:520px){.pmf .btn{flex:1}.pmf .sp{display:none}#pdef{flex-basis:100%}}
 .pgrid.pgrid3{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:560px){.pgrid.pgrid3{grid-template-columns:1fr}}
+.am-t th,.am-t td{padding:6px 7px;text-align:center}.am-t .am-n{text-align:left;min-width:170px;position:sticky;left:0;background:#fff;z-index:1}
+.am-t .am-g{font-size:12px;color:var(--brand);border-bottom:2px solid var(--brand)}.am-t .am-h{vertical-align:bottom;height:120px;padding:4px 2px}
+.am-t .am-h span{writing-mode:vertical-rl;transform:rotate(180deg);font-size:12px;font-weight:600;white-space:nowrap;color:#445}
+.am-on{color:var(--green);font-weight:700}.am-off{color:#b5bac4}.am-na{color:#d5dae3}.am-t tbody tr:hover td{background:#f6f8fc}
+.am-p{font-weight:700;padding:0;background:none;border:0;cursor:pointer;color:var(--brand);text-align:left}
+.amx summary{cursor:pointer}.amx+.card{margin-top:12px}
+.pmc{border:1px solid var(--line);border-radius:10px;padding:6px;background:#fbfcfe}.pmc-h{border:0;padding:4px 6px;font-size:14px}.pmc-s{padding:4px 0 0 26px}
 .pgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}@media(max-width:560px){.pgrid{grid-template-columns:1fr}}.pgrp+.pgrp{margin-top:16px}
 .btn.danger{background:var(--red);border-color:var(--red);color:#fff}.smrow .smlab{font-size:12px;font-weight:700;color:#16674a;background:#e6f4ef;border-radius:6px;padding:3px 8px;align-self:center}.smrow .smlab.out{color:#a35b00;background:#fff4e0}
 .bulkbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;border-color:#c9d6f6;background:#f7f9ff;position:sticky;top:8px;z-index:5}.bulkbar select{min-width:220px}
@@ -484,19 +491,26 @@ const empName=id=>id==="ADMIN_LOG"?"Admin":(emp(id)?.name||id||"—");
 const isLead=()=>!ME||rank(ME.role)<=rank("Team Lead")||TAB_KEYS.some(k=>can(k));
 /* ---- Permission levels (same lists as the server). Role defaults + per-person ticks set by Admin. ---- */
 const SCOPE_OPTS=[["own","Only their own","their own contacts, calls & cases"],["team","Their team","everyone under the same Team Lead"],["all","Everyone","the whole company"]];
-const PERM_DEF=[["Tabs they can see",[["dash","Dashboard"],["lead","Interested"],["cases","Lead Cases"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],["team","Employees / My Team"],["logs","Call Logs"],["meet","Field Work"],["conn","Connectors"],["reports","Reports & downloads"],["perf","Performance & targets"]]],
+/* "Their own page" tabs are on for everyone by default – Admin can switch any of them off (server 11.15+) */
+const PAGE_DEF=[["pDay","My day"],["pList","My calling list"],["pInt","My interested"],["pLoan","Login · Sanction · Disbursal"],["pCalls","Call history"],["pMeet","My field work"],["pConn","My connectors"]];
+const PAGE_KEYS=PAGE_DEF.map(x=>x[0]),NEW_PERM=new Set([...PAGE_KEYS,"today","eod"]);
+const PERM_DEF=[["Their own page",PAGE_DEF],["Team tabs (top bar)",[["today","Today"],["dash","Dashboard"],["lead","Interested"],["cases","Lead Cases"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],["team","Employees / My Team"],["logs","Call Logs"],["meet","Field Work"],["conn","Connectors"],["eod","EOD Report"],["reports","Reports & downloads"],["perf","Performance & targets"]]],
   ["What they can do",[["doAssign","Assign contacts & share out"],["caseEdit","Open & edit lead cases"],["caseTL","Move a case to another Team Lead"],["caseTransfer","Transfer a case (Admin by default)"],["caseRemove","Remove lead cases"],["empEdit","Add, edit & remove employees"],["pinReset","Reset PINs"],["sheet","Open the Google Sheet"],["viewAs","Open anyone's page (Viewing as)"],["targetEdit","Set monthly targets"]]]];
 const PERM_KEYS=[...PERM_DEF.flatMap(g=>g[1].map(x=>x[0])),"scopeTeam","scopeAll"];
-const TAB_KEYS=PERM_DEF[0][1].map(x=>x[0]);
-const ROLE_PERMS={"Manager":["dash","lead","cases","byemp","assign","import","team","logs","meet","conn","reports","doAssign","caseEdit","caseTL","empEdit","pinReset","scopeAll"],
+const TAB_KEYS=["dash","lead","cases","byemp","assign","import","team","logs","meet","conn","reports","perf","eod"];
+const ROLE_PERMS={"Manager":["dash","lead","cases","byemp","assign","import","team","logs","meet","conn","reports","eod","doAssign","caseEdit","caseTL","empEdit","pinReset","scopeAll"],
   "Team Lead":["dash","lead","cases","byemp","assign","import","team","logs","meet","conn","doAssign","caseEdit","pinReset","scopeTeam"],"Sales Manager":[],"Telecaller Executive":[]};
 const NOT_EMP=PERM_KEYS.filter(k=>k!=="empEdit");
 const PERM_ALLOWED={"Manager":PERM_KEYS,"Team Lead":NOT_EMP,"Sales Manager":NOT_EMP,"Telecaller Executive":NOT_EMP.filter(k=>k!=="pinReset")};
-const basePerms=r=>ROLE_PERMS[r]||[],allowedPerms=r=>PERM_ALLOWED[r]||PERM_ALLOWED["Telecaller Executive"];
+const basePerms=r=>[...(ROLE_PERMS[r]||[]),"today",...PAGE_KEYS],allowedPerms=r=>PERM_ALLOWED[r]||PERM_ALLOWED["Telecaller Executive"];
 const scopeOf=set=>set.has("scopeAll")?"all":set.has("scopeTeam")?"team":"own";
 function permsOf(e){if(!e)return new Set();if(e.role==="Admin")return new Set(PERM_KEYS);const set=new Set(basePerms(e.role)),ok=new Set(allowedPerms(e.role));
-  String(e.permRaw||"").split(/[,\s]+/).forEach(t=>{const k=t.slice(1);if(!ok.has(k))return;if(t[0]==="+")set.add(k);else if(t[0]==="-")set.delete(k)});return set}
+  const raw=String(e.permRaw||"").split(/[,\s]+/);raw.forEach(t=>{const k=t.slice(1);if(!ok.has(k))return;if(t[0]==="+")set.add(k);else if(t[0]==="-")set.delete(k)});
+  if(set.has("reports")&&!raw.includes("-eod"))set.add("eod");   // EOD came with "Reports" before it had its own tick
+  return set}
 const can=k=>!ME||ME.role==="Admin"||(Array.isArray(ME.perms)?ME.perms.includes(k):permsOf(ME).has(k));
+/* new tab ticks need server 11.15 – with an older server they stay on (EOD follows "Reports" as before) */
+const pcan=k=>!NEW_PERM.has(k)||S.pagePerms?can(k):k==="eod"?can("reports"):true;
 const canViewAs=()=>!ME||ME.role==="Admin"||(isLead()&&can("viewAs"));   // "Viewing as" (open anyone's page): Admin, or anyone Admin allows
 const isTL=()=>!!ME&&ME.role==="Team Lead";                 // Team Leads get only their own team from the server
 // Teams: a Team Lead + everyone whose "Team Lead" is them. Admin / Manager can filter every page by team.
@@ -603,7 +617,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu,by,form,force,connector){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force,connector})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -821,7 +835,7 @@ function renderAdmin(){
   if(!S.srv2&&(view.tab==="cases"||view.tab==="myteam"))view.tab="dash";
   const dueN=CASES().filter(c=>{const x=fuState(c);return x==="over"||x==="today"}).length;
   const tabs=[["today","Today"+(dueN?" · "+dueN:"")],["dash","Dashboard"],["lead","Interested"],...(S.srv2?[["cases","Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine",ME.role==="Sales Manager"?"My page":"My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(S.connSrv?[["conn","🤝 Connectors"]]:[]),["eod","📋 EOD Report"],["perf","📈 Performance"],["reports","⬇ Reports"]]
-    .filter(([k])=>k==="mine"||k==="today"||can(k==="myteam"?"team":k==="eod"?"reports":k));   /* tabs this person is allowed to see */
+    .filter(([k])=>k==="mine"||pcan(k==="myteam"?"team":k));   /* tabs this person is allowed to see */
   if(!tabs.length)tabs.push(["mine","My calls"]);
   if(!tabs.some(t=>t[0]===view.tab))view.tab=tabs[0][0];
   let h=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${view.tab===k?"on":""}" data-tab="${k}">${l}</button>`).join("")}</div>`;
@@ -1616,16 +1630,42 @@ function accessLabel(e){if(e.role==="Admin")return'<span class="pill" style="bac
   const n=String(e.permRaw||"").split(/[,\s]+/).filter(t=>/^[+-]/.test(t)&&allowedPerms(e.role).includes(t.slice(1))).length;
   if(n)return `<span class="pill" style="background:#fff4e0;color:#b26a00">Custom · ${n} change${n===1?"":"s"}</span>`;
   return rank(e.role)>rank("Team Lead")?`<span class="mute">${e.role==="Sales Manager"?"Own field work page":"Own calling page"}</span>${isCustomRole(e.role)?'<div class="small mute">custom designation</div>':""}`:'<span class="mute">Role default</span>'}
+/* Admin: one table showing which tabs each person can open (✓). Click a name to change it. */
+function accessMatrix(){
+  const people=S.employees.filter(e=>e.active!==false&&e.role!=="Admin"),own=PERM_DEF[0][1],
+    G=[["My calls",own.filter(x=>MC_KEYS.includes(x[0]))],["Own page",own.filter(x=>!MC_KEYS.includes(x[0]))],["Team tabs",PERM_DEF[1][1]]];
+  if(!people.length)return "";
+  const has=(e,k)=>{const p=permsOf(e);if(S.pagePerms||!NEW_PERM.has(k))return p.has(k);return k==="eod"?p.has("reports"):true};
+  const desk=e=>rank(e.role)<=rank("Team Lead")||TAB_KEYS.some(k=>has(e,k));
+  const cell=(e,k)=>{const fieldOnly=(k==="pMeet"&&pageKind(e)==="leads")||(PAGE_KEYS.includes(k)&&k!=="pMeet"&&k!=="pConn"&&pageKind(e)==="field");
+    if(fieldOnly)return `<td class="am-na" title="Not on a ${esc(e.role)}'s page">·</td>`;
+    const on=has(e,k);
+    return `<td class="${on?"am-on":"am-off"}" title="${on?"Can open":"Cannot open"}">${on?"✓":"–"}</td>`};
+  return `<details class="card pad amx" open><summary><b>Who can open which tab</b> <span class="small mute">– ✓ can open · – switched off · click a name to change</span></summary>
+   <div class="tw" style="margin-top:10px"><table class="am-t"><thead><tr><th rowspan="2" class="am-n">Person</th>${G.map(([g,it])=>`<th colspan="${it.length}" class="am-g">${esc(g.replace(/ \(.*\)/,""))}</th>`).join("")}</tr>
+   <tr>${G.flatMap(([,it])=>it.map(([k,l])=>`<th class="am-h" title="${esc(l)}"><span>${esc(l)}</span></th>`)).join("")}</tr></thead>
+   <tbody>${people.map(e=>{const n=G.flatMap(g=>g[1]).filter(([k])=>has(e,k)).length;return `<tr><td class="am-n"><button class="lnk am-p" data-perm="${esc(e.id)}">${esc(e.name)}</button><div class="small mute">${esc(e.role)}${n?"":" · no tabs"}</div></td>${G.flatMap(([,it])=>it.map(([k])=>cell(e,k))).join("")}</tr>`}).join("")}</tbody></table></div>
+   ${S.pagePerms?"":'<div class="small" style="margin-top:8px;color:#8a5300">Switching off “their own page” tabs and Today / EOD Report works after the server update (Version 11.15). Until then those stay on.</div>'}</details>`}
+const MC_KEYS=["pDay","pList","pInt","pLoan","pCalls"];
+function ownPageBox(items,box,cur){const L=k=>items.find(x=>x[0]===k)[1];
+  return `<div class="pgrp"><div class="small" style="font-weight:700;margin-bottom:6px">Their own page</div>
+   <div class="pmc"><label class="perm pmc-h"><input type="checkbox" id="pkMc"> <span><b>📞 My calls</b> <span class="small mute">– <span id="pkMcN"></span></span></span></label>
+    <div class="pgrid pmc-s">${MC_KEYS.map(k=>box(k,L(k))).join("")}</div></div>
+   <div class="pgrid" style="margin-top:6px">${box("pMeet","🗺 "+L("pMeet"))}${box("pConn","🤝 "+L("pConn"))}</div></div>`}
 function openPerms(id){const e=emp(id);if(!e||e.role==="Admin")return;const base=new Set(basePerms(e.role)),cur=permsOf(e),AL=allowedPerms(e.role);
-  const box=(k,l)=>{const allowed=AL.includes(k);return `<label class="perm ${allowed?"":"off"}"><input type="checkbox" data-pk="${k}" ${cur.has(k)?"checked":""} ${allowed?"":"disabled"}> <span>${esc(l)}</span>${!allowed?`<em>${k==="empEdit"?"Admin / Manager only":"Not for this role"}</em>`:base.has(k)?'<em>default</em>':""}</label>`};
+  const pk=pageKind(e),notHere=k=>(k==="pMeet"&&pk==="leads")||(["pDay","pList","pInt","pLoan","pCalls"].includes(k)&&pk==="field");
+  const box=(k,l)=>{const allowed=AL.includes(k);return `<label class="perm ${allowed?"":"off"}"><input type="checkbox" data-pk="${k}" ${cur.has(k)?"checked":""} ${allowed?"":"disabled"}> <span>${esc(l)}</span>${!allowed?`<em>${k==="empEdit"?"Admin / Manager only":"Not for this role"}</em>`:notHere(k)?`<em>not on a ${esc(e.role)}'s page</em>`:base.has(k)?'<em>default</em>':""}</label>`};
   $("#modal").style.maxWidth="780px";
   $("#modal").innerHTML=`<div class="pmw"><div class="mh"><div><b>Permissions – ${esc(e.name)}</b><div class="small mute">${esc(e.role)} · ticks marked <i>default</i> come with the role</div></div><button class="x" id="mc">✕</button></div>
-   <div class="mb">${PERM_DEF.map(([g,items])=>`<div class="pgrp"><div class="small" style="font-weight:700;margin-bottom:6px">${g}</div><div class="pgrid">${items.map(([k,l])=>box(k,l)).join("")}</div></div>`).join("")}
+   <div class="mb">${PERM_DEF.map(([g,items],gi)=>gi===0?ownPageBox(items,box,cur):`<div class="pgrp"><div class="small" style="font-weight:700;margin-bottom:6px">${g}</div><div class="pgrid">${items.map(([k,l])=>box(k,l)).join("")}</div></div>`).join("")}
     <div class="pgrp"><div class="small" style="font-weight:700;margin-bottom:6px">Whose data they see</div><div class="pgrid pgrid3">${SCOPE_OPTS.map(([v,l,d])=>`<label class="perm"><input type="radio" name="pscope" value="${v}" ${scopeOf(cur)===v?"checked":""}> <span><b>${l}</b><div class="small mute">${d}</div></span>${scopeOf(base)===v?"<em>default</em>":""}</label>`).join("")}</div>
-    ${rank(e.role)>rank("Team Lead")?`<div class="small mute" style="margin-top:10px">Tick any tab above and ${esc(e.name.split(" ")[0])} gets the full CRM layout with those tabs, plus a <b>My ${e.role==="Sales Manager"?"page":"calls"}</b> tab for their usual page.</div>`:""}</div></div>
+    ${rank(e.role)>rank("Team Lead")?`<div class="small mute" style="margin-top:10px">Tick any <b>Team tab</b> above and ${esc(e.name.split(" ")[0])} gets the full CRM layout with those tabs, plus a <b>My ${e.role==="Sales Manager"?"page":"calls"}</b> tab for their usual page.</div>`:""}</div></div>
    <div class="mf pmf"><button class="btn" id="pdef" title="Put back the usual access for a ${esc(e.role)}">↺ Reset to default</button><span class="sp"></span><button class="btn" id="mc2">Cancel</button><button class="btn pri" id="psave">Save permissions</button></div></div>`;
   $("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mc").onclick=close;$("#mc2").onclick=close;
-  $("#pdef").onclick=()=>{document.querySelectorAll("[data-pk]").forEach(x=>{if(!x.disabled)x.checked=base.has(x.dataset.pk)});document.querySelectorAll("[name=pscope]").forEach(x=>x.checked=x.value===scopeOf(base))};
+  const mc=$("#pkMc"),sub=[...document.querySelectorAll("[data-pk]")].filter(x=>MC_KEYS.includes(x.dataset.pk));
+  const syncMc=()=>{if(!mc)return;const n=sub.filter(x=>x.checked).length;mc.checked=n>0;mc.indeterminate=n>0&&n<sub.length;$("#pkMcN").textContent=n===sub.length?"all 5 tabs":n?n+" of 5 tabs":"off – hidden"};
+  if(mc){mc.onchange=()=>{sub.forEach(x=>x.checked=mc.checked);syncMc()};sub.forEach(x=>x.addEventListener("change",syncMc));syncMc()}
+  $("#pdef").onclick=()=>{document.querySelectorAll("[data-pk]").forEach(x=>{if(!x.disabled)x.checked=base.has(x.dataset.pk)});document.querySelectorAll("[name=pscope]").forEach(x=>x.checked=x.value===scopeOf(base));syncMc()};
   $("#psave").onclick=async()=>{const sc=(document.querySelector("[name=pscope]:checked")||{}).value||"own";
     const want=[...document.querySelectorAll("[data-pk]:checked")].map(x=>x.dataset.pk).concat(sc==="all"?["scopeAll"]:sc==="team"?["scopeTeam"]:[]);
     const name=k=>(PERM_DEF.flatMap(g=>g[1]).find(x=>x[0]===k)||[])[1];
@@ -1645,6 +1685,7 @@ function aTeam(){
    <button class="btn pri" id="addEmp">Add</button></div>
    <p class="small mute" style="margin:8px 0 0">They log in with this <b>name</b> and PIN (names must be unique), and can change the PIN later. Pick a <b>Team Lead</b> for telecallers – each Team Lead sees and assigns only their own team. Admin and Manager see everyone.</p></div>`:"";
   if(ME&&ME.role==="Admin")h+=`<div class="small" style="margin:0 0 12px;padding:10px 12px;background:var(--brand-soft);border-radius:10px">🛡 <b>Permissions:</b> each role starts with its usual access. Click <b>Permissions</b> on anyone to switch tabs, actions and whose data they see on or off for that one person. Admin always has full access.</div>`;
+  if(ME&&ME.role==="Admin")h+=accessMatrix();
   h+=`<div class="card tw"><table><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Role</th><th>Team Lead</th><th>Contacts</th><th>Access</th><th>Login</th><th></th></tr>`;
   h+=S.employees.map(e=>{const m=S.leads.filter(l=>l.assignedTo===e.id),cm=canManageRole(e.role)||(ME&&e.id===ME.id),self=ME&&e.id===ME.id;
     return `<tr><td class="mute">${esc(e.id)}</td><td><b>${esc(e.name)}</b>${self?' <span class="small mute">(you)</span>':""}</td><td class="num">${esc(e.phone)||'<span class="mute">—</span>'}</td><td>${esc(e.role)}</td><td>${e.role==="Team Lead"?'<span class="small mute">leads a team</span>':e.tl?esc(empName(e.tl)):'<span class="mute">—</span>'}</td><td class="num">${m.length}</td><td class="small">${accessLabel(e)}</td>
@@ -1895,14 +1936,23 @@ const lastOf=l=>l.logs[0]||(l.lastRemark||l.lastAt?{remark:l.lastRemark,at:l.las
 // Which sections a person's page has: Sales Managers = field work only, Telecaller Executives = leads only, others = both
 const pageKind=e=>!e?"both":e.role==="Sales Manager"?"field":e.role==="Telecaller Executive"?"leads":"both";
 const showEtabs=()=>!!ME&&view.who!=="admin"&&(view.who===ME.id||isLead())&&(pageKind(emp(view.who))==="both"||!!S.connSrv);
-const etabs=()=>showEtabs()?`<div class="tabs">${(ME&&view.who===ME.id?[["leads","My calls"],["meet","My field work"],["conn","🤝 My connectors"]]:[["leads","Calls"],["meet","Field work"],["conn","🤝 Connectors"]]).filter(([k])=>(k!=="meet"||pageKind(emp(view.who))==="both")&&(k!=="conn"||S.connSrv)).map(([k,l])=>`<button class="tab ${(view.etab||"leads")===k?"on":""}" data-etab="${k}">${l}</button>`).join("")}</div>`:"";
+/* on their own page a person sees only the tabs Admin allows; Admin / Team Lead looking at someone's page see everything */
+const CTAB_PERM={today:"pDay",leads:"pList",int:"pInt",cases:"pLoan",calls:"pCalls"};
+const pageOk=k=>!ME||view.who!==ME.id||pcan(k);
+const etabList=()=>(ME&&view.who===ME.id?[["leads","My calls"],["meet","My field work"],["conn","🤝 My connectors"]]:[["leads","Calls"],["meet","Field work"],["conn","🤝 Connectors"]]).filter(([k])=>(k!=="meet"||pageKind(emp(view.who))==="both")&&(k!=="conn"||S.connSrv)
+  &&(k==="leads"?Object.values(CTAB_PERM).some(pageOk):pageOk(k==="meet"?"pMeet":"pConn")));
+const noTabsMsg=()=>`<div class="card empty" style="margin-top:10px">🔒 Admin has not switched on any tabs for you yet. Ask Admin to give you access in <b>Employees → Permissions</b>.</div>`;
+const etabs=()=>showEtabs()?`<div class="tabs">${etabList().map(([k,l])=>`<button class="tab ${(view.etab||"leads")===k?"on":""}" data-etab="${k}">${l}</button>`).join("")}</div>`:"";
 function bindEtabs(){document.querySelectorAll("[data-etab]").forEach(b=>b.onclick=()=>{view.etab=b.dataset.etab;render()})}
 function renderEmp(){
   const me=emp(view.who);if(!me){view.who="admin";return render()}
+  if(ME&&pageKind(me)==="field"&&!pageOk("pMeet")){setApp(`<div style="font-size:20px;font-weight:700">${esc(me.name)}</div>`+noTabsMsg());return}
   if(ME&&pageKind(me)==="field"){view.etab="meet";
     $("#app").innerHTML=(view.who!==ME.id?`<div style="margin-bottom:14px"><div class="mute small">Field work of</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>`:`<div style="margin-bottom:14px"><div class="mute small">Good day,</div><div style="font-size:20px;font-weight:700">${esc(me.name)} – my field work</div></div>`)+aMeetings();
     bindRange();bindMeetings();bindTips();return}
   if(ME&&pageKind(me)==="leads"&&view.etab==="meet")view.etab="leads";
+  {const el=etabList().map(x=>x[0]);if(showEtabs()&&el.length&&!el.includes(view.etab||"leads"))view.etab=el[0];
+   if(ME&&view.who===ME.id&&!el.length&&!Object.values(CTAB_PERM).some(pageOk)){setApp(`<div style="font-size:20px;font-weight:700">${esc(me.name)}</div>`+noTabsMsg());return}}
   if(showEtabs()&&view.etab==="conn"){setApp(etabs()+aConn(me.id));bindEtabs();bindConn();afterRender();return}
   if(showEtabs()&&view.etab==="meet"){$("#app").innerHTML=etabs()+(ME&&view.who!==ME.id?`<div style="margin-bottom:14px"><div class="mute small">Field work of</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>`:"")+aMeetings();bindEtabs();bindRange();bindMeetings();bindTips();return}
   const mine=S.leads.filter(l=>l.assignedTo===me.id);
@@ -1912,7 +1962,8 @@ function renderEmp(){
   const calls=allLogs().filter(g=>g.by===me.id&&inRange(g.at));
   const con=calls.filter(g=>CONNECTED(g.outcome)).length;
   const oc=k=>calls.filter(g=>g.outcome===k).length;
-  const ctab=view.ctab||(own?"today":"leads");
+  const ctOk=Object.keys(CTAB_PERM).filter(k=>pageOk(CTAB_PERM[k]));
+  const ctab=ctOk.includes(view.ctab||(own?"today":"leads"))?(view.ctab||(own?"today":"leads")):(ctOk[0]||"none");
   const t0=sod(Date.now()),cbAll=mine.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<t0+DAY).sort((a,b)=>a.followUp-b.followUp);
   const myLeadsP=leadsIn(mine),myLeads=mine.filter(isLeadC);
   /* Leads tab follows the date chosen above (by lead date) */
@@ -1942,7 +1993,8 @@ function renderEmp(){
   <div class="card stat"><span>Converted</span><b style="color:var(--brand)">${oc("conv")}</b><div class="small mute">${oc("cb")} call back later</div></div>
   <div class="card stat"><span>${own?"My calling list":"Calling list"}</span><b>${mine.length}</b><div class="small mute">${mine.filter(l=>l.status==="new").length} not yet called</div></div>
   <div class="card stat"><span>Callbacks due</span><b style="color:var(--amber)">${due.length}</b><div class="small mute">now</div></div></div>`;
-  h+=`<div class="tabs" style="margin-bottom:12px">${[["today",(own?"My day":"Today")+" · "+cbAll.length],["leads",(own?"My calling list":"Calling list")+" · "+mine.length],["int",(own?"My interested":"Interested")+" · "+intN],["cases","Login · Sanction · Disbursal · "+loanPool.length],["calls","Call history · "+calls.length]].map(([k,l])=>`<button class="tab ${ctab===k?"on":""}" data-ctab="${k}">${l}</button>`).join("")}</div>`;
+  h+=`<div class="tabs" style="margin-bottom:12px">${[["today",(own?"My day":"Today")+" · "+cbAll.length],["leads",(own?"My calling list":"Calling list")+" · "+mine.length],["int",(own?"My interested":"Interested")+" · "+intN],["cases","Login · Sanction · Disbursal · "+loanPool.length],["calls","Call history · "+calls.length]].filter(([k])=>ctOk.includes(k)).map(([k,l])=>`<button class="tab ${ctab===k?"on":""}" data-ctab="${k}">${l}</button>`).join("")}</div>`;
+  if(ctab==="none")h+=noTabsMsg();
   if(ctab==="today"){
     const od=cbAll.filter(l=>l.followUp<t0),td=cbAll.filter(l=>l.followUp>=t0),fresh=mine.filter(l=>l.status==="new");
     const casesMine=CASES().filter(c=>c["Telecaller ID"]===me.id),moved=casesMine.filter(c=>c.upd&&c.upd>=Date.now()-3*DAY).sort((a,b)=>b.upd-a.upd);
