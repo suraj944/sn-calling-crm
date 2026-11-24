@@ -144,6 +144,8 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .am-p{font-weight:700;padding:0;background:none;border:0;cursor:pointer;color:var(--brand);text-align:left}
 .amx summary{cursor:pointer}.amx+.card{margin-top:12px}
 .pmc{border:1px solid var(--line);border-radius:10px;padding:6px;background:#fbfcfe}.pmc-h{border:0;padding:4px 6px;font-size:14px}.pmc-s{padding:4px 0 0 26px}
+.stat.sclk{cursor:pointer;position:relative;transition:border-color .15s,box-shadow .15s}.stat.sclk:hover,.stat.sclk:focus-visible{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft);outline:0}
+.stat .sgo{display:block;font-style:normal;font-size:12px;font-weight:600;color:var(--brand);margin-top:6px;opacity:.75}.stat.sclk:hover .sgo{opacity:1}
 .pgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}@media(max-width:560px){.pgrid{grid-template-columns:1fr}}.pgrp+.pgrp{margin-top:16px}
 .btn.danger{background:var(--red);border-color:var(--red);color:#fff}.smrow .smlab{font-size:12px;font-weight:700;color:#16674a;background:#e6f4ef;border-radius:6px;padding:3px 8px;align-self:center}.smrow .smlab.out{color:#a35b00;background:#fff4e0}
 .bulkbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;border-color:#c9d6f6;background:#f7f9ff;position:sticky;top:8px;z-index:5}.bulkbar select{min-width:220px}
@@ -1943,7 +1945,8 @@ const etabList=()=>(ME&&view.who===ME.id?[["leads","My calls"],["meet","My field
   &&(k==="leads"?Object.values(CTAB_PERM).some(pageOk):pageOk(k==="meet"?"pMeet":"pConn")));
 const noTabsMsg=()=>`<div class="card empty" style="margin-top:10px">🔒 Admin has not switched on any tabs for you yet. Ask Admin to give you access in <b>Employees → Permissions</b>.</div>`;
 const etabs=()=>showEtabs()?`<div class="tabs">${etabList().map(([k,l])=>`<button class="tab ${(view.etab||"leads")===k?"on":""}" data-etab="${k}">${l}</button>`).join("")}</div>`:"";
-function bindEtabs(){document.querySelectorAll("[data-etab]").forEach(b=>b.onclick=()=>{view.etab=b.dataset.etab;render()})}
+function bindEtabs(){document.querySelectorAll("[data-etab]").forEach(b=>b.onclick=()=>{view.etab=b.dataset.etab;render()});
+  document.querySelectorAll("[data-sdr]").forEach(c=>{const go=()=>eodDrill(+c.dataset.sdr);c.onclick=go;c.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go()}}})}
 function renderEmp(){
   const me=emp(view.who);if(!me){view.who="admin";return render()}
   if(ME&&pageKind(me)==="field"&&!pageOk("pMeet")){setApp(`<div style="font-size:20px;font-weight:700">${esc(me.name)}</div>`+noTabsMsg());return}
@@ -1986,13 +1989,16 @@ function renderEmp(){
   const backBtn=ME&&own&&isLead()&&!canViewAs()?`<button class="btn sm" id="backTeam">← Team overview</button>`:"";
   let h=etabs()+`<div style="margin-bottom:14px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">${backBtn}<div style="flex:1"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>${tlBtn}</div>`;
   h+=rangeBar();
+  /* the number boxes open the list behind them (same panel as the EOD report) */
+  view.eodDr=[];const rl=rangeLabel(),SD=(title,kind,items)=>{view.eodDr.push({title,kind,items});return `data-sdr="${view.eodDr.length-1}" role="button" tabindex="0"`};
+  const ocL=k=>calls.filter(g=>g.outcome===k);
   h+=`<div class="stats">
-  <div class="card stat" title="Different mobile numbers called – calling the same number again is not counted twice"><span>Calls made</span><b>${uniqN(calls)}</b><div class="small mute">${calls.length?callsSub(calls):"in this period"}</div></div>
-  <div class="card stat" title="Different numbers that picked up at least once"><span>Connected</span><b>${uniqConn(calls)}</b><div class="small mute">${calls.length?Math.round(uniqConn(calls)/uniqN(calls)*100)+"% of numbers called":"—"}</div></div>
-  <div class="card stat" title="Customers marked Interested (or Converted) – counted on the day they first said they're interested"><span>Interested</span><b style="color:var(--green)">${myLeadsP.length}</b><div class="small mute">${oc("ni")} not interested</div></div>
-  <div class="card stat"><span>Converted</span><b style="color:var(--brand)">${oc("conv")}</b><div class="small mute">${oc("cb")} call back later</div></div>
-  <div class="card stat"><span>${own?"My calling list":"Calling list"}</span><b>${mine.length}</b><div class="small mute">${mine.filter(l=>l.status==="new").length} not yet called</div></div>
-  <div class="card stat"><span>Callbacks due</span><b style="color:var(--amber)">${due.length}</b><div class="small mute">now</div></div></div>`;
+  <div class="card stat sclk" ${SD(`Calls made – ${rl}`,"calls",calls)} title="Different mobile numbers called – calling the same number again is not counted twice. Click to see the calls."><span>Calls made</span><b>${uniqN(calls)}</b><div class="small mute">${calls.length?callsSub(calls):"in this period"}</div><i class="sgo">View list ›</i></div>
+  <div class="card stat sclk" ${SD(`Connected – ${rl}`,"calls",calls.filter(g=>CONNECTED(g.outcome)))} title="Different numbers that picked up at least once. Click to see the calls."><span>Connected</span><b>${uniqConn(calls)}</b><div class="small mute">${calls.length?Math.round(uniqConn(calls)/uniqN(calls)*100)+"% of numbers called":"—"}</div><i class="sgo">View list ›</i></div>
+  <div class="card stat sclk" ${SD(`Interested – ${rl}`,"leads",myLeadsP)} title="Customers marked Interested (or Converted) – counted on the day they first said they're interested. Click to see them."><span>Interested</span><b style="color:var(--green)">${myLeadsP.length}</b><div class="small mute">${oc("ni")} not interested</div><i class="sgo">View list ›</i></div>
+  <div class="card stat sclk" ${SD(`Converted – ${rl}`,"calls",ocL("conv"))} title="Calls marked Converted. Click to see them."><span>Converted</span><b style="color:var(--brand)">${oc("conv")}</b><div class="small mute">${oc("cb")} call back later</div><i class="sgo">View list ›</i></div>
+  <div class="card stat sclk" ${SD((own?"My calling list":"Calling list – "+me.name),"leads",mine)} title="Everyone on the calling list. Click to see them."><span>${own?"My calling list":"Calling list"}</span><b>${mine.length}</b><div class="small mute">${mine.filter(l=>l.status==="new").length} not yet called</div><i class="sgo">View list ›</i></div>
+  <div class="card stat sclk" ${SD("Callbacks due now","leads",due)} title="Call-backs whose time has come. Click to see them."><span>Callbacks due</span><b style="color:var(--amber)">${due.length}</b><div class="small mute">now</div><i class="sgo">View list ›</i></div></div>`;
   h+=`<div class="tabs" style="margin-bottom:12px">${[["today",(own?"My day":"Today")+" · "+cbAll.length],["leads",(own?"My calling list":"Calling list")+" · "+mine.length],["int",(own?"My interested":"Interested")+" · "+intN],["cases","Login · Sanction · Disbursal · "+loanPool.length],["calls","Call history · "+calls.length]].filter(([k])=>ctOk.includes(k)).map(([k,l])=>`<button class="tab ${ctab===k?"on":""}" data-ctab="${k}">${l}</button>`).join("")}</div>`;
   if(ctab==="none")h+=noTabsMsg();
   if(ctab==="today"){
@@ -2596,6 +2602,11 @@ function eodDrill(i){const d=(view.eodDr||[])[i];if(!d)return;let bg=$("#eodDrBg
     body=`<div class="eod-drsum"><b>${L.length}</b> case${L.length===1?"":"s"} · <b>${fmtL(amt)}</b> total amount</div>
      <div class="tw"><table class="eod-t eod-drt"><thead><tr><th>Lead code</th><th>Lead date</th><th>Customer</th><th>Product</th><th class="num">Amount</th><th>SM</th><th>With</th><th>Status</th><th></th></tr></thead><tbody>
      ${L.map(c=>`<tr data-ocase="${esc(c.code)}"><td><b>${esc(c.code)}</b></td><td class="num small">${c.leadD?new Date(c.leadD).toLocaleDateString("en-IN",{day:"2-digit",month:"short"}):"—"}</td><td><b>${esc(c["Customer Name"])}</b><div class="small mute">${esc(c["Contact Number"])}</div></td><td>${esc(c.Product)}</td><td class="num">${numOf(c["Amount Required"])?fmtL(numOf(c["Amount Required"])):"—"}</td><td>${esc(c["SM Name"])}</td><td>${esc(holderOf(c))||'<span class="mute">Not assigned</span>'}</td><td>${casePill(c)}</td><td><button class="btn sm">Open</button></td></tr>`).join("")}</tbody></table></div>`}
+  else if(d.kind==="leads"){const L=[...d.items].sort((a,b)=>(a.status==="cb"&&b.status==="cb"?(a.followUp||0)-(b.followUp||0):(b.lastCalled||b.created||0)-(a.lastCalled||a.created||0)));
+    const cs=l=>eodCaseFor(l),fu=l=>l.followUp?new Date(l.followUp).toLocaleString("en-IN",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}):"—";
+    body=`<div class="eod-drsum"><b>${L.length}</b> customer${L.length===1?"":"s"}${L.length?` · ${L.filter(l=>l.status==="new").length} not yet called`:""}</div>
+     ${L.length?`<div class="tw"><table class="eod-t eod-drt"><thead><tr><th>Customer</th><th>Number</th><th>Status</th><th>Follow-up</th><th>Last remark</th><th>Last called</th><th>Lead case</th><th></th></tr></thead><tbody>
+     ${L.map(l=>{const c=cs(l);return `<tr data-olead="${esc(l.id)}" data-ocode="${c?esc(c.code):""}"><td><b>${esc(l.name)}</b><div class="small mute">${esc(l.city||"")}${isCP(l)?' <span class="pill s-cp">CP</span>':""}</div></td><td class="num">${esc(l.phone)}</td><td>${pill(l.status)}</td><td class="small">${l.status==="cb"?fu(l):'<span class="mute">—</span>'}</td><td class="small">${esc(l.lastRemark||"")||'<span class="mute">—</span>'}</td><td class="small">${l.lastAt?fmt(l.lastAt):'<span class="mute">Not called</span>'}</td><td>${c?`<b>${esc(c.code)}</b><div>${casePill(c)}</div>`:'<span class="mute small">No case</span>'}</td><td><button class="btn sm">Open</button></td></tr>`}).join("")}</tbody></table></div>`:'<div class="empty">Nobody here.</div>'}`}
   else{const L=[...d.items].sort((a,b)=>(b.at||0)-(a.at||0));
     body=`<div class="eod-drsum"><b>${uniqN(L)}</b> different number${uniqN(L)===1?"":"s"} · ${L.length} call${L.length===1?"":"s"} in total</div>
      <div class="tw"><table class="eod-t eod-drt"><thead><tr><th>Time</th><th>Customer</th><th>Number</th><th>Outcome</th><th>Called by</th><th>Remark</th><th>Lead case</th><th></th></tr></thead><tbody>
