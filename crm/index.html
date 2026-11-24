@@ -68,7 +68,7 @@ tr:last-child td{border-bottom:0}
 .s-cb{background:var(--amber-soft);color:var(--amber)}
 .s-na{background:var(--violet-soft);color:var(--violet)}
 .s-wn{background:#eceff3;color:#374151}
-.s-nc{background:#e3f3f1;color:#0f6b62}
+.s-nc{background:#e3f3f1;color:#0f6b62}.s-rg{background:#fff1e6;color:#b45309}
 .wawrap{display:inline-flex;gap:0;align-items:stretch}.wawrap select{border-radius:10px 0 0 10px;border-right:0;max-width:150px}.btn.wa{background:#25D366;color:#073b1c;border-color:#25D366;border-radius:0 10px 10px 0;font-weight:700}.btn.wa:hover{background:#1ebe5a}
 .stat.act span{white-space:nowrap}
 .s-conv{background:var(--brand-soft);color:var(--brand)}
@@ -228,6 +228,8 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 .conn-hd{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-start;justify-content:space-between}.conn-btns{display:flex;gap:8px;align-items:center}
 .conn-stats{margin:14px 0 4px}.conn-flt{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.conn-flt input{flex:1 1 240px;min-width:0}.conn-flt select{flex:0 1 200px}
 .intf{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 8px}.intf-sep{width:1px;height:22px;background:var(--line,#e6e8ee);margin:0 4px}
+.sbox{display:flex;gap:0;min-width:0}.sbox input{flex:1;min-width:0;border-top-right-radius:0;border-bottom-right-radius:0}.sbox .sbtn{border-top-left-radius:0;border-bottom-left-radius:0;margin-left:-1px;white-space:nowrap;background:var(--ink,#111827);color:#fff;border-color:var(--ink,#111827)}
+.sbox input::-webkit-search-cancel-button{cursor:pointer}
 .conn-sm tbody tr{cursor:pointer}.conn-sm tbody tr:hover,.conn-sm tbody tr.on{background:#eef3ff}.conn-t tbody tr{cursor:pointer}.conn-t tbody tr:hover{background:#f6f8fc}.conn-t tbody tr:focus-visible{outline:2px solid #2453d6;outline-offset:-2px}
 .pill.conn-y{background:#e7f6ec;color:#166534}.pill.conn-n{background:#fff4e5;color:#92400e}
 .eod-pk-g{font-size:11.5px;font-weight:700;color:#6b7280;padding:8px 8px 2px}
@@ -412,6 +414,7 @@ const OUTCOMES={
   cb:{label:"Call back later",cls:"s-cb"},
   ni:{label:"Not interested",cls:"s-ni"},
   na:{label:"No answer / Busy",cls:"s-na"},
+  rg:{label:"Ringing",cls:"s-rg"},
   nc:{label:"Not connected",cls:"s-nc"},
   wn:{label:"Wrong / Switched off",cls:"s-wn"},
   conv:{label:"Converted",cls:"s-conv"},
@@ -767,7 +770,30 @@ function mobileCards(root){(root||document).querySelectorAll("table").forEach(t=
       if(i>0&&!onlyBtn&&lab&&c.childNodes.length){const w=document.createElement("div");w.className="rc-v";while(c.firstChild)w.appendChild(c.firstChild);c.appendChild(w)}
       if(i>0&&!onlyBtn&&(!txt||txt==="—"||txt==="–")&&!c.querySelector("input,select,button,img,svg"))c.classList.add("rc-empty")})})})}
 const isPhone=()=>window.matchMedia("(max-width:640px)").matches;
-function afterRender(){if(!isPhone())return;mobileCards(document.querySelector("main")||document);const on=document.querySelector(".tabs .tab.on");if(on)on.scrollIntoView({block:"nearest",inline:"center"})}
+// ---- Search boxes: redraw only what's around the box, never the box itself (no flicker, the phone keyboard stays open) ----
+const SEARCH_IDS=new Set(["eq","lq","q","cq","mq","connQ"]);let softT=null,softAfter=false;
+// type, then tap 🔍 Search or press Enter (phone keyboard: "Search"); emptying the box shows everything again
+function wireSearch(id,set){const el=$("#"+id);if(!el)return;const go=()=>{set(el.value);if(isPhone())el.blur();softAfter=true;clearTimeout(softT);render()};
+  el.oninput=()=>{if(!el.value.trim()){set("");softRender()}};
+  el.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();go()}};
+  const b=document.querySelector(`[data-sgo="${id}"]`);if(b)b.onclick=go}
+function softRender(){clearTimeout(softT);softT=setTimeout(()=>{softAfter=true;render()},150)}
+// keep the focused search box and replace everything else (also when the data refreshes in the background while someone is typing)
+function setApp(h,root){const app=root||$("#app"),a=document.activeElement;
+  if(a&&SEARCH_IDS.has(a.id)&&app.contains(a)){const t=document.createElement("div");t.innerHTML=h;if(patchKeep(app,t,a))return}
+  app.innerHTML=h}
+function patchKeep(live,fresh,keep){const path=[];let n=keep;while(n&&n!==live){path.unshift([...n.parentNode.childNodes].indexOf(n));n=n.parentNode}
+  if(n!==live)return false;
+  // check the new page has the same shape along the way to the box before touching anything
+  let L=live,N=fresh;for(const i of path){const a=L.childNodes[i],b=N.childNodes[i];if(!a||!b||a.nodeName!==b.nodeName||L.childNodes.length!==N.childNodes.length)return false;L=a;N=b}
+  if(N.id!==keep.id)return false;
+  L=live;N=fresh;
+  path.forEach((i,d)=>{const lk=[...L.childNodes],nk=[...N.childNodes],ln=lk[i],nn=nk[i];
+    lk.forEach((c,j)=>{if(j!==i)L.replaceChild(nk[j],c)});
+    if(d<path.length-1){[...ln.attributes].forEach(x=>{if(!nn.hasAttribute(x.name))ln.removeAttribute(x.name)});[...nn.attributes].forEach(x=>{if(ln.getAttribute(x.name)!==x.value)ln.setAttribute(x.name,x.value)})}
+    L=ln;N=nn});
+  return true}
+function afterRender(){if(softAfter){softAfter=false;if(isPhone())mobileCards(document.querySelector("main")||document);return}if(!isPhone())return;mobileCards(document.querySelector("main")||document);const on=document.querySelector(".tabs .tab.on");if(on)on.scrollIntoView({block:"nearest",inline:"center"})}
 function render(){
   setSync();requestAnimationFrame(afterRender);
   if(MODE==="login")return;
@@ -794,7 +820,7 @@ function renderAdmin(){
       ${view.team&&view.team!=="all"?`<span class="small mute">Showing only ${esc(teamName(view.team))}${view.team!=="none"?" ("+RAW.allEmps.filter(e=>e.active&&teamOf(e)===view.team).length+" people)":""}</span>`:""}</div>`;
   else if(isTL()||(ME&&rank(ME.role)>rank("Team Lead")))h+=`<div class="small mute" style="margin:-4px 0 12px">${S.employees.length>1?"Showing your team: "+esc(S.employees.map(e=>e.name).join(", ")):"Showing only your own contacts, calls and cases"}</div>`;
   h+=({today:aToday,perf:aPerf,dash:aDash,lead:aLeadsTab,cases:aCases,byemp:aByEmp,myteam:aMyTeam,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings,eod:aEOD,conn:()=>aConn(null)})[view.tab]();
-  $("#app").innerHTML=h;
+  setApp(h);
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{if(b.dataset.tab==="mine"){view.who=ME.id;view.etab="leads";render();return}view.tab=b.dataset.tab;render()});
   const ts=$("#teamSel");if(ts)ts.onchange=()=>{view.team=ts.value;view.sel.clear();if(view.lsel)view.lsel.clear();render()};
   bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();bindCasesTab();bindCases();bindToday();bindPerf();bindMonthly();if(view.tab==="eod")bindEOD();if(view.tab==="reports")bindSmReport();if(view.tab==="conn")bindConn();
@@ -883,7 +909,7 @@ function aLeadsTab(){
     .sort((a,b)=>(leadAt(b)||0)-(leadAt(a)||0));
   let h=rangeBar();
   h+=`<div class="card pad" style="margin-bottom:12px"><div class="row">
-    <input id="lq" placeholder="Search name, number, city" value="${esc(f.q)}" style="flex:1;min-width:180px">
+    <div class="sbox" style="flex:1;min-width:180px"><input id="lq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search name, number, city" value="${esc(f.q)}"><button type="button" class="btn sbtn" data-sgo="lq">🔍 Search</button></div>
     <select id="lwho"><option value="all">All telecallers</option>${S.employees.map(e=>`<option value="${esc(e.id)}" ${f.who===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}<option value="none" ${f.who==="none"?"selected":""}>Unassigned</option></select>
     <select id="lst"><option value="all">Interested + Converted</option><option value="int" ${f.st==="int"?"selected":""}>Interested (not yet converted)</option><option value="conv" ${f.st==="conv"?"selected":""}>Converted</option></select>
     <span class="mute small">${list.length} interested · ${esc(rangeLabel())}</span></div>
@@ -903,7 +929,7 @@ function aLeadsTab(){
 function bindLeadsTab(){
   const w=$("#lwho"),st=$("#lst"),q=$("#lq");if(!w)return;
   w.onchange=()=>{view.lf.who=w.value;render()};st.onchange=()=>{view.lf.st=st.value;render()};
-  q.oninput=e=>{view.lf.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#lq");n.focus();n.setSelectionRange(p,p)};
+  wireSearch("lq",v=>{view.lf.q=v});
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false));
   document.querySelectorAll("[data-lsel]").forEach(c=>c.onchange=()=>{c.checked?view.lsel.add(c.dataset.lsel):view.lsel.delete(c.dataset.lsel);render()});
   const la=$("#lall");if(la)la.onchange=e=>{document.querySelectorAll("[data-lsel]").forEach(c=>e.target.checked?view.lsel.add(c.dataset.lsel):view.lsel.delete(c.dataset.lsel));render()};
@@ -963,7 +989,7 @@ function bindRange(){
 }
 
 /* ================= METRICS ================= */
-const NOT_CONN=["na","nc","wn"];
+const NOT_CONN=["na","rg","nc","wn"];   // Ringing = phone rang, nobody picked up
 const CONNECTED=o=>!NOT_CONN.includes(o);
 const pct=(a,b)=>b?Math.round(a/b*100):0;
 function metrics(){
@@ -1048,11 +1074,11 @@ function activity(logs){
   const out=[...people.values()].map(p=>{const mine=logs.filter(g=>g.by===p.by);
     const mins=t=>{const d=new Date(t);return d.getHours()*60+d.getMinutes()};const avg=a=>Math.round(a.reduce((s,x)=>s+x,0)/a.length);
     const fa=avg(p.days.map(d=>mins(d.a))),la=avg(p.days.map(d=>mins(d.b)));const lab=v=>{const d=new Date(2000,0,1,Math.floor(v/60),v%60);return d.toLocaleTimeString("en-IN",{hour:"numeric",minute:"2-digit"})};
-    return {...p,first:lab(fa),last:lab(la),uniq:new Set(mine.map(custKey)).size,np:mine.filter(g=>g.outcome==="na"||g.outcome==="nc").length,wn:mine.filter(g=>g.outcome==="wn").length,con:mine.filter(g=>CONNECTED(g.outcome)).length,
+    return {...p,first:lab(fa),last:lab(la),uniq:new Set(mine.map(custKey)).size,np:mine.filter(g=>g.outcome==="na"||g.outcome==="rg"||g.outcome==="nc").length,wn:mine.filter(g=>g.outcome==="wn").length,con:mine.filter(g=>CONNECTED(g.outcome)).length,
       perHr:p.span>=15*60000?(p.calls/(p.span/3600000)).toFixed(1):"—"}}).sort((a,b)=>b.calls-a.calls);
   const hours=[];for(let i=8;i<=21;i++)hours.push({h:i,label:new Date(2000,0,1,i).toLocaleTimeString("en-IN",{hour:"numeric"}),n:0});
   logs.forEach(g=>{const x=hours.find(b=>b.h===new Date(g.at).getHours());if(x)x.n++});
-  return {people:out,hours,span:out.reduce((s,p)=>s+p.span,0),uniq:new Set(logs.map(custKey)).size,np:logs.filter(g=>g.outcome==="na"||g.outcome==="nc").length,wn:logs.filter(g=>g.outcome==="wn").length}
+  return {people:out,hours,span:out.reduce((s,p)=>s+p.span,0),uniq:new Set(logs.map(custKey)).size,np:logs.filter(g=>g.outcome==="na"||g.outcome==="rg"||g.outcome==="nc").length,wn:logs.filter(g=>g.outcome==="wn").length}
 }
 function activitySection(m){
   const A=activity(m.logs),one=(()=>{const[a,b]=rangeBounds();return sod(a)===sod(b)})();
@@ -1383,7 +1409,7 @@ function aMeetings(){
     <div class="card stat"><span>Developers</span><b>${c(m=>m.ent==="Developer")}</b></div>
     <div class="card stat"><span>Bankers & customers</span><b>${c(m=>m.ent==="Banker"||m.ent==="Customer")}</b></div></div>`;
   h+=`<div class="card pad" style="margin-bottom:12px"><div class="row">
-    <input id="mq" placeholder="Search name, entity, number, remarks" value="${esc(view.mq)}" style="flex:1;min-width:200px">
+    <div class="sbox" style="flex:1;min-width:200px"><input id="mq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search name, entity, number, remarks" value="${esc(view.mq)}"><button type="button" class="btn sbtn" data-sgo="mq">🔍 Search</button></div>
     ${isLead()&&view.who==="admin"?`<select id="mSm"><option value="all">All SMs</option>${sms.map(s=>`<option ${view.mSm===s?"selected":""}>${esc(s)}</option>`).join("")}</select>`:""}
     <select id="mEnt"><option value="all">Meeting entity: all</option>${M_ENTITY.map(s=>`<option ${view.mEnt===s?"selected":""}>${esc(s)}</option>`).join("")}</select>
     <select id="mInt"><option value="all">Interested & not</option>${[["Interested","Interested"],["Not interested","Not interested"],["none","Not marked yet"]].map(([k,l])=>`<option value="${k}" ${view.mInt===k?"selected":""}>${l}</option>`).join("")}</select>
@@ -1409,7 +1435,7 @@ function aMeetings(){
   return h;
 }
 function bindMeetings(){
-  const q=$("#mq");if(q)q.oninput=e=>{view.mq=e.target.value;const p=e.target.selectionStart;render();const n=$("#mq");n.focus();n.setSelectionRange(p,p)};
+  wireSearch("mq",v=>{view.mq=v});
   [["#mSm","mSm"],["#mEnt","mEnt"],["#mType","mType"],["#mInt","mInt"]].forEach(([s,k])=>{const el=$(s);if(el)el.onchange=()=>{view[k]=el.value;render()}});
   const add=$("#mAdd");if(add)add.onclick=()=>openMeeting(null);
   document.querySelectorAll("[data-medit]").forEach(b=>b.onclick=e=>{e.stopPropagation();openMeeting(b.dataset.medit)});
@@ -1481,7 +1507,7 @@ function aAssign(){
   const f=view.assignFilter,q=view.q.toLowerCase();
   const list=S.leads.filter(l=>(f==="all"||(f==="none"?!l.assignedTo:l.assignedTo===f))&&srch(q,[l.name,l.city],[l.phone]));
   let h=`<div class="card pad" style="margin-bottom:12px"><div class="row">
-   <input id="q" placeholder="Search name, number, city" value="${esc(view.q)}" style="flex:1;min-width:180px">
+   <div class="sbox" style="flex:1;min-width:180px"><input id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search name, number, city" value="${esc(view.q)}"><button type="button" class="btn sbtn" data-sgo="q">🔍 Search</button></div>
    <select id="af"><option value="all">All contacts</option>${isTL()?"":`<option value="none">Unassigned</option>`}${empOpts()}</select>
    <span class="mute small">${view.sel.size} selected</span>
    ${can("doAssign")?`<select id="toEmp"><option value="">Assign selected to…</option>${asgOpts()}</select>
@@ -1630,7 +1656,7 @@ document.addEventListener("input",e=>{const t=e.target;if(t&&/^(lgPin|ePin|fPin|
 const normName=s=>String(s||"").trim().toLowerCase().replace(/\s+/g," ");
 function bindAdmin(){
   const on=(s,ev,fn)=>{const el=$(s);if(el)el[ev]=fn};
-  on("#q","oninput",e=>{view.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#q");n.focus();n.setSelectionRange(p,p)});
+  wireSearch("q",v=>{view.q=v});
   if($("#af")){$("#af").value=view.assignFilter;$("#af").onchange=e=>{view.assignFilter=e.target.value;render()}}
   document.querySelectorAll("[data-sel]").forEach(c=>c.onchange=()=>{c.checked?view.sel.add(c.dataset.sel):view.sel.delete(c.dataset.sel);render()});
   on("#all","onchange",e=>{document.querySelectorAll("[data-sel]").forEach(c=>e.target.checked?view.sel.add(c.dataset.sel):view.sel.delete(c.dataset.sel));render()});
@@ -1780,7 +1806,7 @@ function aConn(whoId){const all=S.conns||[],who=whoId?emp(whoId):null,base=who?a
     <div class="card stat"><span>Contract signed</span><b>${sig}</b><div class="small mute">${L.length?Math.round(sig/L.length*100)+"% of them":"—"}</div></div>
     <div class="card stat"><span>Their business / month</span><b>${fmtL(biz)}</b><div class="small mute">each connector once · lower figure of a range</div></div>
     <div class="card stat"><span>Files / month</span><b>${fl}</b><div class="small mute">total · lower figure of a range</div></div></div>
-   <div class="conn-flt"><input id="connQ" type="search" placeholder="Search name, number, area, type…" value="${esc(f.q)}">
+   <div class="conn-flt"><div class="sbox" style="flex:1 1 240px"><input id="connQ" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search name, number, area, type…" value="${esc(f.q)}"><button type="button" class="btn sbtn" data-sgo="connQ">🔍 Search</button></div>
     ${who?"":`<select id="connSm"><option value="">All SMs</option>${sms.map(n=>`<option ${f.sm===n?"selected":""}>${esc(n)}</option>`).join("")}</select>`}
     <select id="connSig"><option value="">Contract: all</option><option value="Yes" ${f.sig==="Yes"?"selected":""}>Contract signed</option><option value="No" ${f.sig==="No"?"selected":""}>Not signed yet</option></select></div></div>`;
   if(!who&&base.length&&sms.length>1){const R=sms.map(n=>{const x=base.filter(k=>k.sm===n),e=(S.allEmps||[]).find(y=>cnm(y.name)===cnm(n));return{n,id:e?e.id:"",x,last:Math.max(0,...x.map(k=>k.dateT))}}).sort((a,b)=>b.x.length-a.x.length||a.n.localeCompare(b.n));
@@ -1795,7 +1821,7 @@ function aConn(whoId){const all=S.conns||[],who=whoId?emp(whoId):null,base=who?a
   view.connL=L;return h}
 function bindConn(){const on=(s,ev,f)=>{const el=$(s);if(el)el[ev]=f},f=view.connF||{};
   on("#connAdd","onclick",()=>openConn(null));
-  on("#connQ","oninput",e=>{f.q=e.target.value;clearTimeout(bindConn._t);bindConn._t=setTimeout(()=>{const p=e.target.selectionStart;render();const q=$("#connQ");if(q){q.focus();try{q.setSelectionRange(p,p)}catch(x){}}},250)});
+  wireSearch("connQ",v=>{f.q=v});
   on("#connSm","onchange",e=>{f.sm=e.target.value;render()});
   document.querySelectorAll("[data-connsm]").forEach(tr=>{const go=()=>{f.sm=f.sm===tr.dataset.connsm?"":tr.dataset.connsm;render()};tr.onclick=go;tr.onkeydown=e=>{if(e.key==="Enter")go()}});on("#connSig","onchange",e=>{f.sig=e.target.value;render()});
   document.querySelectorAll("[data-conn]").forEach(tr=>{tr.onclick=()=>openConn(tr.dataset.conn);tr.onkeydown=e=>{if(e.key==="Enter")openConn(tr.dataset.conn)}});
@@ -1856,7 +1882,7 @@ function renderEmp(){
     $("#app").innerHTML=(view.who!==ME.id?`<div style="margin-bottom:14px"><div class="mute small">Field work of</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>`:`<div style="margin-bottom:14px"><div class="mute small">Good day,</div><div style="font-size:20px;font-weight:700">${esc(me.name)} – my field work</div></div>`)+aMeetings();
     bindRange();bindMeetings();bindTips();return}
   if(ME&&pageKind(me)==="leads"&&view.etab==="meet")view.etab="leads";
-  if(showEtabs()&&view.etab==="conn"){$("#app").innerHTML=etabs()+aConn(me.id);bindEtabs();bindConn();afterRender();return}
+  if(showEtabs()&&view.etab==="conn"){setApp(etabs()+aConn(me.id));bindEtabs();bindConn();afterRender();return}
   if(showEtabs()&&view.etab==="meet"){$("#app").innerHTML=etabs()+(ME&&view.who!==ME.id?`<div style="margin-bottom:14px"><div class="mute small">Field work of</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>`:"")+aMeetings();bindEtabs();bindRange();bindMeetings();bindTips();return}
   const mine=S.leads.filter(l=>l.assignedTo===me.id);
   const due=mine.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<=Date.now()+30*60e3);
@@ -1938,11 +1964,11 @@ function renderEmp(){
     const list=mine.filter(l=>(f==="all"||l.status===f)&&srch(q,[l.name,l.city],[l.phone])).sort((a,b)=>(a.status==="new"?0:1)-(b.status==="new"?0:1));
     if(due.length)h+=`<div class="card due pad" style="margin-bottom:14px"><h3 style="color:var(--amber)">⏰ Callbacks due now (${due.length})</h3>${due.map(l=>leadRow(l)).join("")}</div>`;
     const counts=k=>k==="all"?mine.length:mine.filter(l=>l.status===k).length;
-    h+=`<div class="row" style="margin-bottom:10px"><input id="eq" placeholder="Search contacts" value="${esc(view.q)}" style="flex:1;min-width:180px"></div>
+    h+=`<div class="row" style="margin-bottom:10px"><div class="sbox" style="flex:1;min-width:180px"><input id="eq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search contacts" value="${esc(view.q)}"><button type="button" class="btn sbtn" data-sgo="eq">🔍 Search</button></div></div>
     <div class="chips">${["all","new",...Object.keys(OUTCOMES)].map(k=>`<button class="chip ${f===k?"on":""}" data-f="${k}">${k==="all"?"All":STATUS[k].label} · ${counts(k)}</button>`).join("")}</div>
     <div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No contacts here${mine.length?"":" yet – your manager will assign a list"}.</div>`}</div>`;
   }
-  $("#app").innerHTML=h;
+  setApp(h);
   bindEtabs();bindRange();bindTips();
   document.querySelectorAll("[data-ctab]").forEach(b=>b.onclick=()=>{view.ctab=b.dataset.ctab;render()});bindCases();
   document.querySelectorAll("[data-intf]").forEach(b=>b.onclick=()=>{view.intF=b.dataset.intf;render()});
@@ -1951,7 +1977,7 @@ function renderEmp(){
   const st=$("#seeTeam");if(st)st.onclick=()=>{view.team=me.id;view.who="admin";view.tab="byemp";render()};
   const cs=$("#cOut");if(cs)cs.onchange=()=>{view.cOut=cs.value;render()};
   document.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{view.filter=b.dataset.f;render()});
-  const eq=$("#eq");if(eq)eq.oninput=e=>{view.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#eq");n.focus();n.setSelectionRange(p,p)};
+  wireSearch("eq",v=>{view.q=v});
   document.querySelectorAll("[data-call]").forEach(a=>a.onclick=()=>{setTimeout(()=>openLead(a.dataset.call,true),400)});
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false));
 }
@@ -2076,7 +2102,7 @@ function aCases(){
     <div class="card stat"><span>In progress</span><b style="color:var(--amber)">${all.length-cnt("New")-disb.length-closed}</b><div class="small mute">follow up, login, sanction, on hold</div></div>
     <div class="card stat"><span>Disbursed</span><b style="color:var(--green)">${disb.length}</b><div class="small mute">${amt?"₹"+amt.toLocaleString("en-IN"):"—"}</div></div>
     <div class="card stat"><span>Closed / dropped</span><b style="color:#c0392b">${closed}</b><div class="small mute">not interested, cancelled, rejected, closed</div></div></div>`;
-  h+=`<div class="card pad" style="margin-bottom:12px"><div class="row"><input id="cq" placeholder="Search customer, number, lead code, bank" value="${esc(f.q)}" style="flex:1;min-width:200px">
+  h+=`<div class="card pad" style="margin-bottom:12px"><div class="row"><div class="sbox" style="flex:1;min-width:200px"><input id="cq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search customer, number, lead code, bank" value="${esc(f.q)}"><button type="button" class="btn sbtn" data-sgo="cq">🔍 Search</button></div>
     <select id="cst"><option value="all">All statuses</option>${[...new Set([...caseOpts("Status"),...all.map(c=>c.Status).filter(Boolean)])].map(x=>`<option ${f.st===x?"selected":""}>${x}</option>`).join("")}</select>
     <select id="cmon"><option value="all">All months</option>${months.map(m=>`<option ${f.mon===m?"selected":""}>${esc(m)}</option>`).join("")}</select>
     <span class="small mute">${list.length} case${list.length===1?"":"s"}</span></div>
@@ -2100,7 +2126,7 @@ function bindCasesTab(){const q=$("#cq");if(!q)return;
     const nm=(S.transferTo.find(x=>x.id===to)||{}).name||to,pick=CASES().filter(c=>view.csel.has(c.code)),bySm={};pick.forEach(c=>{const k=c["SM Name"]||"—";bySm[k]=(bySm[k]||0)+1});
     if(!await askOk({title:`Transfer ${codes.length} case${codes.length===1?"":"s"} to ${nm}?`,ok:"Yes, transfer",body:`<ul>${Object.entries(bySm).map(([k,n])=>`<li>SM <b>${esc(k)}</b>: ${n} case${n===1?"":"s"}</li>`).join("")}</ul><p class="small mute">“With” becomes <b>${esc(nm)}</b> and each case gets the remark “Transferred … to ${esc(nm)} by ${esc(ME.name)}”. SM Name does not change.</p>`}))return;
     let res=null;if(await write(async api=>{res=await api.transferCases(codes,to)},`${codes.length} cases transferred to ${nm}`,`Transferring ${codes.length} cases…`)){view.csel.clear();if(res&&res.skipped)toast(`${res.done} transferred · ${res.skipped} skipped (already with ${nm})`);render()}};$("#cmon").onchange=e=>{view.cf.mon=e.target.value;render()};
-  q.oninput=e=>{view.cf.q=e.target.value;const p=e.target.selectionStart;render();const n=$("#cq");n.focus();n.setSelectionRange(p,p)};}
+  wireSearch("cq",v=>{view.cf.q=v});}
 function leadRow(l){
   const last=lastOf(l);
   return `<div class="lead"><div class="av">${initials(l.name)}</div><div class="info">
@@ -2705,6 +2731,7 @@ function openLead(id,fromCall){
     if(ok){close();return}ma.value=l.assignedTo||"";ma.disabled=false};
   document.querySelectorAll("[data-out]").forEach(b=>b.onclick=()=>{M.out=b.dataset.out;document.querySelectorAll("[data-out]").forEach(x=>x.classList.toggle("on",x===b));
     $("#fuWrap").style.display=M.out==="cb"?"block":"none";
+    {const r=$("#rem"),auto="Ringing – no answer";if(r){if(M.out==="rg"&&!r.value.trim()){r.value=auto;r.dataset.auto="1"}else if(M.out!=="rg"&&r.dataset.auto&&r.value===auto){r.value="";delete r.dataset.auto}}}   // ready-made remark for Ringing (can be changed)
     const lf=$("#lfWrap");if(lf){lf.style.display=M.out==="int"?"block":"none";$("#ms").textContent=M.out==="int"?(fullF?"Save call & open case":"Save call & send case"):"Save call log";if(M.out==="int")$("#modal").style.maxWidth="760px"}
     if(M.out==="cb"&&!$("#fu").value){const d=new Date(Date.now()+864e5);$("#fu").value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T11:00`}});
   if(withForm)bindNF(fullF);
