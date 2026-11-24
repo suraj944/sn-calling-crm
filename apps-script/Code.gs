@@ -84,11 +84,12 @@ const CASE_HDR = ["Timestamp", "SM Name", "Customer Name", "Contact Number", "Pr
   "Unique Lead Code", "Bank Name", "Banker Name", "Banker Contact No", "Status", "Remarks", "Disbursed Date", "Disbursed Month",
   "Customer Status", "Contact ID", "Team Lead", "Telecaller ID", "Last updated", "Updated by",
   "Follow-up history", "Next follow-up", "Login date", "Sanction date",
-  "Login by", "Sanction by", "Disbursed by"];   // columns after Follow-up history are added to the sheet automatically
+  "Login by", "Sanction by", "Disbursed by", "Sanction amount", "Disbursed amount"];   // columns after Follow-up history are added to the sheet automatically
 const CASE_COLS = CASE_HDR.length, C_ = Object.fromEntries(CASE_HDR.map((h, i) => [h, i]));
 // what a Team Lead / Manager / Admin may change from the CRM (everything else is filled automatically)
 const CASE_EDIT = ["SM Name", "Lead Shared by", "Product", "Amount Required", "Lead Source", "Connector Name", "Connector Contact No", "Connector Location",
-  "Lead Type", "Bank Name", "Banker Name", "Banker Contact No", "Status", "Remarks", "Disbursed Date", "Customer Status", "Next follow-up"];
+  "Lead Type", "Bank Name", "Banker Name", "Banker Contact No", "Status", "Remarks", "Disbursed Date", "Customer Status", "Next follow-up",
+  "Login date", "Sanction date", "Sanction amount", "Disbursed amount"];   // 11.14: loan progress dates and amounts
 const TARGET_HDR = ["Month", "Employee ID", "Name", "Calls", "Leads", "Cases", "Logins", "Disbursed cases", "Disbursal amount", "Set by", "Set at"];
 const SESSION_DAYS = 30;
 const MAX_FAILS = 5, LOCK_MIN = 15;
@@ -318,6 +319,7 @@ function loadAll_(me) {
     handTo: handTargets_(me, emps).map(x => [x.id, x.name, x.role]),
     connectors: connectorsFor_(me, emps),
     cpData: true,                                     // this server knows "CP data" contacts (11.13+)
+    stages: true,                                     // case window can save login / sanction dates and amounts (11.14+)
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
   };
@@ -720,7 +722,7 @@ function board_(logs, rows, emps, L) {
     const id = tlId[t]; if (!id || !r[C_["Unique Lead Code"]]) return;
     add(mon_(r[C_["Lead Date"]]) || mon_(r[C_["Monthly"]]), id, 2, 1);
     add(mon_(r[C_["Login date"]]), id, 3, 1);
-    if (stType_(String(r[C_["Status"]]), L) === "disb") { const m = mon_(r[C_["Disbursed Month"]]) || mon_(r[C_["Disbursed Date"]]); add(m, id, 4, 1); add(m, id, 5, num_(r[C_["Amount Required"]])); }
+    if (stType_(String(r[C_["Status"]]), L) === "disb") { const m = mon_(r[C_["Disbursed Month"]]) || mon_(r[C_["Disbursed Date"]]); add(m, id, 4, 1); add(m, id, 5, num_(r[C_["Disbursed amount"]]) || num_(r[C_["Amount Required"]])); }
   });
   return out;
 }
@@ -982,7 +984,13 @@ function saveCase_(me, c) {
   if (!canEditCase_(me, row, emps)) throw new Error(String(row[C_["Team Lead"]]).trim() ? "This case is with " + row[C_["Team Lead"]] + " – you can see its updates, but only they (or Admin) can change it" : "You can't change this case – ask Admin");
   const cl = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "'$&").trim().slice(0, 500);
   const L = lists_();
-  CASE_EDIT.forEach(h => { if (c[h] !== undefined) row[C_[h]] = h === "Remarks" ? tidyText_(cl(c[h])) : h === "Next follow-up" ? fuDate_(c[h]) : LIST_COLS.indexOf(h) >= 0 ? pick_(h, cl(c[h]), rows[i][C_[h]], L) : h === "Banker Name" || h === "Connector Name" ? properName_(cl(c[h])) : cl(c[h]); });
+  const stepDate_ = (h, v) => { const s = String(v == null ? "" : v).trim(); if (!s) return ""; if (s === String(rows[i][C_[h]]).trim()) return s;   // unchanged
+    const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    const d = m && new Date(+m[1], +m[2] - 1, +m[3]); if (!d || isNaN(d) || d.getFullYear() < 2020 || d > new Date()) throw new Error(h + " should be a date, not in the future");
+    return Utilities.formatDate(d, "Asia/Kolkata", "yyyy-MM-dd"); };
+  const amt_ = (h, v) => { const s = String(v == null ? "" : v).replace(/[,\s₹]/g, ""); if (!s) return ""; const n = Math.round(Number(s)); if (!(n > 0)) throw new Error(h + " should be a number, e.g. 500000"); return n; };
+  CASE_EDIT.forEach(h => { if (c[h] !== undefined) row[C_[h]] = h === "Remarks" ? tidyText_(cl(c[h])) : h === "Next follow-up" ? fuDate_(c[h]) :
+    h === "Login date" || h === "Sanction date" || h === "Disbursed Date" ? stepDate_(h, c[h]) : h === "Sanction amount" || h === "Disbursed amount" ? amt_(h, c[h]) : LIST_COLS.indexOf(h) >= 0 ? pick_(h, cl(c[h]), rows[i][C_[h]], L) : h === "Banker Name" || h === "Connector Name" ? properName_(cl(c[h])) : cl(c[h]); });
   const st = String(row[C_["Status"]]), was = String(rows[i][C_["Status"]]), today = Utilities.formatDate(new Date(), "Asia/Kolkata", "yyyy-MM-dd");
   const ty = stType_(st, L), who = String(row[C_["Team Lead"]] || "").trim() || me.name;   // credit goes to the person the case is with
   if (st !== was) {                                     // remember when (and by whom) a case reached login, sanction and disbursal
@@ -992,6 +1000,10 @@ function saveCase_(me, c) {
     } else if (/login/i.test(st)) { if (!row[C_["Login date"]]) row[C_["Login date"]] = today; if (!row[C_["Login by"]]) row[C_["Login by"]] = who; }
     if (ty === "disb" && !row[C_["Disbursed by"]]) row[C_["Disbursed by"]] = who;
   }
+  // a step date filled in by hand (11.14) – remember who it counts for, once
+  [["Login date", "Login by"], ["Sanction date", "Sanction by"], ["Disbursed Date", "Disbursed by"]].forEach(([d, b]) => {
+    if (String(row[C_[d]]).trim() && !String(row[C_[b]]).trim()) row[C_[b]] = who; });
+  if (String(row[C_["Sanction date"]]).trim() && !String(row[C_["Login date"]]).trim()) row[C_["Login date"]] = row[C_["Sanction date"]];
   if (ty === "disb" || ty === "closed") row[C_["Next follow-up"]] = "";   // nothing more to follow up
   row[C_["Contact Number"]] = text_(row[C_["Contact Number"]]);
   ["Connector Contact No", "Banker Contact No"].forEach(h => row[C_[h]] = text_(row[C_[h]]));

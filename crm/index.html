@@ -372,6 +372,17 @@ ol.tl{list-style:none;margin:6px 0 0;padding:0 0 0 14px;border-left:2px solid va
  #printArea .pr-h{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #2453d6;padding-bottom:8px;margin-bottom:12px}#printArea .pr-t{font-size:20px;font-weight:700;color:#2453d6}
  #printArea .pr-k{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:10px}#printArea .pr-k div{border:1px solid #ddd;border-radius:6px;padding:6px 8px}#printArea .pr-k span{display:block;color:#666;font-size:10px}#printArea .pr-k b{font-size:16px}#printArea .pr-k small{display:block;color:#666}
  #printArea h2{font-size:13px;margin:14px 0 4px;break-after:avoid}#printArea table{width:100%;border-collapse:collapse;break-inside:auto}#printArea th,#printArea td{border:1px solid #ddd;padding:3px 6px;text-align:left}#printArea th{background:#f1f4fb}#printArea tr{break-inside:avoid}}
+.lsbox{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:4px 0 12px;background:#fbfcfe}
+.ls-hd{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px}
+.ls-row{display:grid;grid-template-columns:repeat(3,1fr)}
+.ls-step{display:flex;gap:9px;padding:4px 10px 4px 0}
+.ls-step+.ls-step{padding-left:10px;border-left:1px dashed #d5dae3}
+.ls-dot{flex:0 0 26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;background:#eef0f3;color:#667;border:2px solid #d5dae3}
+.ls-step.on .ls-dot{background:var(--green);color:#fff;border-color:var(--green)}
+.ls-b{min-width:0;flex:1}.ls-t{font-weight:700}.ls-h{margin:1px 0 5px}
+.ls-in{display:flex;gap:6px;align-items:center;margin-top:4px}.ls-in input{flex:1;min-width:0;width:100%}.ls-rs{color:#667;font-weight:600}
+.ls-v{font-weight:600;margin-top:2px}
+@media(max-width:640px){.ls-row{grid-template-columns:1fr;gap:8px}.ls-step+.ls-step{border-left:0;padding-left:0;border-top:1px dashed #d5dae3;padding-top:8px}}
 </style>
 </head>
 <body>
@@ -592,7 +603,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu,by,form,force,connector){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force,connector})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -1084,7 +1095,7 @@ function activitySection(m){
   const A=activity(m.logs),one=(()=>{const[a,b]=rangeBounds();return sod(a)===sod(b)})();
   const card=(label,val,sub,ic)=>`<div class="card stat act"><span>${ic} ${label}</span><b>${val}</b>${sub?`<div class="small mute">${sub}</div>`:""}</div>`;
   const peak=A.hours.reduce((m2,b)=>b.n>m2.n?b:m2,{n:0});
-  const CS=CASES(),inR=t=>t&&inRange(t),lg=CS.filter(c=>inR(c.login)).length,sc=CS.filter(c=>inR(c.sanc)).length,dsL=CS.filter(c=>stType(c.Status)==="disb"&&inR(c.disbD)),damt=dsL.reduce((s,c)=>s+numOf(c["Amount Required"]),0);
+  const CS=CASES(),inR=t=>t&&inRange(t),lg=CS.filter(c=>inR(c.login)).length,sc=CS.filter(c=>inR(c.sanc)).length,dsL=CS.filter(c=>stType(c.Status)==="disb"&&inR(c.disbD)),damt=dsL.reduce((s,c)=>s+dAmt(c),0);
   let h=`<div class="card pad" style="margin-bottom:16px"><div class="row" style="justify-content:space-between;align-items:baseline"><h3 style="margin:0">Call activity</h3></div>
   <div class="stats" style="margin-top:12px">
     ${card("Unique customers",A.uniq,`different people called`,"👥")}
@@ -1097,7 +1108,7 @@ function activitySection(m){
   /* per person: calls (who saved the call) + case steps (credited to the person the case is with) */
   const rows=new Map();const row=n=>{if(!rows.has(n))rows.set(n,{name:n,p:null,l:0,s:0,d:0,amt:0});return rows.get(n)};
   A.people.forEach(p=>{row(empName(p.by)).p=p});
-  CS.forEach(c=>{const w=String(c["Team Lead"]||"").trim()||"Not assigned",by=k=>String(c[k]||"").trim()||w;if(inR(c.login))row(by("Login by")).l++;if(inR(c.sanc))row(by("Sanction by")).s++;if(stType(c.Status)==="disb"&&inR(c.disbD)){const r=row(by("Disbursed by"));r.d++;r.amt+=numOf(c["Amount Required"])}});
+  CS.forEach(c=>{const w=String(c["Team Lead"]||"").trim()||"Not assigned",by=k=>String(c[k]||"").trim()||w;if(inR(c.login))row(by("Login by")).l++;if(inR(c.sanc))row(by("Sanction by")).s++;if(stType(c.Status)==="disb"&&inR(c.disbD)){const r=row(by("Disbursed by"));r.d++;r.amt+=dAmt(c)}});
   const R=[...rows.values()].sort((a,b)=>(b.d-a.d)||(b.s-a.s)||(b.l-a.l)||((b.p?b.p.calls:0)-(a.p?a.p.calls:0)));
   const dash='<span class="mute">—</span>',z=v=>v?`<b>${v}</b>`:dash;
   h+=`<div class="grid2 dash" style="margin-top:4px;align-items:start"><div><h3 style="margin:10px 0 6px">Calls by hour of day</h3>${m.logs.length?columnChart(A.hours.map(b=>({label:b.label,n:b.n})),"hour"):`<div class="empty small">No calls in this period</div>`}</div>
@@ -1189,7 +1200,7 @@ function rSummary(){
 function rActivity(){const logs=metrics().logs,A=activity(logs),CS=CASES(),inR=t=>t&&inRange(t);
   const rows=new Map();const row=n=>{if(!rows.has(n))rows.set(n,{name:n,p:null,l:0,s:0,d:0,amt:0});return rows.get(n)};
   A.people.forEach(p=>{row(empName(p.by)).p=p});
-  CS.forEach(c=>{const w=String(c["Team Lead"]||"").trim()||"Not assigned",by=k=>String(c[k]||"").trim()||w;if(inR(c.login))row(by("Login by")).l++;if(inR(c.sanc))row(by("Sanction by")).s++;if(stType(c.Status)==="disb"&&inR(c.disbD)){const r=row(by("Disbursed by"));r.d++;r.amt+=numOf(c["Amount Required"])}});
+  CS.forEach(c=>{const w=String(c["Team Lead"]||"").trim()||"Not assigned",by=k=>String(c[k]||"").trim()||w;if(inR(c.login))row(by("Login by")).l++;if(inR(c.sanc))row(by("Sanction by")).s++;if(stType(c.Status)==="disb"&&inR(c.disbD)){const r=row(by("Disbursed by"));r.d++;r.amt+=dAmt(c)}});
   const out=[["Name","Days with calls","Avg first call","Avg last call","Working time","Calls","Calls per hour","Unique customers","Connected","Not picked up","Wrong / switched off","Login done","Sanction done","Disbursed","Disbursed amount (₹)"],
     ...[...rows.values()].map(r=>{const p=r.p;return [r.name,p?p.days.length:0,p?p.first:"",p?p.last:"",p?hm(p.span):"",p?p.calls:0,p?p.perHr:"",p?p.uniq:0,p?p.con:0,p?p.np:0,p?p.wn:0,r.l,r.s,r.d,Math.round(r.amt)]})];
   out.push([],["Calls by hour of day"],["Hour","Calls"],...A.hours.map(b=>[b.label,b.n]));return out}
@@ -1260,7 +1271,7 @@ function lcBase(){const names=lcSmMap(CASES());return{names,all:CASES().filter(c
 function lcInRange(list){const[a,b]=lcBounds();return list.filter(c=>c.leadD&&c.leadD>=a&&c.leadD<=b)}
 function lcStat(list){const r={n:list.length,lead:0,inq:0,act:0,l:0,s:0,d:0,lost:0,amt:0,damt:0};
   list.forEach(c=>{const t=String(c["Lead Type"]||"").toLowerCase();if(t==="lead")r.lead++;else if(t==="inquiry")r.inq++;const st=stType(c.Status),g=stageOf(c);
-    if(st==="closed")r.lost++;else if(st!=="disb")r.act++;if(g>=1)r.l++;if(g>=2)r.s++;if(g>=3){r.d++;r.damt+=numOf(c["Amount Required"])}r.amt+=numOf(c["Amount Required"])});return r}
+    if(st==="closed")r.lost++;else if(st!=="disb")r.act++;if(g>=1)r.l++;if(g>=2)r.s++;if(g>=3){r.d++;r.damt+=dAmt(c)}r.amt+=numOf(c["Amount Required"])});return r}
 function lcSumRows(){const {names,all}=lcBase(),list=lcInRange(all),g=new Map();list.forEach(c=>{const k=lcSmOf(c,names);if(!g.has(k))g.set(k,[]);g.get(k).push(c)});
   const rows=[...g.entries()].map(([k,l])=>({k,...lcStat(l)})).sort((a,b)=>b.n-a.n||b.d-a.d);return{rows,tot:lcStat(list)}}
 function lcDays(){const[a,b]=lcBounds();const out=[];let t=sod(b);while(t>=sod(a)&&out.length<31){out.unshift(t);t=sod(t-DAY/2)}return out}
@@ -1270,12 +1281,12 @@ function lcDailyRows(){const {names,all}=lcBase(),days=lcDays(),from=days[0],to=
   return{days,rows,tot:days.map((_,i)=>rows.reduce((s,r)=>s+r.v[i],0))}}
 function lcMonths(){const n=view.lcM==="fy"?null:+view.lcM;if(n){const out=[];for(let i=n-1;i>=0;i--)out.push(monAdd(curMon(),-i));return out}return periodMonths("fy")}
 function lcMonthlyRows(met){const {names,all}=lcBase(),ms=lcMonths(),g=new Map();
-  all.forEach(c=>{const k=lcSmOf(c,names),m=met==="n"?caseMon(c):(stType(c.Status)==="disb"?disbMon(c):"");if(!ms.includes(m))return;if(!g.has(k))g.set(k,new Map());const x=g.get(k);x.set(m,(x.get(m)||0)+(met==="amt"?numOf(c["Amount Required"]):1))});
+  all.forEach(c=>{const k=lcSmOf(c,names),m=met==="n"?caseMon(c):(stType(c.Status)==="disb"?disbMon(c):"");if(!ms.includes(m))return;if(!g.has(k))g.set(k,new Map());const x=g.get(k);x.set(m,(x.get(m)||0)+(met==="amt"?dAmt(c):1))});
   const rows=[...g.entries()].map(([k,m])=>({k,v:ms.map(x=>m.get(x)||0)})).map(r=>({...r,t:r.v.reduce((s,x)=>s+x,0)})).filter(r=>r.t).sort((a,b)=>b.t-a.t);
   return{ms,rows,tot:ms.map((_,i)=>rows.reduce((s,r)=>s+r.v[i],0))}}
 function lcCaseList(){const {names,all}=lcBase();return lcInRange(all).filter(c=>view.lcSt==="all"||(c.Status||"New")===view.lcSt).sort((a,b)=>(b.leadD||0)-(a.leadD||0)||String(b.code).localeCompare(String(a.code),undefined,{numeric:true})).map(c=>({c,sm:lcSmOf(c,names)}))}
-const LC_COLS=["Case","Lead date","SM","Customer","Mobile","Product","Amount (₹)","Lead source","Lead type","Lead shared by","With","Status","Customer status","Bank","Latest remark","Next follow-up","Login date","Sanction date","Disbursed date"];
-const lcCaseRow=({c,sm})=>[c.code,c["Lead Date"],sm,c["Customer Name"],c["Contact Number"],c.Product,numOf(c["Amount Required"])||"",c["Lead Source"],c["Lead Type"],c["Lead Shared by"],c["Team Lead"]||"Not assigned",c.Status||"New",c["Customer Status"],c["Bank Name"],String(c.Remarks||"").split(" // ")[0],c["Next follow-up"],c["Login date"],c["Sanction date"],c["Disbursed Date"]];
+const LC_COLS=["Case","Lead date","SM","Customer","Mobile","Product","Amount (₹)","Lead source","Lead type","Lead shared by","With","Status","Customer status","Bank","Latest remark","Next follow-up","Login date","Sanction date","Sanction amount (₹)","Disbursed date","Disbursed amount (₹)"];
+const lcCaseRow=({c,sm})=>[c.code,c["Lead Date"],sm,c["Customer Name"],c["Contact Number"],c.Product,numOf(c["Amount Required"])||"",c["Lead Source"],c["Lead Type"],c["Lead Shared by"],c["Team Lead"]||"Not assigned",c.Status||"New",c["Customer Status"],c["Bank Name"],String(c.Remarks||"").split(" // ")[0],c["Next follow-up"],c["Login date"],c["Sanction date"],numOf(c["Sanction amount"])||"",c["Disbursed Date"],numOf(c["Disbursed amount"])||""];
 const lcDs=t=>new Date(t).toLocaleDateString("en-IN",{day:"numeric",month:"short"});
 const lcVal=(met,v)=>met==="amt"?(v?fmtL(v):"–"):(v||"–");
 function lcSheets(){const S1=lcSumRows(),D=lcDailyRows(),Mn=lcMonthlyRows("n"),Md=lcMonthlyRows("d"),Ma=lcMonthlyRows("amt");
@@ -1988,7 +1999,7 @@ function renderEmp(){
   document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openLead(b.dataset.open,false));
 }
 /* ---------- LEAD CASES: Interested customers handed to the Team Lead ---------- */
-const CASE_HDR=["Timestamp","SM Name","Customer Name","Contact Number","Product","Amount Required","Lead Source","Connector Name","Connector Contact No","Connector Location","Lead Type","Lead Shared by","Lead Date","Monthly","Unique Lead Code","Bank Name","Banker Name","Banker Contact No","Status","Remarks","Disbursed Date","Disbursed Month","Customer Status","Contact ID","Team Lead","Telecaller ID","Last updated","Updated by","Follow-up history","Next follow-up","Login date","Sanction date","Login by","Sanction by","Disbursed by"];
+const CASE_HDR=["Timestamp","SM Name","Customer Name","Contact Number","Product","Amount Required","Lead Source","Connector Name","Connector Contact No","Connector Location","Lead Type","Lead Shared by","Lead Date","Monthly","Unique Lead Code","Bank Name","Banker Name","Banker Contact No","Status","Remarks","Disbursed Date","Disbursed Month","Customer Status","Contact ID","Team Lead","Telecaller ID","Last updated","Updated by","Follow-up history","Next follow-up","Login date","Sanction date","Login by","Sanction by","Disbursed by","Sanction amount","Disbursed amount"];
 const CASE_OPTS={"Product":["Home Loan","Balance Transfer","Top-up","Personal Loan","Business Loan","LAP","Commercial Property","Commercial Loan","Industrial Plot","Project Finance","Working Capital","OD Loan","Unsecured OD","Professional Loan","Car Loan","Two-wheeler Loan","Gold Loan","Education Loan","Machinery Loan"],
   "Status":["New","Follow Up","In Process","Login Done","Sanction Done","Disbursed","On Hold","Not Responding","Not Interested","Cancelled","Case Rejected","Case Closed"],
   "Lead Source":["Personal Data","Telecalling","Website","CP","Site","A1","Ai","Uptown Site","Urban Hills","Connector","Walk-in","Reference"],"Lead Type":["Lead","Inquiry"],
@@ -2027,6 +2038,48 @@ function bindCases(){document.querySelectorAll("[data-case]").forEach(b=>b.oncli
   document.querySelectorAll("[data-mkcase]").forEach(b=>b.onclick=async()=>{const l=S.leads.find(x=>x.id===b.dataset.mkcase)||{},tl=tlOf(l.assignedTo);
     if(!await askOk({title:"Open a lead case?",ok:"Yes, open case",body:`A new lead case will be opened for <b>${esc(l.name||"this customer")}</b> (${esc(l.phone||"")})${tl?` and sent to <b>${esc(tl)}</b> to follow up`:""}.<div class="small mute" style="margin-top:8px">Opened by mistake? Only Admin can remove a case.</div>`}))return;
     const done=btnBusy(b,"Opening…");if(!await write(api=>api.createCase(b.dataset.mkcase),"Lead case opened","Opening lead case…"))done()})}
+/* Loan progress in the case window: Login → Sanction → Disbursal, each with its date (and amount for sanction / disbursal).
+   Filling a step's date moves Status forward; picking Login Done / Sanction Done / Disbursed fills today's date. Server 11.14+ saves the dates and amounts. */
+const LS_STEPS=[{k:"login",t:"Login",ic:"📂",date:"Login date",by:"Login by",st:"Login Done",hint:"File logged in at the bank"},
+  {k:"sanc",t:"Sanction",ic:"✅",date:"Sanction date",by:"Sanction by",st:"Sanction Done",amt:"Sanction amount",hint:"Bank approved the loan"},
+  {k:"disbD",t:"Disbursal",ic:"💰",date:"Disbursed Date",by:"Disbursed by",st:"Disbursed",amt:"Disbursed amount",hint:"Money released to the customer"}];
+const LS_EXTRA=["Login date","Sanction date","Sanction amount","Disbursed amount"],LS_AMT=new Set(["Sanction amount","Disbursed amount"]);
+const LS_DATE={"Login date":"login","Sanction date":"sanc","Disbursed Date":"disbD"};
+const lsId=h=>"cf_"+h.replace(/\W/g,"");
+const lsStage=v=>stType(v)==="disb"?3:/sanction/i.test(v||"")?2:/login/i.test(v||"")?1:0;
+const lsReached=(c,i)=>!!c[LS_STEPS[i].k]||stageOf(c)>i;
+function loanSteps(c,canEd){
+  const srv=!!S.stages,ask=numOf(c["Amount Required"]),dd=t=>t?new Date(t).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}):"";
+  const cells=LS_STEPS.map((s,i)=>{const on=lsReached(c,i),d=c[s.k],dateEd=canEd&&(srv||s.k==="disbD"),amtEd=canEd&&srv&&s.amt,byW=String(c[s.by]||"").trim();
+    const dateUI=dateEd?`<div class="ls-in"><input type="date" id="${lsId(s.date)}" value="${d?ymd(d):""}" max="${ymd(Date.now())}" aria-label="${s.t} date"><button class="btn sm" type="button" data-lst="${i}">Today</button></div>`
+      :`<div class="ls-v">${d?dd(d):on?'<span class="mute" style="font-weight:400">done – no date</span>':'<span class="mute" style="font-weight:400">not yet</span>'}</div>`;
+    const amtUI=!s.amt?"":amtEd?`<div class="ls-in"><span class="ls-rs">₹</span><input id="${lsId(s.amt)}" inputmode="numeric" value="${numOf(c[s.amt])||""}" placeholder="Amount, e.g. 2500000" aria-label="${s.amt}"></div>`
+      :numOf(c[s.amt])?`<div class="ls-v num">${inr(c[s.amt])}</div>`:"";
+    return `<div class="ls-step ${on?"on":""}" data-ls="${i}"><div class="ls-dot">${on?"✓":i+1}</div>
+      <div class="ls-b"><div class="ls-t">${s.ic} ${s.t}</div><div class="ls-h small mute">${on&&byW?"by "+esc(byW):s.hint}</div>
+      ${dateUI}${amtUI}</div></div>`}).join("");
+  const sum=[c["Bank Name"]?"Bank: <b>"+esc(c["Bank Name"])+"</b>":"",ask?"Asked "+inr(ask):"",numOf(c["Sanction amount"])?"Sanctioned "+inr(c["Sanction amount"]):"",numOf(c["Disbursed amount"])?"Disbursed "+inr(c["Disbursed amount"]):"",c["Disbursed Month"]?"Month "+esc(c["Disbursed Month"]):""].filter(Boolean).join(" · ");
+  return `<div class="lsbox"><div class="ls-hd"><b>Loan progress</b><span class="small mute">${sum||"Fill each step when it happens"}</span></div><div class="ls-row">${cells}</div>
+    ${canEd&&!srv&&ME&&ME.role==="Admin"?'<div class="small" style="margin-top:6px;color:#8a5300">Login / sanction dates and amounts can be saved after the server update (Version 11.14).</div>':""}</div>`}
+function bindLoanSteps(c){
+  const stSel=$("#cf_Status"),stNow=()=>stSel?stSel.value:c.Status,pick=v=>{if(stSel&&[...stSel.options].some(o=>o.value===v))stSel.value=v};
+  const paint=()=>LS_STEPS.forEach((s,i)=>{const el=document.querySelector(`[data-ls="${i}"]`),inp=$("#"+lsId(s.date));if(!el)return;
+    const on=(inp?!!inp.value:!!c[s.k])||lsStage(stNow())>i;el.classList.toggle("on",on);el.querySelector(".ls-dot").textContent=on?"✓":i+1});
+  LS_STEPS.forEach((s,i)=>{const inp=$("#"+lsId(s.date));if(!inp)return;
+    inp.onchange=()=>{if(inp.value){if(lsStage(stNow())<i+1&&stType(stNow())!=="closed")pick(s.st);
+      if(i>=1){const l=$("#"+lsId("Login date"));if(l&&!l.value)l.value=inp.value}
+      if(i===2){const a=$("#"+lsId("Disbursed amount")),sa=$("#"+lsId("Sanction amount"));if(a&&!a.value)a.value=(sa&&sa.value)||numOf(c["Sanction amount"])||numOf(c["Amount Required"])||""}}paint()}});
+  document.querySelectorAll("[data-lst]").forEach(b=>b.onclick=()=>{const inp=$("#"+lsId(LS_STEPS[+b.dataset.lst].date));if(inp){inp.value=ymd(Date.now());inp.onchange()}});
+  if(stSel)stSel.addEventListener("change",()=>{const i=lsStage(stSel.value)-1;
+    if(i>=0){const inp=$("#"+lsId(LS_STEPS[i].date));if(inp&&!inp.value){inp.value=ymd(Date.now());inp.onchange()}}paint()});
+}
+function loanStepsCheck(o){
+  const t=h=>o[h]?dayOf(o[h]):null,today=sod(Date.now())+DAY-1,L=t("Login date"),Sx=t("Sanction date"),D=t("Disbursed Date");
+  for(const [h,v] of [["Login date",L],["Sanction date",Sx],["Disbursed date",D]])if(v&&v>today)return h+" can't be in the future";
+  if(L&&Sx&&Sx<L)return "Sanction date is before the login date";
+  if(Sx&&D&&D<Sx)return "Disbursed date is before the sanction date";
+  for(const h of LS_AMT)if(o[h]&&!(numOf(o[h])>0))return h+" should be a number, e.g. 500000";
+  return ""}
 function openCase(code){
   const c=CASES().find(x=>x.code===code);if(!c)return;const canEd=canEditCase(c),sentByMe=isMine(c)&&!heldByMe(c);
   const ro=(h,v)=>`<div><div class="small mute">${h}</div><div style="font-weight:600">${v||'<span class="mute" style="font-weight:400">—</span>'}</div></div>`;
@@ -2048,19 +2101,20 @@ function openCase(code){
       <div><label class="f" for="cf_fu" style="margin-top:0">Next follow-up ${caseActive(c)&&!c.fu?'<span style="color:var(--amber);font-weight:600">· not set</span>':""}</label><input type="date" id="cf_fu" value="${c.fu?ymd(c.fu):""}" style="width:100%">
        <div class="qb">${[[0,"Today"],[1,"Tomorrow"],[3,"In 3 days"],[7,"Next week"]].map(([n,l])=>`<button class="btn" type="button" data-fq="${n}">${l}</button>`).join("")}<button class="btn" type="button" data-fq="x">Clear</button></div></div></div>`
      :`<div class="row" style="margin-bottom:10px;gap:14px">${ro("Next follow-up",c.fu?dShort(c.fu)+" · "+fuBadge(c):(caseActive(c)?'<span class="mute" style="font-weight:400">Not set</span>':"—"))}</div>`}
+    ${loanSteps(c,canEd)}
     <div class="cgrid">
      ${tlSel}${inp("SM Name")}${inp("Status")}${inp("Customer Status")}
      ${inp("Product")}${inp("Amount Required")}${inp("Lead Type")}${inp("Lead Source")}
-     ${inp("Bank Name")}${inp("Banker Name")}${inp("Banker Contact No","tel")}${inp("Disbursed Date","date")}
-     ${inp("Connector Name")}${inp("Connector Contact No","tel")}${inp("Connector Location")}${ro("Disbursed Month",esc(c["Disbursed Month"]))}
-     ${inp("Lead Shared by")}
+     ${inp("Bank Name")}${inp("Banker Name")}${inp("Banker Contact No","tel")}${inp("Lead Shared by")}
+     ${inp("Connector Name")}${inp("Connector Contact No","tel")}${inp("Connector Location")}
     </div>
     ${canEd?`<label class="f" for="cf_Remarks">Remarks</label><textarea id="cf_Remarks" style="width:100%;min-height:70px">${esc(c.Remarks)}</textarea>`:`<div style="margin-top:14px"><div class="small mute">Updates (newest first)</div>${updatesTimeline(c)}</div>`}
     ${c["Follow-up history"]?`<details style="margin-top:10px"><summary class="small"><b>Earlier follow-up history</b> <span class="mute">(from the old sheet)</span></summary><div class="small" style="margin-top:6px;white-space:pre-wrap;background:#f7f8fa;border-radius:8px;padding:8px 10px">${esc(c["Follow-up history"])}</div></details>`:""}
-    <div class="small mute" style="margin-top:8px">Monthly: ${esc(c.Monthly)}${c.login?" · Login "+esc(ymd(c.login)):""}${c.sanc?" · Sanction "+esc(ymd(c.sanc)):""} · Last update ${c.upd?fmt(c.upd):"—"} by ${esc(c["Updated by"])}</div>
+    <div class="small mute" style="margin-top:8px">Monthly: ${esc(c.Monthly)} · Last update ${c.upd?fmt(c.upd):"—"} by ${esc(c["Updated by"])}</div>
    </div>
    <div class="mf">${isLead()&&can("caseRemove")?`<button class="btn" id="crm" style="margin-right:auto;color:var(--red)">🗑 Remove case</button>`:""}${canTransferCase(c)?`<button class="btn" id="ctr">⇄ Transfer case</button>`:""}<button class="btn" id="mc">${canEd?"Cancel":"Close"}</button>${canEd?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
   $("#modal").style.maxWidth="880px";$("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#mc").onclick=close;
+  if(canEd)bindLoanSteps(c);
   document.querySelectorAll("[data-fq]").forEach(b=>b.onclick=()=>{const v=b.dataset.fq;$("#cf_fu").value=v==="x"?"":ymd(sod(Date.now())+(+v)*DAY+3600e3)});
   const trb=$("#ctr");if(trb)trb.onclick=async()=>{
     const adm=can("caseTransfer")&&(S.transferTo||[]).length>0,cur=c["Team Lead"]||"",list=(adm?S.transferTo:S.handTo||[]).filter(x=>normName(x.name)!==normName(cur));
@@ -2076,18 +2130,19 @@ function openCase(code){
     if(!await askOk({title:"Remove case "+c.code+"?",ok:"Yes, remove",danger:true,body:`<b>${esc(c["Customer Name"])}</b> · ${esc(c["Contact Number"])}<br>The case leaves Lead Cases for everyone. A copy is kept in the <b>Removed Cases</b> tab of the sheet with your name and the time. The contact stays in the Calling List and can get a new case later.`}))return;
     const done=btnBusy(rmb,"Removing…");if(await write(api=>api.removeCase(c.code),"Case "+c.code+" removed","Removing case "+c.code+"…"))close();else done()};
   const sv=$("#csave");if(sv)sv.onclick=async()=>{const o={code:c.code};
-    ["SM Name","Lead Shared by","Status","Customer Status","Product","Amount Required","Lead Type","Lead Source","Bank Name","Banker Name","Banker Contact No","Disbursed Date","Connector Name","Connector Contact No","Connector Location","Remarks"].forEach(h=>{const el=$("#cf_"+h.replace(/\W/g,""));if(el)o[h]=el.value.trim()});
+    ["SM Name","Lead Shared by","Status","Customer Status","Product","Amount Required","Lead Type","Lead Source","Bank Name","Banker Name","Banker Contact No","Disbursed Date","Connector Name","Connector Contact No","Connector Location","Remarks",...(S.stages?LS_EXTRA:[])].forEach(h=>{const el=$("#cf_"+h.replace(/\W/g,""));if(el)o[h]=el.value.trim()});
     if(o.Status==="Disbursed"&&!o["Disbursed Date"])return toast("Add the disbursed date");
+    const lsErr=loanStepsCheck(o);if(lsErr)return toast(lsErr);
     const upd=($("#cf_upd")||{}).value;if(upd&&upd.trim()){const d=new Date();o.Remarks=`${d.getDate()}-${pad(d.getMonth()+1)} ${upd.trim()}`+(o.Remarks?" // "+o.Remarks:"")}
     const fuEl=$("#cf_fu");if(fuEl)o["Next follow-up"]=fuEl.value;
     const willClose=["disb","closed"].includes(stType(o.Status||c.Status));if(willClose)o["Next follow-up"]="";
     const tl=$("#cf_TL");if(tl)o["Team Lead"]=tl.value;
-    const ch=Object.keys(o).filter(h=>h!=="code"&&h!=="Team Lead"&&(h==="Next follow-up"?(o[h]||"")!==(c.fu?ymd(c.fu):""):String(o[h])!==String(c[h]||""))).map(h=>[h,h==="Next follow-up"?(c.fu?dShort(c.fu):""):c[h]||"",h==="Next follow-up"&&o[h]?dShort(dayOf(o[h])):o[h]]);
+    const ch=Object.keys(o).filter(h=>h!=="code"&&h!=="Team Lead"&&(h==="Next follow-up"?(o[h]||"")!==(c.fu?ymd(c.fu):""):LS_DATE[h]?(o[h]||"")!==(c[LS_DATE[h]]?ymd(c[LS_DATE[h]]):""):LS_AMT.has(h)?numOf(o[h])!==numOf(c[h]):String(o[h])!==String(c[h]||""))).map(h=>[h,h==="Next follow-up"?(c.fu?dShort(c.fu):""):c[h]||"",h==="Next follow-up"&&o[h]?dShort(dayOf(o[h])):o[h]]);
     if(tl&&tl.value!==c.tlId)ch.push(["Team Lead",c["Team Lead"]||"Not assigned",empName(tl.value)||"Not assigned"]);
     if(!ch.length)return toast("Nothing changed");
     const cut=v=>esc(String(v).length>60?String(v).slice(0,60)+"…":v)||'<span class="mute">empty</span>';
     const noFu=!willClose&&!o["Next follow-up"]?`<div class="small" style="margin-top:8px;padding:8px 10px;background:#fff4e0;border-radius:8px;color:#8a5300">⚠ No next follow-up date – this case won't show in anyone's <b>Today</b> list.</div>`:"";
-    if(!await askOk({title:"Save changes to "+c.code+"?",ok:"Yes, save",body:`<ul>${ch.map(([h,a,b])=>`<li><b>${esc(h)}</b>: ${cut(a)} → ${cut(b)}</li>`).join("")}</ul>${noFu}`}))return;
+    if(!await askOk({title:"Save changes to "+c.code+"?",ok:"Yes, save",body:`<ul>${ch.map(([h,a,b])=>`<li><b>${esc(h)}</b>: ${LS_AMT.has(h)?(numOf(a)?inr(a):'<span class="mute">empty</span>'):cut(a)} → ${LS_AMT.has(h)?(numOf(b)?inr(b):'<span class="mute">empty</span>'):cut(b)}</li>`).join("")}</ul>${noFu}`}))return;
     sv.disabled=true;sv.innerHTML=`<span class="spin"></span> Saving…`;if(await write(api=>api.saveCase(o),"Case "+c.code+" saved","Saving case "+c.code+"…"))close();else{sv.disabled=false;sv.textContent="Save case"}};
 }
 function aCases(){
@@ -2103,7 +2158,7 @@ function aCases(){
   const months=[...new Set(all.map(c=>c.Monthly).filter(Boolean))];
   const list=all.filter(c=>(f.sm==="all"||(f.sm==="__notcrm"?!inCRM(smOf(c)):smOf(c)===f.sm))&&(f.fu==="all"||fuState(c)===f.fu)&&(f.st==="all"||c.Status===f.st)&&(f.mon==="all"||c.Monthly===f.mon)&&(srch(q,[c["Customer Name"],c.code,c["Bank Name"],c["Lead Shared by"],c["SM Name"]],[c["Contact Number"]]))).sort((a,b)=>(b.at||0)-(a.at||0));
   const ofType=t=>all.filter(c=>stType(c.Status)===t),disb=ofType("disb"),closed=ofType("closed").length,newN=ofType("new").length,cnt=st=>st==="New"?newN:all.filter(c=>c.Status===st).length;
-  const amt=disb.reduce((s,c)=>s+(parseFloat(String(c["Amount Required"]).replace(/[^\d.]/g,""))||0),0);
+  const amt=disb.reduce((s,c)=>s+dAmt(c),0);
   let h=`<div class="stats sm"><div class="card stat"><span>Lead cases</span><b>${all.length}</b><div class="small mute">${cnt("New")} new – not yet followed up</div></div>
     <div class="card stat"><span>In progress</span><b style="color:var(--amber)">${all.length-cnt("New")-disb.length-closed}</b><div class="small mute">follow up, login, sanction, on hold</div></div>
     <div class="card stat"><span>Disbursed</span><b style="color:var(--green)">${disb.length}</b><div class="small mute">${amt?"₹"+amt.toLocaleString("en-IN"):"—"}</div></div>
@@ -2171,6 +2226,7 @@ const monTime=m=>{const[a,y]=String(m).split("-");return new Date(+y,MONS.indexO
 const monAdd=(m,n)=>{const d=new Date(monTime(m));d.setMonth(d.getMonth()+n);return monOf(d.getTime())};
 const monLong=m=>{const d=new Date(monTime(m));return d.toLocaleDateString("en-IN",{month:"long",year:"numeric"})};
 const numOf=v=>{const n=parseFloat(String(v==null?"":v).replace(/[^\d.]/g,""));return isFinite(n)?n:0};
+const dAmt=c=>numOf(c["Disbursed amount"])||numOf(c["Amount Required"]);   // disbursed amount when filled in, else the amount asked
 const fmtL=n=>!n?"₹0":n>=1e7?"₹"+(n/1e7).toFixed(2).replace(/\.?0+$/,"")+" Cr":n>=1e5?"₹"+(n/1e5).toFixed(1).replace(/\.0$/,"")+" L":"₹"+Math.round(n).toLocaleString("en-IN");
 const MET=["Calls","Interested","Cases","Logins","Disbursed cases","Disbursal"];
 const isCaller=role=>!["Team Lead","Manager","Admin"].includes(role);
@@ -2235,7 +2291,7 @@ const periodLabel=p=>{const f=PERIODS.find(x=>x[0]===p);if(p==="cur")return monL
 // furthest a case got: 0 lead, 1 login, 2 sanction, 3 disbursed
 function stageOf(c){if(stType(c.Status)==="disb")return 3;const s=String(c.Status||"").toLowerCase();if(c.sanc||/sanction/.test(s))return 2;if(c.login||/login/.test(s)||/reject/.test(s))return 1;return 0}
 const pctS=(a,b)=>b?Math.round(a/b*100)+"%":"—";
-function funnelOf(list){const r={n:list.length,l:0,s:0,d:0,amt:0};list.forEach(c=>{const g=stageOf(c);if(g>=1)r.l++;if(g>=2)r.s++;if(g>=3){r.d++;r.amt+=numOf(c["Amount Required"])}});return r}
+function funnelOf(list){const r={n:list.length,l:0,s:0,d:0,amt:0};list.forEach(c=>{const g=stageOf(c);if(g>=1)r.l++;if(g>=2)r.s++;if(g>=3){r.d++;r.amt+=dAmt(c)}});return r}
 function groupBy(list,key){const m=new Map();list.forEach(c=>{const k=String(key(c)||"").trim()||"Not recorded";if(!m.has(k))m.set(k,[]);m.get(k).push(c)});return[...m.entries()]}
 const DIMS=[["tl","Team Lead",c=>c["Team Lead"]||"Not assigned"],["shared","Lead shared by",c=>c["Lead Shared by"]],["sm","SM Name",c=>c["SM Name"]],["prod","Product",c=>c.Product],["src","Lead source",c=>c["Lead Source"]],["bank","Bank",c=>c["Bank Name"]||"No bank yet"]];
 const dd=n=>{n=Math.round(n);return n+(n===1?" day":" days")};
@@ -2258,7 +2314,7 @@ function lbTable(rows,pace,single){const ix=rows[0]?rows[0].ix:[];if(!rows.lengt
 function funnelVisual(f){const st=[["Lead cases",f.n,"var(--brand)"],["Logged in at a bank",f.l,"#4f7be8"],["Sanctioned",f.s,"#7c9cf0"],["Disbursed",f.d,"var(--green)"]];
   return `<div class="funnel">${st.map(([l,v,c],i)=>`<div class="fstep"><div class="flab"><b>${l}</b><span class="num"><b>${v.toLocaleString("en-IN")}</b> <span class="mute">${i?pctS(v,f.n)+" of cases":""}</span></span></div>
     <div class="fbar"><i style="width:${f.n?Math.max(2,Math.round(v/f.n*100)):0}%;background:${c}"></i></div>${i?`<div class="small mute" style="margin-top:2px">${pctS(v,st[i-1][1])} of the step before</div>`:""}</div>`).join("")}</div>
-    ${f.d?`<div class="small" style="margin-top:8px">Disbursed amount (loan amount of disbursed cases): <b>${fmtL(f.amt)}</b></div>`:""}`}
+    ${f.d?`<div class="small" style="margin-top:8px">Disbursed amount (the disbursed amount, or the amount asked when it isn't filled in): <b>${fmtL(f.amt)}</b></div>`:""}`}
 function funnelRows(cases,dim){const d=DIMS.find(x=>x[0]===dim)||DIMS[0];return groupBy(cases,d[2]).map(([k,l])=>({k,...funnelOf(l)})).sort((a,b)=>b.n-a.n||b.d-a.d)}
 function funnelTable(rows,label){if(!rows.length)return`<div class="card empty">No cases in this period.</div>`;const top=rows.slice(0,25),rest=rows.slice(25);
   if(rest.length)top.push({k:`Others (${rest.length})`,...rest.reduce((s,r)=>({n:s.n+r.n,l:s.l+r.l,s:s.s+r.s,d:s.d+r.d,amt:s.amt+r.amt}),{n:0,l:0,s:0,d:0,amt:0})});
@@ -2343,7 +2399,7 @@ function monthlySheets(p){
   const tRows=(rows,label)=>[[label,"Disbursed cases","Average days","Median days","Fastest","Slowest"],...rows.map(r=>[r.k,r.n,Math.round(r.avg),Math.round(r.med),r.min,r.max])];
   const summary=[["SN Financial Services – monthly report"],["Period",lbl],["Prepared",new Date().toLocaleString("en-IN")],[],
     ["Lead cases",D.f.n],["Logged in at a bank",D.f.l,pctS(D.f.l,D.f.n)],["Sanctioned",D.f.s,pctS(D.f.s,D.f.n)],["Disbursed (of these cases)",D.f.d,pctS(D.f.d,D.f.n)],
-    ["Disbursed in the period (any lead date)",D.disb.length],["Disbursed amount in the period (₹)",Math.round(D.disb.reduce((s,c)=>s+numOf(c["Amount Required"]),0))],
+    ["Disbursed in the period (any lead date)",D.disb.length],["Disbursed amount in the period (₹)",Math.round(D.disb.reduce((s,c)=>s+dAmt(c),0))],
     ["Average days lead → disbursal",tAll.length?Math.round(tAll.reduce((s,v)=>s+v,0)/tAll.length):""],["Median days lead → disbursal",tAll.length?Math.round(median(tAll)):""],[],
     ["Follow-ups overdue today",act.filter(c=>fuState(c)==="over").length],["Active cases with no follow-up date",act.filter(c=>fuState(c)==="none").length]];
   return [["Summary",summary],["Team Leads vs target",lbRows(D.leads,[2,3,4,5])],["Telecallers vs target",lbRows(D.callers,[0,1])],
@@ -2351,7 +2407,7 @@ function monthlySheets(p){
     ["Funnel by bank",fRows(funnelRows(D.cases,"bank"),"Bank")],
     ["Connectors",fRows(groupBy(D.cases.filter(c=>c["Connector Name"]),c=>c["Connector Name"]).map(([k,l])=>({k,...funnelOf(l)})).sort((a,b)=>b.d-a.d||b.n-a.n),"Connector")],
     ["Days to disbursal – bank",tRows(tatRows(D.tat,c=>c["Bank Name"]||"No bank recorded"),"Bank")],["Days to disbursal – product",tRows(tatRows(D.tat,c=>c.Product||"No product recorded"),"Product")],
-    ["Disbursed cases",[["Lead code","Customer","Product","Amount (₹)","Bank","Team Lead","Lead date","Disbursed date","Days"],...D.disb.map(c=>[c.code,c["Customer Name"],c.Product,numOf(c["Amount Required"])||"",c["Bank Name"],c["Team Lead"],c["Lead Date"],c["Disbursed Date"],c.leadD&&c.disbD?Math.round((c.disbD-c.leadD)/DAY):""])]],
+    ["Disbursed cases",[["Lead code","Customer","Product","Amount (₹)","Bank","Team Lead","Lead date","Disbursed date","Days"],...D.disb.map(c=>[c.code,c["Customer Name"],c.Product,dAmt(c)||"",c["Bank Name"],c["Team Lead"],c["Lead Date"],c["Disbursed Date"],c.leadD&&c.disbD?Math.round((c.disbD-c.leadD)/DAY):""])]],
     ["Follow-ups overdue",[["Next follow-up","Lead code","Customer","Number","Status","Team Lead","Latest remark"],...act.filter(c=>fuState(c)==="over").sort((a,b)=>a.fu-b.fu).map(c=>[c["Next follow-up"],c.code,c["Customer Name"],c["Contact Number"],c.Status,c["Team Lead"],lastLine(c)])]]];
 }
 async function monthlyExcel(p){try{toast("Preparing the monthly report…");await loadXLSX();const wb=XLSX.utils.book_new();
