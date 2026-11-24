@@ -2467,7 +2467,7 @@ function eodData(dayTs){
   const pd=rowsOf("d"),pm=rowsOf("m");
   return {d0,m0,calling,callAll,people,cd:sumC("d"),cm:sumC("m"),pd,pm,td:tot(pd),tm:tot(pm)};
 }
-const PIPE_COLS=[["lead","Leads generated"],["inq","Inquiries"],["login","Login done"],["sanc","Sanction done"],["disb","Disbursed"]];
+const PIPE_COLS=[["inq","Inquiries"],["lead","Leads generated"],["login","Login done"],["sanc","Sanction done"],["disb","Disbursed"]];
 function eodHTML(E){view.eodDr=[];const DR=(n,title,kind,items,cls,label)=>{if(!n)return '<span class="eod-z">–</span>';view.eodDr.push({title,kind,items});return `<button class="eod-dr ${cls||""}" data-dr="${view.eodDr.length-1}" title="See the list">${label||n}</button>`};
   const dd=v=>v?v:'<span class="eod-z">–</span>',dl=new Date(E.d0).toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short",year:"numeric"}),
     ml=new Date(E.m0).toLocaleDateString("en-IN",{day:"numeric"})+"–"+new Date(E.d0).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});
@@ -2523,14 +2523,14 @@ function aEOD(){
      <div class="eod-sub">${esc(new Date(E.d0).toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"}))} · ${team} · as of ${new Date(lastSync||Date.now()).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"})}</div></div>
    <div class="eod-act"><input type="date" id="eodDay" value="${view.eodDay}" max="${ymd(Date.now())}"><a class="btn sm eod-wa" id="eodWaSend" href="#" target="_blank" rel="noopener">Send on WhatsApp</a><button class="btn sm" id="eodWa">📋 Copy text</button><button class="btn sm" id="eodXl">⬇ Excel</button><button class="btn sm" id="eodPdf">🖨 PDF</button></div></div>
    ${eodHTML(E)}
-   <p class="small mute" style="margin:6px 2px 0">Leads generated and Inquiries are counted on the lead date; Login, Sanction and Disbursed on the day the case reached that step. Pre-sales in the lead pipeline is the SM Name on the lead form.</p></div>`;
+   <p class="small mute" style="margin:6px 2px 0">Inquiries and Leads generated are counted on the lead date; Login, Sanction and Disbursed on the day the case reached that step. Pre-sales in the lead pipeline is the SM Name on the lead form.</p></div>`;
 }
 function eodText(E){const dl=new Date(E.d0).toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short",year:"numeric"}),m=x=>x[0]?`${x[0]} (₹${crore(x[1])} Cr)`:"0";
   let t=`*SN Financial Services – EOD Report*\n${dl}\n\n*Calling* (Today | MTD)\n`;
   E.calling.forEach(r=>{t+=`• ${r.name}: ${r.d.calls} calls, ${r.d.conn} connected | ${r.m.calls}, ${r.m.conn}\n`});
   t+=`*Total: ${E.cd.calls} calls, ${E.cd.conn} connected (${E.cd.pct}%) | ${E.cm.calls}, ${E.cm.conn} (${E.cm.pct}%)*\n\n*Lead pipeline* (Today | MTD)\n`;
   PIPE_COLS.forEach(([k,l])=>{t+=`• ${l}: ${m(E.td[k])} | ${m(E.tm[k])}\n`});
-  const top=E.pm.filter(r=>r.lead[0]+r.inq[0]);if(top.length){t+=`\n*By pre-sales (MTD)*\n`;top.forEach(r=>{t+=`• ${r.name}: ${r.lead[0]} lead${r.lead[0]===1?"":"s"}, ${r.inq[0]} inquir${r.inq[0]===1?"y":"ies"}${r.login[0]?`, ${r.login[0]} login`:""}${r.sanc[0]?`, ${r.sanc[0]} sanction`:""}${r.disb[0]?`, ${r.disb[0]} disbursed`:""}\n`})}
+  const top=E.pm.filter(r=>r.lead[0]+r.inq[0]);if(top.length){t+=`\n*By pre-sales (MTD)*\n`;top.forEach(r=>{t+=`• ${r.name}: ${r.inq[0]} inquir${r.inq[0]===1?"y":"ies"}, ${r.lead[0]} lead${r.lead[0]===1?"":"s"}${r.login[0]?`, ${r.login[0]} login`:""}${r.sanc[0]?`, ${r.sanc[0]} sanction`:""}${r.disb[0]?`, ${r.disb[0]} disbursed`:""}\n`})}
   return t.trim()}
 function eodSheets(E){const dl=ymd(E.d0);
   const c=[["Pre-sales","Today – Calls","Today – Connected","Today – Connect %","Today – Interested","MTD – Calls","MTD – Connected","MTD – Connect %","MTD – Interested"],
@@ -2622,7 +2622,7 @@ async function eodWorkbook(E){await loadExcelJS();const wb=new ExcelJS.Workbook(
     if(!rows.length){ws.mergeCells(r,2,r,15);const c=ws.getRow(r).getCell(2);c.value=label==="today"?"Nothing saved yet today":"Nothing this month yet";c.font={italic:true,color:{argb:MUTE}};c.alignment={indent:1};r++}
     rows.forEach(x=>prow(x));prow({name:"Total",...T},1);r++};
   ptab(E.pd.filter(x=>PIPE_COLS.some(([k])=>x[k][0])),E.td,"today",BLUE);ptab(E.pm,E.tm,"month to date",GREEN);
-  ws.mergeCells(r,2,r,15);cell(ws.getRow(r).getCell(2).address,"Leads generated and Inquiries are counted on the lead date; Login, Sanction and Disbursed on the day the case reached that step. The full list of connected calls is on the “Connected calls” sheet.",{font:{size:9,italic:true,color:{argb:MUTE}},alignment:{indent:1}});
+  ws.mergeCells(r,2,r,15);cell(ws.getRow(r).getCell(2).address,"Inquiries and Leads generated are counted on the lead date; Login, Sanction and Disbursed on the day the case reached that step. The full list of connected calls is on the “Connected calls” sheet.",{font:{size:9,italic:true,color:{argb:MUTE}},alignment:{indent:1}});
   ws.eachRow({includeEmpty:true},row=>row.eachCell({includeEmpty:true},c=>{c.font={name:"Calibri",...(c.font||{})}}));
   // plain data sheets (same as before, with a styled header)
   eodSheets(E).forEach(([n,rows])=>{const s=wb.addWorksheet(n,{views:[{state:"frozen",ySplit:1}]});rows.forEach(x=>s.addRow(x));
