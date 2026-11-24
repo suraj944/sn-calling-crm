@@ -68,7 +68,7 @@ tr:last-child td{border-bottom:0}
 .s-cb{background:var(--amber-soft);color:var(--amber)}
 .s-na{background:var(--violet-soft);color:var(--violet)}
 .s-wn{background:#eceff3;color:#374151}
-.s-nc{background:#e3f3f1;color:#0f6b62}.s-rg{background:#fff1e6;color:#b45309}
+.s-nc{background:#e3f3f1;color:#0f6b62}.s-rg{background:#fff1e6;color:#b45309}.s-cp{background:#efe9fd;color:#5b21b6;font-weight:700}
 .wawrap{display:inline-flex;gap:0;align-items:stretch}.wawrap select{border-radius:10px 0 0 10px;border-right:0;max-width:150px}.btn.wa{background:#25D366;color:#073b1c;border-color:#25D366;border-radius:0 10px 10px 0;font-weight:700}.btn.wa:hover{background:#1ebe5a}
 .stat.act span{white-space:nowrap}
 .s-conv{background:var(--brand-soft);color:var(--brand)}
@@ -511,7 +511,7 @@ function build(eRows,lRows,cRows){
   const findEmp=v=>{v=String(v||"").trim();if(!v)return null;const lv=v.toLowerCase();const e=allEmps.find(e=>e.id.toLowerCase()===lv||e.name.toLowerCase()===lv);return e?e.id:v};
   const leads=lRows.map((r,i)=>({id:String(r[0]||"").trim(),name:String(r[1]||""),phone:String(r[2]??""),city:String(r[3]||""),assignedTo:findEmp(r[4]),
     status:statusCode(r[5]),followUp:parseT(r[6]),lastRemark:String(r[7]||""),lastAt:parseT(r[8]),created:parseT(r[9]),
-    source:["Website","Import","Manual"].find(x=>x.toLowerCase()===String(r[10]||"").trim().toLowerCase())||"Import",
+    source:["Website","Import","Manual","CP data"].find(x=>x.toLowerCase()===String(r[10]||"").trim().toLowerCase())||"Import",
     firstRemark:String(r[11]||"")||(/^Website enquiry/.test(String(r[7]||""))?String(r[7]):""),row:i+2,logs:[]})).filter(l=>l.id||l.name);
   const byId=Object.fromEntries(leads.map(l=>[l.id,l]));
   cRows.forEach(r=>{const l=byId[String(r[2]||"").trim()];if(!l)return;
@@ -592,9 +592,9 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
-  async logCall(leadId,out,remark,fu,by,form,force){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force})},
+  async logCall(leadId,out,remark,fu,by,form,force,connector){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force,connector})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
   async addLeads(list){return await this.req("addLeads",{leads:list.map(x=>({...x,phone:normPhone(x.phone)}))})},
   async addEmp(o){await this.req("addEmp",{...o,phone:o.phone?normPhone(o.phone):""})},
@@ -922,7 +922,7 @@ function aLeadsTab(){
   h+=list.map(l=>`<tr>${ck?`<td><input type="checkbox" data-lsel="${esc(l.id)}" ${view.lsel.has(l.id)?"checked":""}></td>`:""}<td class="small num">${fmt(leadAt(l))}</td><td><b>${esc(l.name)}</b><div class="small mute">${esc(l.city)}</div></td>
     <td class="num"><a class="lnk" href="${telHref(l.phone)}">${esc(l.phone)}</a></td><td>${l.assignedTo?esc(empName(l.assignedTo)):'<span class="mute">Unassigned</span>'}</td>
     <td>${pill(l.status)}</td><td class="small" style="max-width:260px">${esc(lastOf(l)?.remark||"")||'<span class="mute">—</span>'}</td><td class="small num">${l.followUp?fmt(l.followUp):"—"}</td>
-    <td class="small" style="white-space:nowrap">${!S.srv2?esc(l.source||""):caseOf(l.id)?`<a class="lnk" href="#" data-case="${esc(caseOf(l.id).code)}">${esc(caseOf(l.id).code)}</a><div>${casePill(caseOf(l.id))}</div>`:ck?`<button class="btn sm" data-mkcase="${esc(l.id)}">Open case</button>`:'<span class="mute">—</span>'}</td><td><button class="btn sm" data-open="${esc(l.id)}">Open</button></td></tr>`).join("")
+    <td class="small" style="white-space:nowrap">${isCP(l)?'<span class="pill s-cp">CP → Connectors</span>':!S.srv2?esc(l.source||""):caseOf(l.id)?`<a class="lnk" href="#" data-case="${esc(caseOf(l.id).code)}">${esc(caseOf(l.id).code)}</a><div>${casePill(caseOf(l.id))}</div>`:ck?`<button class="btn sm" data-mkcase="${esc(l.id)}">Open case</button>`:'<span class="mute">—</span>'}</td><td><button class="btn sm" data-open="${esc(l.id)}">Open</button></td></tr>`).join("")
     ||`<tr><td colspan="10"><div class="empty">No interested customers in this period${all.length?" match these filters":" – customers marked Interested on a call show up here"}.</div></td></tr>`;
   return h+`</table></div>`;
 }
@@ -1525,6 +1525,7 @@ function aImport(){
    <label class="f">Customer name</label><input id="nName" style="width:100%" placeholder="e.g. Ramesh Kumar">
    <label class="f">Mobile number</label><input id="nPhone" inputmode="tel" style="width:100%" placeholder="10-digit mobile, e.g. 98765 43210"><div id="nDup" class="impmsg"></div>
    <label class="f">City / area <span class="mute">(optional)</span></label><input id="nCity" style="width:100%" placeholder="e.g. Thane">
+   ${typeSel("nType")}
    <label class="f">Who should call</label><select id="nEmp" style="width:100%">${tl?`<option value="">Choose…</option>`:`<option value="">Assign later</option>`}${asgOpts()}</select>
    <div style="margin-top:16px"><button class="btn pri" id="addOne">Add contact</button></div></div>
    <div class="card pad"><div class="imphead"><div><h3 style="margin:0">Import a list</h3>
@@ -1532,10 +1533,13 @@ function aImport(){
      <div class="impbtns"><button class="btn sm" id="impFileBtn">📄 Upload CSV</button><input type="file" id="impFile" accept=".csv,.txt,.tsv,text/csv,text/plain" hidden><button class="btn sm" id="impClear">Clear</button></div></div>
    <textarea id="bulk" class="impbox" spellcheck="false" placeholder="Name\tMobile\tCity (optional)&#10;Ramesh Kumar\t98765 43210\tThane&#10;Sunita Shah\t91234 56780">${esc(view.bulkText||"")}</textarea>
    <div id="impPrev"></div>
+   ${S.cpData?`<div style="max-width:420px;margin-bottom:10px">${typeSel("bType")}</div>`:""}
    <div class="impfoot"><div style="flex:1;min-width:240px"><label class="f" style="margin-top:0">Who should call these contacts</label><select id="bEmp" style="width:100%">${tl?"":`<option value="">Leave unassigned (assign later)</option>`}<option value="__auto">Share equally across ${tl?"my team":"all telecallers"}</option>${asgOpts()}</select><div id="impPlan" class="small mute" style="margin-top:6px"></div></div>
    <div style="align-self:flex-end"><button class="btn pri" id="doBulk" disabled>Import contacts</button></div></div>
    <p class="small mute" style="margin:10px 0 0">A duplicate = <b>same name and same mobile number</b>. Duplicates already in the calling list (any team), lines repeated in this list and invalid numbers are skipped automatically. The same number with a different name is added as a separate contact.</p></div></div>`;
 }
+const isCP=l=>!!l&&l.source==="CP data";   // contact imported as connector / channel-partner data
+const typeSel=(id)=>S.cpData?`<label class="f">Data type</label><select id="${id}" style="width:100%"><option value="">Customers – loan enquiries</option><option value="cp" ${view.impType==="cp"?"selected":""}>Connectors – CP data</option></select><div class="small mute" style="margin-top:4px">CP data: when the caller marks <b>Interested</b>, the contact is added to their <b>Connectors</b> (not a lead case).</div>`:"";
 /* ---- import helpers: one mobile number = one contact ---- */
 const phoneKey=p=>{let d=String(p||"").replace(/\D/g,"");if(d.length===12&&d.startsWith("91"))d=d.slice(2);if(d.length===11&&d.startsWith("0"))d=d.slice(1);return d};
 const validMob=k=>/^[6-9]\d{9}$/.test(k);
@@ -1679,7 +1683,8 @@ function bindAdmin(){
     if(!validMob(phoneKey(p)))return toast("Enter a 10-digit Indian mobile number");
     if(nDupMsg())return toast("This customer (same name and number) is already in the calling list – not added again");
     if(isTL()&&!$("#nEmp").value)return toast("Choose who in your team should call this contact");
-    await write(api=>api.addLeads([{name:n,phone:p,city:$("#nCity").value.trim(),assignedTo:$("#nEmp").value}]),"Contact added","Adding contact…")});
+    const ty=$("#nType")?$("#nType").value:"";
+    await write(api=>api.addLeads([{name:n,phone:p,city:$("#nCity").value.trim(),assignedTo:$("#nEmp").value,type:ty}]),ty==="cp"?"Connector contact added (CP data)":"Contact added","Adding contact…")});
   const bulk=$("#bulk");
   if(bulk){bulk.oninput=()=>{view.bulkText=bulk.value;impPreview();impCheckRemote()};impPreview();if(bulk.value)impCheckRemote()}
   on("#bEmp","onchange",impPlan);
@@ -1687,12 +1692,13 @@ function bindAdmin(){
   on("#impFileBtn","onclick",()=>$("#impFile").click());
   on("#impFile","onchange",e=>{const f=e.target.files[0];if(!f)return;if(/\.xlsx?$/i.test(f.name))return toast("For Excel files: select the columns in Excel, copy, and paste them here");
     const rd=new FileReader();rd.onload=()=>{bulk.value=String(rd.result||"");view.bulkText=bulk.value;impPreview();impCheckRemote()};rd.readAsText(f)});
+  ["#nType","#bType"].forEach(sel=>on(sel,"onchange",e=>{view.impType=e.target.value;["#nType","#bType"].forEach(x=>{const el=$(x);if(el)el.value=e.target.value})}));
   on("#doBulk","onclick",async()=>{const rows=parseBulk($("#bulk").value),ok=rows.filter(r=>r.st==="ok"||r.st==="samenum"),skip=rows.length-ok.length,to=$("#bEmp").value;
     if(!ok.length)return toast("Nothing to import – check the lines marked in red or orange");
-    const list=ok.map(r=>({name:r.name,phone:r.key,city:r.city}));
+    const ty=$("#bType")?$("#bType").value:"",list=ok.map(r=>({name:r.name,phone:r.key,city:r.city,type:ty}));
     if(to==="__auto"){const plan=distributePlan(list.map((_,i)=>i));Object.entries(plan).forEach(([eid,idx])=>idx.forEach(i=>list[i].assignedTo=eid))}else list.forEach(x=>x.assignedTo=to);
     const per={};list.forEach(x=>{const k=x.assignedTo?empName(x.assignedTo):"Not assigned";per[k]=(per[k]||0)+1});
-    if(!await askOk({title:"Import "+list.length+" contact"+(list.length===1?"":"s")+"?",ok:"Yes, import",body:`<ul>${Object.entries(per).map(([k,v])=>`<li><b>${esc(k)}</b>: ${v}</li>`).join("")}</ul>${skip?`<p class="mute small">${skip} line${skip===1?"":"s"} will be skipped (duplicates or errors).</p>`:""}`}))return;
+    if(!await askOk({title:"Import "+list.length+(ty==="cp"?" connector contact":" contact")+(list.length===1?"":"s")+"?",ok:"Yes, import",body:`${ty==="cp"?`<p><b>Data type: Connectors – CP data.</b> An Interested call adds them to the caller's Connectors.</p>`:""}<ul>${Object.entries(per).map(([k,v])=>`<li><b>${esc(k)}</b>: ${v}</li>`).join("")}</ul>${skip?`<p class="mute small">${skip} line${skip===1?"":"s"} will be skipped (duplicates or errors).</p>`:""}`}))return;
     let res=null;
     if(await write(async api=>{res=await api.addLeads(list)},`${list.length} contact${list.length===1?"":"s"} imported`,"Importing "+list.length+" contacts…")){
       if(res&&res.skipped)toast(`${res.added} imported · ${res.skipped} skipped – already in the calling list`);
@@ -1906,7 +1912,7 @@ function renderEmp(){
   intPool.all=CASES().filter(c=>filledByMe(c)||sentToMe(c)||!!mateOf(c));
   tMates.forEach(e=>{intPool[e.id]=intPool.team.filter(c=>mateOf(c)===e)});
   const intAll=intPool[intF]||intPool.mine,intCases=intAll.filter(inP).sort(byDate);
-  const intNoCase=intF==="mine"||intF==="all"||intF==="filled"?myLeadsP.filter(l=>!caseOf(l.id)):[],intN=S.srv2?intCases.length+intNoCase.length:myLeadsP.length,intOut=S.srv2?intAll.length-intCases.length:myLeads.length-myLeadsP.length;
+  const intNoCase=intF==="mine"||intF==="all"||intF==="filled"?myLeadsP.filter(l=>!caseOf(l.id)&&!isCP(l)):[],intN=S.srv2?intCases.length+intNoCase.length:myLeadsP.length,intOut=S.srv2?intAll.length-intCases.length:myLeads.length-myLeadsP.length;
   const tlBtn=me.role==="Team Lead"&&isMgr()&&!isTL()&&!own?`<button class="btn sm" id="seeTeam">👥 See ${esc(me.name.split(" ")[0])}'s team view</button>`:"";
   const backBtn=ME&&own&&isLead()&&!canViewAs()?`<button class="btn sm" id="backTeam">← Team overview</button>`:"";
   let h=etabs()+`<div style="margin-bottom:14px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">${backBtn}<div style="flex:1"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>${tlBtn}</div>`;
@@ -1961,11 +1967,11 @@ function renderEmp(){
           <td class="small num">${g.followUp?fmt(g.followUp):"—"}</td><td><button class="btn sm" data-open="${esc(g.lead.id)}">Open</button></td></tr>`).join("")}</table></div></div>`).join("");}
   }else{
     const f=view.filter,q=view.q.toLowerCase();
-    const list=mine.filter(l=>(f==="all"||l.status===f)&&srch(q,[l.name,l.city],[l.phone])).sort((a,b)=>(a.status==="new"?0:1)-(b.status==="new"?0:1));
+    const list=mine.filter(l=>(f==="all"||(f==="cp"?isCP(l):l.status===f))&&srch(q,[l.name,l.city],[l.phone])).sort((a,b)=>(a.status==="new"?0:1)-(b.status==="new"?0:1));
     if(due.length)h+=`<div class="card due pad" style="margin-bottom:14px"><h3 style="color:var(--amber)">⏰ Callbacks due now (${due.length})</h3>${due.map(l=>leadRow(l)).join("")}</div>`;
-    const counts=k=>k==="all"?mine.length:mine.filter(l=>l.status===k).length;
+    const counts=k=>k==="all"?mine.length:k==="cp"?mine.filter(isCP).length:mine.filter(l=>l.status===k).length;
     h+=`<div class="row" style="margin-bottom:10px"><div class="sbox" style="flex:1;min-width:180px"><input id="eq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search contacts" value="${esc(view.q)}"><button type="button" class="btn sbtn" data-sgo="eq">🔍 Search</button></div></div>
-    <div class="chips">${["all","new",...Object.keys(OUTCOMES)].map(k=>`<button class="chip ${f===k?"on":""}" data-f="${k}">${k==="all"?"All":STATUS[k].label} · ${counts(k)}</button>`).join("")}</div>
+    <div class="chips">${["all",...(mine.some(isCP)?["cp"]:[]),"new",...Object.keys(OUTCOMES)].map(k=>`<button class="chip ${f===k?"on":""}" data-f="${k}">${k==="all"?"All":k==="cp"?"CP data":STATUS[k].label} · ${counts(k)}</button>`).join("")}</div>
     <div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No contacts here${mine.length?"":" yet – your manager will assign a list"}.</div>`}</div>`;
   }
   setApp(h);
@@ -2130,7 +2136,7 @@ function bindCasesTab(){const q=$("#cq");if(!q)return;
 function leadRow(l){
   const last=lastOf(l);
   return `<div class="lead"><div class="av">${initials(l.name)}</div><div class="info">
-   <div class="nm">${esc(l.name)} ${pill(l.status)}${caseOf(l.id)?` <span class="pill" style="background:#efe9fd;color:#5b3cc4">🤝 ${isLead()?"Case "+esc(caseOf(l.id).code):"With Team Lead"} · ${esc(caseOf(l.id).Status)}</span>`:""}</div>
+   <div class="nm">${esc(l.name)} ${isCP(l)?'<span class="pill s-cp" title="Connector / channel-partner data">CP</span> ':""}${pill(l.status)}${!isCP(l)&&caseOf(l.id)?` <span class="pill" style="background:#efe9fd;color:#5b3cc4">🤝 ${isLead()?"Case "+esc(caseOf(l.id).code):"With Team Lead"} · ${esc(caseOf(l.id).Status)}</span>`:""}</div>
    <div class="num" style="margin-top:2px">${esc(l.phone)} <span class="mute small">· ${esc(l.city)}</span></div>
    ${last?`<div class="last">📝 ${esc(last.remark)||"No remark"} · ${fmt(last.at)}${l.status==="cb"&&l.followUp?` · <b style="color:var(--amber)">Callback ${fmt(l.followUp)}</b>`:""}</div>`:""}
   </div><div class="row acts" style="gap:6px;flex-wrap:nowrap">
@@ -2707,7 +2713,7 @@ function readNF(){const v=id=>{const e=$("#nf_"+id);return e?String(e.value).tri
 let M={};
 function openLead(id,fromCall){
   const l=S.leads.find(x=>x.id===id);if(!l)return;M={id,out:null};$("#modal").style.maxWidth="";
-  const withForm=S.srv2&&!caseOf(l.id)&&!!S.handTo&&S.lists&&S.lists["Lead Shared by"],fullF=can("cases");   /* the new server sends the lists the form needs */
+  const cp=isCP(l)&&!!S.cpData,withForm=!cp&&S.srv2&&!caseOf(l.id)&&!!S.handTo&&S.lists&&S.lists["Lead Shared by"],fullF=can("cases");   /* the new server sends the lists the form needs */
   $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(l.name)}</div><div><div style="font-weight:700">${esc(l.name)}</div><div class="num mute small">${esc(l.phone)} · ${esc(l.city)}</div></div><button class="x" id="mx">×</button></div>
   <div class="mb">
    ${fromCall?`<div class="card pad" style="background:var(--green-soft);border-color:#c7e8d2;margin-bottom:6px"><b style="color:var(--green)">📞 Dialing ${esc(l.phone)}…</b><div class="small mute" style="margin-top:3px">Your phone's dialer should open. After the call, record the outcome below.</div></div>`:""}
@@ -2715,6 +2721,20 @@ function openLead(id,fromCall){
    <label class="f">Call outcome</label>
    <div class="outs">${Object.entries(OUTCOMES).map(([k,o])=>`<button class="out" data-out="${k}"><span class="pill ${o.cls}">${o.label}</span></button>`).join("")}</div>
    <div id="fuWrap" style="display:none"><label class="f">Call back on</label><input type="datetime-local" id="fu" style="width:100%"></div>
+   ${cp?`<div class="small" style="margin-top:10px;padding:8px 10px;border-radius:10px;background:#f3efff;color:#4c1d95"><b>CP data</b> – marking <b>Interested</b> adds ${esc(l.name)} to ${ME&&view.who===ME.id?"your":"the caller's"} <b>Connectors</b> (not a lead case).</div>
+   <div id="cfWrap" style="display:none;margin-top:14px;border:1px solid #ddd3fb;background:#faf8ff;border-radius:14px;padding:14px">
+    <div style="font-weight:700">🤝 Connector details</div><div class="small mute">${esc(l.name)} · ${esc(l.phone)} – fill what you learnt on the call; everything is optional.</div>
+    <div class="g2"><div><label class="f">Meeting Type</label><input id="cf_mt" list="dl_cfmt" value="Call" style="width:100%" maxlength="60"></div>
+      <div><label class="f">Connector Type</label><input id="cf_ct" list="dl_cfct" value="CP" style="width:100%" maxlength="60"></div></div>
+    <div class="g2"><div><label class="f">Current business per month (Value)</label><input id="cf_biz" placeholder="e.g. 1 Cr, 50 L" style="width:100%" maxlength="40"></div>
+      <div><label class="f">No of Files per month</label><input id="cf_files" placeholder="e.g. 2-3" style="width:100%" maxlength="20"></div></div>
+    <label class="f">Area of Operation</label><input id="cf_area" value="${esc(l.city||"")}" placeholder="e.g. Thane, Kalyan" style="width:100%" maxlength="120">
+    <div class="g3"><div><label class="f">Current Payout</label><input id="cf_cp" placeholder="e.g. 0.4%" style="width:100%" maxlength="40"></div>
+      <div><label class="f">Payout from?</label><input id="cf_pf" list="dl_cfpf" placeholder="e.g. Bank" style="width:100%" maxlength="80"></div>
+      <div><label class="f">Expected payout</label><input id="cf_ep" placeholder="e.g. 0.5%" style="width:100%" maxlength="40"></div></div>
+    <label class="f">Contract form Signed</label><div class="seg" data-seg="cf_sig"><button type="button">Yes</button><button type="button" class="on">No</button></div>
+    <datalist id="dl_cfmt">${connOpts("Meeting Type").map(o=>`<option>${esc(o)}</option>`).join("")}</datalist><datalist id="dl_cfct">${connOpts("Connector Type").map(o=>`<option>${esc(o)}</option>`).join("")}</datalist><datalist id="dl_cfpf">${connOpts("Payout from?").map(o=>`<option>${esc(o)}</option>`).join("")}</datalist>
+   </div>`:""}
    ${withForm?`<div id="lfWrap" style="display:none;margin-top:14px;border:1px solid #d5def3;background:#f8faff;border-radius:14px;padding:14px">${nfHTML({},can("cases"),{inCall:true,name:l.name,phone:l.phone})}</div>`:""}
    <label class="f">Remark</label><textarea id="rem" placeholder="What did the customer say? e.g. wants quote by Friday, prefers WhatsApp…"></textarea>
    <div class="hist"><b class="small">Call history (${l.logs.length})</b>${l.logs.map(g=>`<div class="hi">${pill(g.outcome)} <span class="mute small">${fmt(g.at)} · ${esc(empName(g.by))}</span><div style="margin-top:4px">${esc(g.remark)||'<span class="mute">No remark</span>'}</div>${g.followUp?`<div class="small" style="color:var(--amber)">Follow-up: ${fmt(g.followUp)}</div>`:""}</div>`).join("")||`<div class="mute small" style="padding:8px 0">No calls yet</div>`}</div>
@@ -2731,11 +2751,18 @@ function openLead(id,fromCall){
     if(ok){close();return}ma.value=l.assignedTo||"";ma.disabled=false};
   document.querySelectorAll("[data-out]").forEach(b=>b.onclick=()=>{M.out=b.dataset.out;document.querySelectorAll("[data-out]").forEach(x=>x.classList.toggle("on",x===b));
     $("#fuWrap").style.display=M.out==="cb"?"block":"none";
+    {const cw=$("#cfWrap");if(cw){cw.style.display=M.out==="int"?"block":"none";$("#ms").textContent=M.out==="int"?"Save call & add connector":"Save call log"}}
     {const r=$("#rem"),auto="Ringing – no answer";if(r){if(M.out==="rg"&&!r.value.trim()){r.value=auto;r.dataset.auto="1"}else if(M.out!=="rg"&&r.dataset.auto&&r.value===auto){r.value="";delete r.dataset.auto}}}   // ready-made remark for Ringing (can be changed)
     const lf=$("#lfWrap");if(lf){lf.style.display=M.out==="int"?"block":"none";$("#ms").textContent=M.out==="int"?(fullF?"Save call & open case":"Save call & send case"):"Save call log";if(M.out==="int")$("#modal").style.maxWidth="760px"}
     if(M.out==="cb"&&!$("#fu").value){const d=new Date(Date.now()+864e5);$("#fu").value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T11:00`}});
   if(withForm)bindNF(fullF);
+  document.querySelectorAll('[data-seg="cf_sig"] button').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-seg="cf_sig"] button').forEach(x=>x.classList.toggle("on",x===b))});
   $("#ms").onclick=async()=>{if(!M.out)return toast("Select a call outcome");
+    if(M.out==="int"&&cp){const v=id=>($("#"+id)||{}).value||"",sg=document.querySelector('[data-seg="cf_sig"] button.on');
+      const conn={meetType:v("cf_mt"),connType:v("cf_ct"),business:v("cf_biz").trim(),files:v("cf_files").trim(),area:v("cf_area"),curPayout:v("cf_cp"),payoutFrom:v("cf_pf"),expPayout:v("cf_ep"),signed:sg?sg.textContent:""};
+      const btn=$("#ms");btn.disabled=true;btn.innerHTML=`<span class="spin"></span> Saving…`;let r=null;
+      const ok=await write(async api=>{r=await api.logCall(l.id,"int",$("#rem").value.trim(),null,null,null,false,conn)},l.name+" added to Connectors","Saving call and adding the connector…");
+      if(ok)close();else{btn.disabled=false;btn.textContent="Save call & add connector"}return}
     if(M.out==="int"&&withForm){const o=readNF(),miss=nfMissing(o,fullF,true);
       if(miss.length){nfMark(miss);return toast("Lead form – please fill in: "+miss.join(", "))}
       if(fullF&&o["Amount Required"]&&!(numOf(o["Amount Required"])>0))return toast("Amount Required should be a number, e.g. 500000");

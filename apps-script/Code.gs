@@ -317,6 +317,7 @@ function loadAll_(me) {
     transferTo: perms_(me).has("caseTransfer") ? transferTargets_(me, emps).map(x => [x.id, x.name, x.role]) : [],
     handTo: handTargets_(me, emps).map(x => [x.id, x.name, x.role]),
     connectors: connectorsFor_(me, emps),
+    cpData: true,                                     // this server knows "CP data" contacts (11.13+)
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
   };
@@ -329,10 +330,11 @@ function logCall_(me, b) {
   const lead = leads.getRange(r, 1, 1, 10).getDisplayValues()[0];
   if (rank_(me.role) > rank_("Team Lead") && String(lead[4]).trim() !== me.id) throw new Error("This contact isn't assigned to you");
   if (me.role === "Team Lead" && !teamIds_(me, emps_()).has(String(lead[4]).trim())) throw new Error("This contact isn't in your team");
-  const open = caseRows_().find(x => String(x[C_["Contact ID"]]).trim() === String(lead[0]).trim());
+  const isCP = /^cp data/i.test(String(leads.getRange(r, 11).getDisplayValue()).trim());   // contact imported as connector data
+  const open = isCP ? null : caseRows_().find(x => String(x[C_["Contact ID"]]).trim() === String(lead[0]).trim());
   if (open && rank_(me.role) > rank_("Team Lead")) throw new Error("This customer is now with your Team Lead – you can view the updates only");
   let prep = null;
-  if (b.outcome === "Interested" && !open && b.form) {             // lead form filled in the call window – check it before saving anything
+  if (b.outcome === "Interested" && !open && b.form && !isCP) {             // lead form filled in the call window – check it before saving anything
     const lc = leads.getRange(r, 1, 1, 12).getDisplayValues()[0];
     prep = prepareCase_(me, Object.assign({}, b.form, { Remarks: b.remark || b.form.Remarks || "" }), !!b.force, String(b.form.to || ""),
       { contactId: lead[0], phone: lead[2], name: lead[1], source: String(lc[10]).trim() === "Website" ? "Website" : "Telecalling" });
@@ -343,6 +345,12 @@ function logCall_(me, b) {
     me.id, me.name, b.outcome || "", b.remark || "", b.followUp || ""]);
   leads.getRange(r, 6, 1, 4).setValues([[b.outcome || "", b.followUp || "", b.remark || "", at]]);
   if (prep) return writeCase_(prep);
+  if (isCP) {                                                      // connector data: Interested → a row in the Connectors tab for the person who called (never a lead case)
+    if (b.outcome !== "Interested") return { saved: true };
+    const k = Object.assign({ meetType: "Call", connType: "CP", area: lead[3] }, b.connector || {}, { name: lead[1], phone: lead[2], sm: "" });
+    const res = saveConnector_(me, k, true);
+    return { saved: true, connector: res.id };
+  }
   if (b.outcome === "Interested" && !open) {                      // older website without the form: hand the customer to the Team Lead
     const lc = leads.getRange(r, 1, 1, 12).getDisplayValues()[0];
     const code = createCase_(me, lc, b.remark || "");
@@ -391,7 +399,8 @@ function addLeads_(list, me) {
   rows_("Leads", 1).forEach(r => { const v = parseInt(String(r[0]).replace(/\D/g, ""), 10); if (v > max) max = v; });
   const at = now_();
   const src = list.length > 1 ? "Import" : "Manual";
-  const out = keep.map(x => ["L" + (++max), properName_(x.name), text_(x.phone), properName_(x.city || ""), x.assignedTo || "", "New", "", "", "", at, src]);
+  // data type: connectors / channel partners are saved as "CP data" – an Interested call on them adds a connector, not a lead case
+  const out = keep.map(x => ["L" + (++max), properName_(x.name), text_(x.phone), properName_(x.city || ""), x.assignedTo || "", "New", "", "", "", at, x.type === "cp" ? "CP data" : src]);
   if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, 11).setValues(out);
   return { added: out.length, skipped: skipped.length, dups: skipped.slice(0, 20) };
 }
