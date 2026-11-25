@@ -2293,7 +2293,8 @@ function leadRow(l){
    <div class="num" style="margin-top:2px">${esc(l.phone)} <span class="mute small">· ${esc(l.city)}</span></div>
    ${last?`<div class="last">📝 ${esc(last.remark)||"No remark"} · ${fmt(last.at)}${l.status==="cb"&&l.followUp?` · <b style="color:var(--amber)">Callback ${fmt(l.followUp)}</b>`:""}</div>`:""}
   </div><div class="row acts" style="gap:6px;flex-wrap:nowrap">
-   ${caseOf(l.id)&&!isLead()?`<button class="btn" data-case="${esc(caseOf(l.id).code)}">View updates</button>`:`<a class="btn call" href="${telHref(l.phone)}" data-call="${esc(l.id)}">📞 Call</a>
+   ${caseOf(l.id)&&!isLead()?`<button class="btn" data-case="${esc(caseOf(l.id).code)}">View updates</button>`:openCaseOf(l)?`<a class="btn call" href="${telHref(l.phone)}">📞 Call</a>
+   <button class="btn" data-case="${esc(openCaseOf(l).code)}" title="This customer has an open lead case – updates go in the case">📂 Open case</button>`:`<a class="btn call" href="${telHref(l.phone)}" data-call="${esc(l.id)}">📞 Call</a>
    <button class="btn" data-open="${esc(l.id)}">✎ Remark</button>`}</div></div>`;
 }
 
@@ -2871,8 +2872,19 @@ function readNF(){const v=id=>{const e=$("#nf_"+id);return e?String(e.value).tri
 
 /* ---------- LEAD MODAL (log call / remark) ---------- */
 let M={};
+/* once a customer has an open lead case, the calling list can't change their call result any more – updates go in the case (Suraj, 25 Nov) */
+const openCaseOf=l=>{const c=l&&!isCP(l)?caseOf(l.id):null;return c&&caseStage(c)!=="closed"?c:null};
 function openLead(id,fromCall){
   const l=S.leads.find(x=>x.id===id);if(!l)return;M={id,out:null};$("#modal").style.maxWidth="";
+  const lockC=openCaseOf(l);
+  if(lockC){$("#modal").innerHTML=`<div class="mh"><div class="av">${initials(l.name)}</div><div><div style="font-weight:700">${esc(l.name)}</div><div class="num mute small">${esc(l.phone)} · ${esc(l.city)}</div></div><button class="x" id="mx">×</button></div>
+    <div class="mb"><div class="row"><a class="btn call" href="${telHref(l.phone)}">📞 Call ${esc(l.phone)}</a></div>
+     <div class="card pad" style="margin-top:12px;background:#f3f6ff;border-color:#cfdaf7"><b>🔒 ${esc(l.name)} has lead case ${esc(lockC.code)}</b> ${casePill(lockC)}
+      <div class="small mute" style="margin-top:4px">With <b>${esc(lockC["Team Lead"]||"—")}</b>. The call result can't be changed from the calling list any more – follow-ups, remarks and status go in the case.</div></div>
+     <div class="hist"><b class="small">Call history (${l.logs.length})</b>${l.logs.map(g=>`<div class="hi">${pill(g.outcome)} <span class="mute small">${fmt(g.at)} · ${esc(empName(g.by))}</span><div style="margin-top:4px">${esc(g.remark)||'<span class="mute">No remark</span>'}</div></div>`).join("")||'<div class="mute small">No calls yet</div>'}</div></div>
+    <div class="mf"><button class="btn" id="mc">Close</button><button class="btn pri" id="mOpenCase">📂 Open case ${esc(lockC.code)}</button></div>`;
+    $("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#mc").onclick=close;
+    $("#mOpenCase").onclick=()=>{close();openCase(lockC.code)};return}
   const cp=isCP(l)&&!!S.cpData,withForm=!cp&&S.srv2&&!caseOf(l.id)&&!!S.handTo&&S.lists&&S.lists["Lead Shared by"],fullF=can("cases");   /* the new server sends the lists the form needs */
   $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(l.name)}</div><div><div style="font-weight:700">${esc(l.name)}</div><div class="num mute small">${esc(l.phone)} · ${esc(l.city)}</div></div><button class="x" id="mx">×</button></div>
   <div class="mb">
