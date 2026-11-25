@@ -996,9 +996,11 @@ const ymd=t=>{const d=new Date(t);return `${d.getFullYear()}-${pad(d.getMonth()+
 const RANGES=[["today","Today"],["yesterday","Yesterday"],["7d","Last 7 days"],["30d","Last 30 days"],["month","This month"],["pickm","Pick month"],["all","All time"],["custom","Custom"]];
 if(!view.range)view.range={key:"7d",from:ymd(Date.now()-6*DAY),to:ymd(Date.now())};
 if(!view.fwRange)view.fwRange={key:"all",from:ymd(Date.now()-29*DAY),to:ymd(Date.now())};
+["caseRange","logRange","connRange"].forEach(k=>{if(!view[k])view[k]={key:"all",from:ymd(Date.now()-6*DAY),to:ymd(Date.now())}});
 const onFieldWork=()=>(view.who==="admin"&&view.tab==="meet")||(view.who!=="admin"&&(view.etab==="meet"||(typeof pageKind==="function"&&pageKind(emp(view.who))==="field")));
 if(!view.cRange)view.cRange={key:"today",from:ymd(Date.now()-6*DAY),to:ymd(Date.now())};
-const curRange=()=>onFieldWork()?view.fwRange:(view.who!=="admin"?view.cRange:view.range);
+const onConnTab=()=>(view.who==="admin"&&view.tab==="conn")||(view.who!=="admin"&&view.etab==="conn");
+const curRange=()=>onFieldWork()?view.fwRange:onConnTab()?view.connRange:view.who==="admin"&&view.tab==="cases"?view.caseRange:view.who==="admin"&&view.tab==="logs"?view.logRange:(view.who!=="admin"?view.cRange:view.range);
 function rangeBounds(){
   const r=curRange(),t0=sod(Date.now());
   switch(r.key){
@@ -1014,6 +1016,7 @@ function rangeBounds(){
 }
 const rangeLabel=()=>{const[a,b]=rangeBounds();const f=t=>new Date(t).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});return sod(a)===sod(b)?f(a):f(a)+" – "+f(b)};
 const inRange=t=>{const[a,b]=rangeBounds();return t&&t>=a&&t<=b};
+const inRangeAll=t=>curRange().key==="all"||inRange(t);   // All time keeps rows that have no date
 function rangeBar(){
   const r=curRange();
   return `<div class="card pad rangebar"><div class="row">
@@ -1708,11 +1711,11 @@ function aTeam(){
   return h+`</table></div>`;
 }
 const isAdminUser=()=>MODE==="live"&&!!ME&&ME.role==="Admin";
-const filteredLogs=()=>allLogs().filter(g=>(view.logEmp==="all"||g.by===view.logEmp)&&(view.logOut==="all"||g.outcome===view.logOut));
+const filteredLogs=()=>allLogs().filter(g=>inRangeAll(g.at)&&(view.logEmp==="all"||g.by===view.logEmp)&&(view.logOut==="all"||g.outcome===view.logOut));
 function aLogs(){
   const logs=filteredLogs(),adm=isAdminUser();if(!view.logSel)view.logSel=new Set();
   const shown=new Set(logs.map(g=>g.id));[...view.logSel].forEach(id=>{if(!shown.has(id))view.logSel.delete(id)});const nSel=view.logSel.size;
-  let h=`<div class="card pad" style="margin-bottom:12px"><div class="row">
+  let h=rangeBar()+`<div class="card pad" style="margin-bottom:12px"><div class="row">
    <select id="lEmp"><option value="all">Everyone</option>${S.employees.map(e=>`<option value="${esc(e.id)}" ${view.logEmp===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select>
    <select id="lOut"><option value="all">All outcomes</option>${Object.entries(OUTCOMES).map(([k,o])=>`<option value="${k}" ${view.logOut===k?"selected":""}>${o.label}</option>`).join("")}</select>
    <span class="spacer"></span><span class="mute small">${logs.length} calls</span>${adm&&nSel?`<button class="btn" id="lgClr">Clear selection</button><button class="btn danger" id="lgRm">🗑 Remove ${nSel} call${nSel===1?"":"s"}</button>`:""}<button class="btn" id="copyCsv">⧉ Copy as CSV</button></div>
@@ -1867,7 +1870,7 @@ function buildConns(rows){return(Array.isArray(rows)?rows:[]).map(r=>{const g=i=
 const cnm=x=>String(x||"").trim().toLowerCase().replace(/\s+/g," "),connMine=(k,e)=>k.smId===e.id||cnm(k.sm)===cnm(e.name);
 function aConn(whoId){const all=S.conns||[],who=whoId?emp(whoId):null,base=who?all.filter(k=>connMine(k,who)):all;
   const f=view.connF||(view.connF={q:"",sm:"",sig:""}),q=f.q.trim().toLowerCase(),qd=q.replace(/\D/g,"");
-  const L=base.filter(k=>(!f.sm||k.sm===f.sm)&&(!f.sig||(f.sig==="Yes"?k.signed==="Yes":k.signed!=="Yes"))&&srch(q,[k.name,k.area,k.connType,k.sm,k.id],[k.phone]))
+  const L=base.filter(k=>inRangeAll(k.dateT)&&(!f.sm||k.sm===f.sm)&&(!f.sig||(f.sig==="Yes"?k.signed==="Yes":k.signed!=="Yes"))&&srch(q,[k.name,k.area,k.connType,k.sm,k.id],[k.phone]))
     .sort((a,b)=>(b.dateT-a.dateT)||String(b.id).localeCompare(String(a.id),undefined,{numeric:true}));
     const ck=k=>String(k.phone).replace(/\D/g,"").slice(-10)||k.name.toLowerCase(),uq=list=>new Set(list.map(ck)).size;
   const latest=list=>{const m=new Map();[...list].sort((a,b)=>b.dateT-a.dateT).forEach(k=>{if(!m.has(ck(k)))m.set(ck(k),k)});return[...m.values()]};   // a connector met twice counts once (latest meeting)
@@ -1875,7 +1878,7 @@ function aConn(whoId){const all=S.conns||[],who=whoId?emp(whoId):null,base=who?a
   const sms=[...new Set(base.map(k=>k.sm).filter(Boolean))].sort(),sig=L.filter(k=>k.signed==="Yes").length,biz=bizOf(L),fl=filesOf(L);
   const own=who&&ME&&who.id===ME.id,title=who?(own?"My connectors":who.name+"'s connectors"):"Connectors – all SMs";
   const dt=d=>d?new Date(d).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}):"—";
-  let h=`<div class="card pad conn-top"><div class="conn-hd"><div><h3 style="margin:0">${esc(title)}</h3><div class="small mute">Every connector met – who they are, how much business they do and the payout talk. Click a row to edit.</div></div>
+  let h=rangeBar()+`<div class="card pad conn-top"><div class="conn-hd"><div><h3 style="margin:0">${esc(title)}</h3><div class="small mute">Every connector met – who they are, how much business they do and the payout talk. Click a row to edit.</div></div>
     <div class="conn-btns"><button class="btn sm" id="connXl">⬇ Excel</button><button class="btn pri" id="connAdd">+ Add connector</button></div></div>
    <div class="stats conn-stats"><div class="card stat"><span>Connectors</span><b>${uq(L)}</b><div class="small mute">${L.length} meeting${L.length===1?"":"s"}${L.length!==base.length?" · of "+base.length+" in total":""}</div></div>
     <div class="card stat"><span>Contract signed</span><b>${sig}</b><div class="small mute">${L.length?Math.round(sig/L.length*100)+"% of them":"—"}</div></div>
@@ -1894,7 +1897,7 @@ function aConn(whoId){const all=S.conns||[],who=whoId?emp(whoId):null,base=who?a
      <td>${esc(k.area)||'<span class="mute">—</span>'}</td><td>${esc(k.curPayout)||'<span class="mute">—</span>'}</td><td>${esc(k.payoutFrom)||'<span class="mute">—</span>'}</td><td>${esc(k.expPayout)||'<span class="mute">—</span>'}</td>
      <td>${k.signed==="Yes"?'<span class="pill conn-y">✓ Signed</span>':k.signed==="No"?'<span class="pill conn-n">Not yet</span>':'<span class="mute">—</span>'}</td></tr>`).join(""):`<tr><td colspan="12" class="mute">No connector matches – change the search or filters.</td></tr>`}</tbody></table></div>`;
   view.connL=L;return h}
-function bindConn(){const on=(s,ev,f)=>{const el=$(s);if(el)el[ev]=f},f=view.connF||{};
+function bindConn(){bindRange();const on=(s,ev,f)=>{const el=$(s);if(el)el[ev]=f},f=view.connF||{};
   on("#connAdd","onclick",()=>openConn(null));
   wireSearch("connQ",v=>{f.q=v});
   on("#connSm","onchange",e=>{f.sm=e.target.value;render()});
@@ -2242,7 +2245,7 @@ function openCase(code){
     sv.disabled=true;sv.innerHTML=`<span class="spin"></span> Saving…`;if(await write(api=>api.saveCase(o),"Case "+c.code+" saved","Saving case "+c.code+"…"))close();else{sv.disabled=false;sv.textContent="Save case"}};
 }
 function aCases(){
-  const f=view.cf||(view.cf={st:"all",mon:"all",q:"",fu:"all",sm:"all"}),q=f.q.toLowerCase(),all=CASES();f.fu=f.fu||"all";f.sm=f.sm||"all";
+  const f=view.cf||(view.cf={st:"all",mon:"all",q:"",fu:"all",sm:"all"}),q=f.q.toLowerCase(),all=CASES().filter(c=>inRangeAll(c.leadD||c.at));f.fu=f.fu||"all";f.sm=f.sm||"all";
   // SM buttons: a Team Lead sees only the people in her team (plus one "Other SMs" button); Admin sees every SM
   const teamView=!!ME&&ME.role!=="Admin"&&isTL(),teamNames=teamView?(S.employees||[]).map(e=>e.name):[],nk=s=>String(s||"").trim().toLowerCase();
   const crmEmps=(S.allEmps&&S.allEmps.length?S.allEmps:S.employees||[]).filter(e=>e.active!==false&&e.role!=="Admin"),inCRM=s=>crmEmps.some(e=>nk(e.name)===nk(s));
@@ -2252,16 +2255,15 @@ function aCases(){
   const smList=Object.entries(smCnt).filter(([k,n])=>k!=="__other"||n).sort((a,b)=>(a[0]==="__other")-(b[0]==="__other")||b[1]-a[1]);
   const smLabel=k=>k==="__other"?"Other SMs":k;
   const months=[...new Set(all.map(c=>c.Monthly).filter(Boolean))];
-  const list=all.filter(c=>(f.sm==="all"||(f.sm==="__notcrm"?!inCRM(smOf(c)):smOf(c)===f.sm))&&(f.fu==="all"||fuState(c)===f.fu)&&(f.st==="all"||c.Status===f.st)&&(f.mon==="all"||c.Monthly===f.mon)&&(srch(q,[c["Customer Name"],c.code,c["Bank Name"],c["Lead Shared by"],c["SM Name"]],[c["Contact Number"]]))).sort((a,b)=>(b.at||0)-(a.at||0));
+  const list=all.filter(c=>(f.sm==="all"||(f.sm==="__notcrm"?!inCRM(smOf(c)):smOf(c)===f.sm))&&(f.fu==="all"||fuState(c)===f.fu)&&(f.st==="all"||c.Status===f.st)&&(srch(q,[c["Customer Name"],c.code,c["Bank Name"],c["Lead Shared by"],c["SM Name"]],[c["Contact Number"]]))).sort((a,b)=>(b.at||0)-(a.at||0));
   const ofType=t=>all.filter(c=>stType(c.Status)===t),disb=ofType("disb"),closed=ofType("closed").length,newN=ofType("new").length,cnt=st=>st==="New"?newN:all.filter(c=>c.Status===st).length;
   const amt=disb.reduce((s,c)=>s+dAmt(c),0);
-  let h=`<div class="stats sm"><div class="card stat"><span>Lead cases</span><b>${all.length}</b><div class="small mute">${cnt("New")} new – not yet followed up</div></div>
+  let h=rangeBar()+`<div class="stats sm"><div class="card stat"><span>Lead cases</span><b>${all.length}</b><div class="small mute">${cnt("New")} new – not yet followed up</div></div>
     <div class="card stat"><span>In progress</span><b style="color:var(--amber)">${all.length-cnt("New")-disb.length-closed}</b><div class="small mute">follow up, login, sanction, on hold</div></div>
     <div class="card stat"><span>Disbursed</span><b style="color:var(--green)">${disb.length}</b><div class="small mute">${amt?"₹"+amt.toLocaleString("en-IN"):"—"}</div></div>
     <div class="card stat"><span>Closed / dropped</span><b style="color:#c0392b">${closed}</b><div class="small mute">not interested, cancelled, rejected, closed</div></div></div>`;
   h+=`<div class="card pad" style="margin-bottom:12px"><div class="row"><div class="sbox" style="flex:1;min-width:200px"><input id="cq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search customer, number, lead code, bank" value="${esc(f.q)}"><button type="button" class="btn sbtn" data-sgo="cq">🔍 Search</button></div>
     <select id="cst"><option value="all">All statuses</option>${[...new Set([...caseOpts("Status"),...all.map(c=>c.Status).filter(Boolean)])].map(x=>`<option ${f.st===x?"selected":""}>${x}</option>`).join("")}</select>
-    <select id="cmon"><option value="all">All months</option>${months.map(m=>`<option ${f.mon===m?"selected":""}>${esc(m)}</option>`).join("")}</select>
     <span class="small mute">${list.length} case${list.length===1?"":"s"}</span></div>
     ${teamView?(smList.length>1?`<div class="chips" style="margin:10px 0 0"><span class="small mute" style="align-self:center">My team:</span><button class="chip ${f.sm==="all"?"on":""}" data-csm="all">All · ${all.length}</button>${smList.map(([k,n])=>`<button class="chip ${f.sm===k?"on":""}" data-csm="${esc(k)}" ${k==="__other"?'title="Cases with you whose SM is not in your team"':""}>${esc(smLabel(k))} · ${n}</button>`).join("")}</div>`:""):(()=>{
       const inL=smList.filter(([k])=>inCRM(k)),outL=smList.filter(([k])=>!inCRM(k)),outN=outL.reduce((s,[,n])=>s+n,0),eid=k=>(crmEmps.find(e=>nk(e.name)===nk(k))||{}).id||"";
@@ -2282,7 +2284,7 @@ function bindCasesTab(){const q=$("#cq");if(!q)return;
   const bg=$("#bkGo");if(bg)bg.onclick=async()=>{const to=$("#bkTo").value,codes=[...view.csel];if(!to)return toast("Choose who the cases should go to");
     const nm=(S.transferTo.find(x=>x.id===to)||{}).name||to,pick=CASES().filter(c=>view.csel.has(c.code)),bySm={};pick.forEach(c=>{const k=c["SM Name"]||"—";bySm[k]=(bySm[k]||0)+1});
     if(!await askOk({title:`Transfer ${codes.length} case${codes.length===1?"":"s"} to ${nm}?`,ok:"Yes, transfer",body:`<ul>${Object.entries(bySm).map(([k,n])=>`<li>SM <b>${esc(k)}</b>: ${n} case${n===1?"":"s"}</li>`).join("")}</ul><p class="small mute">“With” becomes <b>${esc(nm)}</b> and each case gets the remark “Transferred … to ${esc(nm)} by ${esc(ME.name)}”. SM Name does not change.</p>`}))return;
-    let res=null;if(await write(async api=>{res=await api.transferCases(codes,to)},`${codes.length} cases transferred to ${nm}`,`Transferring ${codes.length} cases…`)){view.csel.clear();if(res&&res.skipped)toast(`${res.done} transferred · ${res.skipped} skipped (already with ${nm})`);render()}};$("#cmon").onchange=e=>{view.cf.mon=e.target.value;render()};
+    let res=null;if(await write(async api=>{res=await api.transferCases(codes,to)},`${codes.length} cases transferred to ${nm}`,`Transferring ${codes.length} cases…`)){view.csel.clear();if(res&&res.skipped)toast(`${res.done} transferred · ${res.skipped} skipped (already with ${nm})`);render()}};
   wireSearch("cq",v=>{view.cf.q=v});}
 function leadRow(l){
   const last=lastOf(l);
