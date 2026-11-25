@@ -331,7 +331,7 @@ function loadAll_(me) {
     connectors: connectorsFor_(me, emps),
     cpData: true,
     pagePerms: true,
-    leadForm: true, cpLead: true, meetLoc: true, keepLead: true,   // 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
+    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true,   // 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
     stages: true,                                     // case window can save login / sanction dates and amounts (11.14+)
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
@@ -851,7 +851,7 @@ function prepareCase_(me, c, force, to, src) {
   row[C_["Timestamp"]] = now_(); row[C_["Lead Date"]] = today; row[C_["Monthly"]] = Utilities.formatDate(now, "Asia/Kolkata", "MMM-yyyy");
   row[C_["Lead Type"]] = choose("Lead Type"); row[C_["Customer Name"]] = properName_(cl(c["Customer Name"]) || src.name || need("Customer Name"));
   row[C_["Contact Number"]] = ph.slice(0, 5) + " " + ph.slice(5); row[C_["SM Name"]] = choose("SM Name"); row[C_["Product"]] = choose("Product");
-  row[C_["Lead Shared by"]] = choose("Lead Shared by");
+  row[C_["Lead Shared by"]] = me.role === "SM - Field work" && !cl(c["Lead Shared by"]) ? "" : choose("Lead Shared by");   // 11.19: field SM generate their own leads – no "Lead Shared by"
   row[C_["Lead Source"]] = cp && cl(c["Lead Source"]) ? choose("Lead Source") : src.source || "";
   if (full) row[C_["Amount Required"]] = amt || "";                   // amount only from people with Lead Cases access
   if (cp) {                                                            // connector / CP who gave the lead
