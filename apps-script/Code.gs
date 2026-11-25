@@ -30,22 +30,24 @@
  * Calling List tab (all contacts to call; was "Leads") column K "Source" = Website / Import / Manual, column L "Customer request" = what a website visitor asked for.
  */
 
-const ROLES = ["Admin", "Manager", "Team Lead", "Sales Manager", "Telecaller Executive"];
+const ROLES = ["Admin", "Manager", "Team Lead", "Sales Manager", "SM - Field work", "Telecaller Executive"];   // 11.16: SM - Field work
 // ---- Permission levels: each role starts with its defaults; Admin can tick/untick extras per person
 // (saved in Employees column K as e.g. "+reports, -doAssign"). Admin always has everything.
 const PERM_KEYS = ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "conn", "reports", "perf",
   "doAssign", "caseEdit", "caseTL", "caseRemove", "empEdit", "pinReset", "sheet", "viewAs", "caseTransfer", "targetEdit", "scopeTeam", "scopeAll",
-  "today", "eod", "pDay", "pList", "pInt", "pLoan", "pCalls", "pMeet", "pConn"];   // 11.15: Today, EOD Report and each tab of a person's own page
+  "today", "eod", "pDay", "pList", "pInt", "pLoan", "pCalls", "pMeet", "pConn", "leadForm"];   // 11.16: leadForm = fill the lead form without the Lead Cases tab   // 11.15: Today, EOD Report and each tab of a person's own page
 const PAGE_KEYS = ["pDay", "pList", "pInt", "pLoan", "pCalls", "pMeet", "pConn"];  // on for everyone unless Admin switches one off
 const TAB_KEYS = PERM_KEYS.slice(0, 12).concat(["eod"]);
 const ROLE_PERMS = {
   "Manager":   ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "conn", "reports", "eod", "doAssign", "caseEdit", "caseTL", "empEdit", "pinReset", "scopeAll"],
   "Team Lead": ["dash", "lead", "cases", "byemp", "assign", "import", "team", "logs", "meet", "conn", "doAssign", "caseEdit", "pinReset", "scopeTeam"],
   "Sales Manager": [],            // own field work page – Admin can add tabs / actions / wider data
+  "SM - Field work": ["leadForm"], // field work + connectors + lead form (cases go to their Team Lead)
   "Telecaller Executive": []      // own calling page – Admin can add tabs / actions / wider data
 };
 const NOT_EMP = PERM_KEYS.filter(k => k !== "empEdit");     // only Managers can be allowed to add / edit / remove employees
-const PERM_ALLOWED = { "Manager": PERM_KEYS, "Team Lead": NOT_EMP, "Sales Manager": NOT_EMP, "Telecaller Executive": NOT_EMP.filter(k => k !== "pinReset") };   // what Admin may tick per role
+const PERM_ALLOWED = { "Manager": PERM_KEYS, "Team Lead": NOT_EMP, "Sales Manager": NOT_EMP, "SM - Field work": NOT_EMP.filter(k => k !== "pinReset"), "Telecaller Executive": NOT_EMP.filter(k => k !== "pinReset") };
+const ROLE_PAGE_OFF = { "SM - Field work": ["pDay", "pList", "pCalls"] };   // page tabs a role starts without   // what Admin may tick per role
 // Whose data someone sees: "all", "team" (their Team Lead's team) or "own"
 function scope_(e) { const p = perms_(e); return p.has("scopeAll") ? "all" : p.has("scopeTeam") ? "team" : "own"; }
 function hasDesk_(e) { const p = perms_(e); return rank_(e.role) <= rank_("Team Lead") || TAB_KEYS.some(k => p.has(k)); }
@@ -57,7 +59,7 @@ function teamOf_(e, emps) {
 // null = can see everyone; otherwise the set of employee IDs this person may see / work with
 function limit_(me, emps) { const sc = scope_(me); return sc === "all" ? null : sc === "team" ? teamOf_(me, emps) : new Set([me.id]); }
 // Designations typed by Admin (e.g. "Operations Executive") work like a Telecaller: own page, then Admin adds access with Permissions
-const basePerms_ = role => (ROLE_PERMS[role] || []).concat(["today"], PAGE_KEYS);
+const basePerms_ = role => (ROLE_PERMS[role] || []).concat(["today"], PAGE_KEYS.filter(k => (ROLE_PAGE_OFF[role] || []).indexOf(k) < 0));
 const allowedPerms_ = role => PERM_ALLOWED[role] || PERM_ALLOWED["Telecaller Executive"];
 const isCustomRole_ = role => ROLES.indexOf(role) < 0;
 function roleOf_(raw) {                       // what's in the sheet → role
@@ -323,7 +325,8 @@ function loadAll_(me) {
     handTo: handTargets_(me, emps).map(x => [x.id, x.name, x.role]),
     connectors: connectorsFor_(me, emps),
     cpData: true,
-    pagePerms: true,                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
+    pagePerms: true,
+    leadForm: true,                                   // 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
     stages: true,                                     // case window can save login / sanction dates and amounts (11.14+)
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
@@ -860,7 +863,7 @@ function writeCase_(p) {
   return { saved: true, code: p.code, caseCode: p.code, to: p.to };
 }
 function newCase_(me, c, force, to) {
-  if (!perms_(me).has("cases")) throw new Error("Mark the customer Interested in your calling list – the lead form opens there");
+  if (!perms_(me).has("cases") && !perms_(me).has("leadForm")) throw new Error("Mark the customer Interested in your calling list – the lead form opens there");
   const p = prepareCase_(me, c, force, to, {});
   return p.duplicate ? p : writeCase_(p);
 }

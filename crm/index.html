@@ -425,7 +425,7 @@ const SHEET_URL_DEFAULT="https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/edi
 const SRV="Google Sheets";
 // Apps Script Web app URL for this team's sheet. Logins are checked by the Apps Script; no secrets live in this file.
 const BUILTIN_API="https://script.google.com/macros/s/AKfycbz9UyLJzPbROL9kSAAmw0R5uG1qQorrEOr24IMOioQVXcIuIBjir9L90cCasmMoGxGn/exec";
-const ROLES=["Admin","Manager","Team Lead","Sales Manager","Telecaller Executive"];
+const ROLES=["Admin","Manager","Team Lead","Sales Manager","SM - Field work","Telecaller Executive"];
 /* Any other text in the Role column is a designation Admin typed (works like a Telecaller until given Permissions) */
 const roleOf=raw=>{const v=String(raw||"").trim();if(!v||/^employee$/i.test(v))return "Telecaller Executive";return ROLES.find(x=>x.toLowerCase()===v.toLowerCase())||v};
 const isCustomRole=r=>!ROLES.includes(r);
@@ -497,14 +497,16 @@ const SCOPE_OPTS=[["own","Only their own","their own contacts, calls & cases"],[
 const PAGE_DEF=[["pDay","My day"],["pList","My calling list"],["pInt","My follow-up"],["pLoan","Login · Sanction · Disbursal & Closed"],["pCalls","Call history"],["pMeet","My field work"],["pConn","My connectors"]];
 const PAGE_KEYS=PAGE_DEF.map(x=>x[0]),NEW_PERM=new Set([...PAGE_KEYS,"today","eod"]);
 const PERM_DEF=[["Their own page",PAGE_DEF],["Team tabs (top bar)",[["today","Today"],["dash","Dashboard"],["lead","Interested"],["cases","Lead Cases"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],["team","Employees / My Team"],["logs","Call Logs"],["meet","Field Work"],["conn","Connectors"],["eod","EOD Report"],["reports","Reports & downloads"],["perf","Performance & targets"]]],
-  ["What they can do",[["doAssign","Assign contacts & share out"],["caseEdit","Open & edit lead cases"],["caseTL","Move a case to another Team Lead"],["caseTransfer","Transfer a case (Admin by default)"],["caseRemove","Remove lead cases"],["empEdit","Add, edit & remove employees"],["pinReset","Reset PINs"],["sheet","Open the Google Sheet"],["viewAs","Open anyone's page (Viewing as)"],["targetEdit","Set monthly targets"]]]];
+  ["What they can do",[["doAssign","Assign contacts & share out"],["caseEdit","Open & edit lead cases"],["leadForm","Fill the lead form (case goes to their Team Lead)"],["caseTL","Move a case to another Team Lead"],["caseTransfer","Transfer a case (Admin by default)"],["caseRemove","Remove lead cases"],["empEdit","Add, edit & remove employees"],["pinReset","Reset PINs"],["sheet","Open the Google Sheet"],["viewAs","Open anyone's page (Viewing as)"],["targetEdit","Set monthly targets"]]]];
 const PERM_KEYS=[...PERM_DEF.flatMap(g=>g[1].map(x=>x[0])),"scopeTeam","scopeAll"];
 const TAB_KEYS=["dash","lead","cases","byemp","assign","import","team","logs","meet","conn","reports","perf","eod"];
 const ROLE_PERMS={"Manager":["dash","lead","cases","byemp","assign","import","team","logs","meet","conn","reports","eod","doAssign","caseEdit","caseTL","empEdit","pinReset","scopeAll"],
-  "Team Lead":["dash","lead","cases","byemp","assign","import","team","logs","meet","conn","doAssign","caseEdit","pinReset","scopeTeam"],"Sales Manager":[],"Telecaller Executive":[]};
+  "Team Lead":["dash","lead","cases","byemp","assign","import","team","logs","meet","conn","doAssign","caseEdit","pinReset","scopeTeam"],"Sales Manager":[],"SM - Field work":["leadForm"],"Telecaller Executive":[]};
+/* page tabs a role starts without (Admin can still tick them on) */
+const ROLE_PAGE_OFF={"SM - Field work":["pDay","pList","pCalls"]};
 const NOT_EMP=PERM_KEYS.filter(k=>k!=="empEdit");
-const PERM_ALLOWED={"Manager":PERM_KEYS,"Team Lead":NOT_EMP,"Sales Manager":NOT_EMP,"Telecaller Executive":NOT_EMP.filter(k=>k!=="pinReset")};
-const basePerms=r=>[...(ROLE_PERMS[r]||[]),"today",...PAGE_KEYS],allowedPerms=r=>PERM_ALLOWED[r]||PERM_ALLOWED["Telecaller Executive"];
+const PERM_ALLOWED={"Manager":PERM_KEYS,"Team Lead":NOT_EMP,"Sales Manager":NOT_EMP,"SM - Field work":NOT_EMP.filter(k=>k!=="pinReset"),"Telecaller Executive":NOT_EMP.filter(k=>k!=="pinReset")};
+const basePerms=r=>[...(ROLE_PERMS[r]||[]),"today",...PAGE_KEYS.filter(k=>!(ROLE_PAGE_OFF[r]||[]).includes(k))],allowedPerms=r=>PERM_ALLOWED[r]||PERM_ALLOWED["Telecaller Executive"];
 const scopeOf=set=>set.has("scopeAll")?"all":set.has("scopeTeam")?"team":"own";
 function permsOf(e){if(!e)return new Set();if(e.role==="Admin")return new Set(PERM_KEYS);const set=new Set(basePerms(e.role)),ok=new Set(allowedPerms(e.role));
   const raw=String(e.permRaw||"").split(/[,\s]+/);raw.forEach(t=>{const k=t.slice(1);if(!ok.has(k))return;if(t[0]==="+")set.add(k);else if(t[0]==="-")set.delete(k)});
@@ -619,7 +621,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.leadForm=!!j.leadForm;S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu,by,form,force,connector){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force,connector})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -1459,7 +1461,7 @@ function aMeetings(){
     <select id="mEnt"><option value="all">Meeting entity: all</option>${M_ENTITY.map(s=>`<option ${view.mEnt===s?"selected":""}>${esc(s)}</option>`).join("")}</select>
     <select id="mInt"><option value="all">Interested & not</option>${[["Interested","Interested"],["Not interested","Not interested"],["none","Not marked yet"]].map(([k,l])=>`<option value="${k}" ${view.mInt===k?"selected":""}>${l}</option>`).join("")}</select>
     <select id="mType"><option value="all">Physical & call</option>${M_TYPES.map(s=>`<option ${view.mType===s?"selected":""}>${esc(s)}</option>`).join("")}</select>
-    <button class="btn pri" id="mAdd">＋ Add field work</button></div></div>`;
+    ${view.who!=="admin"&&ME&&view.who===ME.id&&canLeadForm()?`<button class="btn" data-newcase>📝 Fill lead form</button>`:""}<button class="btn pri" id="mAdd">＋ Add field work</button></div></div>`;
   h+=`<div class="card tw"><table class="mtable"><tr><th>Timestamp</th>${isLead()?"<th>SM Name</th>":""}<th>Meeting Entity</th><th>Name of CP / Developer / Customer / Connector</th><th>Contact no</th><th>Interested?</th><th>Purpose</th><th>Meeting Outcome</th><th>Remarks / Feedback</th><th></th></tr>`;
   h+=list.map(m=>`<tr class="mrow"><td class="num small" style="white-space:nowrap">${m.at?fmt(m.at):"—"}<div class="mute">${esc(m.type)}</div></td>
     ${isLead()?`<td>${esc(m.sm)}</td>`:""}<td>${m.ent?`<span class="pill ${entCls(m.ent)}">${esc(m.ent)}</span>`:"—"}</td>
@@ -1482,7 +1484,7 @@ function aMeetings(){
 function bindMeetings(){
   wireSearch("mq",v=>{view.mq=v});
   [["#mSm","mSm"],["#mEnt","mEnt"],["#mType","mType"],["#mInt","mInt"]].forEach(([s,k])=>{const el=$(s);if(el)el.onchange=()=>{view[k]=el.value;render()}});
-  const add=$("#mAdd");if(add)add.onclick=()=>openMeeting(null);
+  const add=$("#mAdd");if(add)add.onclick=()=>openMeeting(null);document.querySelectorAll("[data-newcase]").forEach(b=>b.onclick=()=>openNewCase());
   document.querySelectorAll("[data-medit]").forEach(b=>b.onclick=e=>{e.stopPropagation();openMeeting(b.dataset.medit)});
 }
 function openMeeting(id){
@@ -1645,7 +1647,7 @@ const pickedRole=(selId,boxId)=>{const v=$("#"+selId).value;return v==="__custom
 function accessLabel(e){if(e.role==="Admin")return'<span class="pill" style="background:#e8f0fe;color:var(--brand)">Full access</span>';
   const n=String(e.permRaw||"").split(/[,\s]+/).filter(t=>/^[+-]/.test(t)&&allowedPerms(e.role).includes(t.slice(1))).length;
   if(n)return `<span class="pill" style="background:#fff4e0;color:#b26a00">Custom · ${n} change${n===1?"":"s"}</span>`;
-  return rank(e.role)>rank("Team Lead")?`<span class="mute">${e.role==="Sales Manager"?"Own field work page":"Own calling page"}</span>${isCustomRole(e.role)?'<div class="small mute">custom designation</div>':""}`:'<span class="mute">Role default</span>'}
+  return rank(e.role)>rank("Team Lead")?`<span class="mute">${e.role==="Sales Manager"?"Own field work page":isFieldSM(e)?"Field work, connectors & lead form":"Own calling page"}</span>${isCustomRole(e.role)?'<div class="small mute">custom designation</div>':""}`:'<span class="mute">Role default</span>'}
 /* Admin: one table showing which tabs each person can open (✓). Click a name to change it. */
 function accessMatrix(){
   const people=S.employees.filter(e=>e.active!==false&&e.role!=="Admin"),own=PERM_DEF[0][1],
@@ -1950,12 +1952,14 @@ function openConn(id){const k=id?(S.conns||[]).find(x=>x.id===id):null;if(id&&!k
 /* ---------- EMPLOYEE VIEW ---------- */
 const lastOf=l=>l.logs[0]||(l.lastRemark||l.lastAt?{remark:l.lastRemark,at:l.lastAt}:null);
 // Which sections a person's page has: Sales Managers = field work only, Telecaller Executives = leads only, others = both
-const pageKind=e=>!e?"both":e.role==="Sales Manager"?"field":e.role==="Telecaller Executive"?"leads":"both";
+const pageKind=e=>!e?"both":e.role==="Sales Manager"?"field":e.role==="Telecaller Executive"?"leads":"both";   // "SM - Field work": field work + connectors + their leads
+const isFieldSM=e=>!!e&&e.role==="SM - Field work";
+const canLeadForm=()=>can("cases")||(!!S.leadForm&&can("leadForm"));
 const showEtabs=()=>!!ME&&view.who!=="admin"&&(view.who===ME.id||isLead())&&(pageKind(emp(view.who))==="both"||!!S.connSrv);
 /* on their own page a person sees only the tabs Admin allows; Admin / Team Lead looking at someone's page see everything */
 const CTAB_PERM={today:"pDay",leads:"pList",int:"pInt",fu:"pInt",cases:"pLoan",closed:"pLoan",calls:"pCalls"};
 const pageOk=k=>!ME||view.who!==ME.id||pcan(k);
-const etabList=()=>(ME&&view.who===ME.id?[["leads","My calls"],["meet","My field work"],["conn","🤝 My connectors"]]:[["leads","Calls"],["meet","Field work"],["conn","🤝 Connectors"]]).filter(([k])=>(k!=="meet"||pageKind(emp(view.who))==="both")&&(k!=="conn"||S.connSrv)
+const etabList=()=>(ME&&view.who===ME.id?[["leads",pageOk("pList")||pageOk("pDay")||pageOk("pCalls")?"My calls":"📋 My leads"],["meet","My field work"],["conn","🤝 My connectors"]]:[["leads","Calls"],["meet","Field work"],["conn","🤝 Connectors"]]).filter(([k])=>(k!=="meet"||pageKind(emp(view.who))==="both")&&(k!=="conn"||S.connSrv)
   &&(k==="leads"?Object.values(CTAB_PERM).some(pageOk):pageOk(k==="meet"?"pMeet":"pConn")));
 const noTabsMsg=()=>`<div class="card empty" style="margin-top:10px">🔒 Admin has not switched on any tabs for you yet. Ask Admin to give you access in <b>Employees → Permissions</b>.</div>`;
 const etabs=()=>showEtabs()?`<div class="tabs">${etabList().map(([k,l])=>`<button class="tab ${(view.etab||"leads")===k?"on":""}" data-etab="${k}">${l}</button>`).join("")}</div>`:"";
@@ -2058,6 +2062,7 @@ function renderEmp(){
     if(!S.srv2){h+=`<div class="small mute" style="margin-bottom:10px">Customers ${own?"you":"they"}'ve marked <b>Interested</b> (or Converted), newest first.</div>`;
       h+=`<div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No leads yet – customers marked Interested on a call show up here.</div>`}</div>`;}else{
     if(intNoCase.length)h+=`<div class="card pad" style="margin-bottom:12px;background:#fff7e8;border-color:#f0c983"><b>📝 Lead form pending (${intNoCase.length})</b> <span class="small mute">– marked Interested on a call but no case yet. Press <b>✎ Remark</b>, pick <b>Interested</b> and fill the lead form – the case then shows below.</span><div class="card" style="margin-top:8px">${intNoCase.slice().sort((a,b)=>(leadAt(b)||0)-(leadAt(a)||0)).map(l=>leadRow(l)).join("")}</div></div>`;
+    if(own&&canLeadForm())h+=`<div class="row" style="margin-bottom:8px;justify-content:flex-end"><button class="btn pri sm" data-newcase>📝 Fill lead form</button></div>`;
     h+=`<div class="small mute" style="margin-bottom:10px">Lead cases <b>before login</b>: documents and follow-ups, done by the Team Lead. ${own?"Cases you generated show here too – open one to see every update; 🔔 means the Team Lead changed something since you last looked.":""}</div>`;
     if(tMates.length){const n=k=>intPool[k].length,chip=(k,l)=>`<button class="chip ${intF===k?"on":""}" data-intf="${esc(k)}">${esc(l)} · ${n(k)}</button>`;
       h+=`<div class="intf"><span class="small mute">Show:</span>${chip("all","All")}${chip("filled",own?"Filled by me":"Filled by them")}${chip("sent",own?"Sent to me":"Sent to them")}${chip("team",own?"My team":"Team")}<span class="intf-sep"></span>${tMates.map(e=>chip(e.id,e.name)).join("")}</div>
@@ -2110,7 +2115,7 @@ const BANKS_FALLBACK=["Aditya Birla Capital","Aeon Finance","AU Small Finance Ba
 const BANKS=()=>S.banks&&S.banks.length?S.banks:BANKS_FALLBACK;
 const CASE_PICK=new Set(["SM Name","Lead Shared by","Status","Customer Status","Product","Lead Type","Lead Source","Bank Name"]);   /* real drop-downs: choose from the list only – no typing */
 const SM_NAMES=["Abhilash Shandilya","Amol","Anita Gupta","Apeksha","Arshiya Shaikh","Ashish","Iram","Ishwar","Jyotsna Rokade","Khushi","Komal","Management Lead","Mayur","Omkar Shinde","Prerna","Presika Vishwakarma","Priyanka Singh","Sahil","Sana Momin","Surojit Ghosh"];
-const smNames=()=>[...new Set([...SM_NAMES,...(S.allEmps||[]).filter(e=>e.role==="Sales Manager"&&e.active).map(e=>e.name),...CASES().map(c=>c["SM Name"]).filter(Boolean)])].sort((a,b)=>a.localeCompare(b));
+const smNames=()=>[...new Set([...SM_NAMES,...(S.allEmps||[]).filter(e=>(e.role==="Sales Manager"||isFieldSM(e))&&e.active).map(e=>e.name),...CASES().map(c=>c["SM Name"]).filter(Boolean)])].sort((a,b)=>a.localeCompare(b));
 /* Drop-down choices come from the Lists tab of the sheet (sent by the server); the built-in lists are only a fallback */
 const caseOpts=h=>{const L=S.lists&&S.lists[h];if(L&&L.length)return L;return(h==="Bank Name"?BANKS():h==="SM Name"?smNames():h==="Lead Shared by"?[...new Set(CASES().map(c=>c["Lead Shared by"]).filter(Boolean))].sort():CASE_OPTS[h])||[]};
 /* How a status counts on the dashboard: "Counts as" column next to Status in the Lists tab, else the built-in rule */
@@ -2188,7 +2193,7 @@ function openCase(code){
     if(!canEd)return ro(h,h==="Amount Required"?inr(v):esc(v));
     if(CASE_PICK.has(h)){const opts=caseOpts(h);const all=v&&!opts.includes(v)?[v,...opts]:opts;
       return `<div><label class="f" for="${id}">${h}</label><select id="${id}" style="width:100%"><option value="">${h==="Bank Name"?"— Choose bank —":"— Choose —"}</option>${all.map(o=>`<option ${o===v?"selected":""}>${esc(o)}</option>`).join("")}</select></div>`}
-    const list=CASE_OPTS[h]||(h==="SM Name"?(S.allEmps||[]).filter(e=>e.role==="Sales Manager"&&e.active).map(e=>e.name):null);
+    const list=CASE_OPTS[h]||(h==="SM Name"?(S.allEmps||[]).filter(e=>(e.role==="Sales Manager"||isFieldSM(e))&&e.active).map(e=>e.name):null);
     return `<div><label class="f" for="${id}">${h}</label><input id="${id}" type="${type}" value="${esc(v)}" style="width:100%" ${list?`list="${id}_l"`:""} ${h==="Amount Required"?'inputmode="numeric" placeholder="e.g. 500000"':""}>${list?`<datalist id="${id}_l">${list.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>`:""}</div>`};
   const tlSel=canEd&&can("caseTL")?`<div><label class="f">Team Lead</label><select id="cf_TL" style="width:100%"><option value="">Not assigned</option>${(S.allEmps||[]).filter(e=>e.role==="Team Lead"&&e.active).map(e=>`<option value="${esc(e.id)}" ${c.tlId===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select></div>`:ro("With",esc(c["Team Lead"])||(c["Telecaller ID"]?esc(empName(c["Telecaller ID"])||"")+' <span class="small mute" style="font-weight:400">(not sent yet)</span>':""));
   $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(c["Customer Name"])}</div><div><div style="font-weight:700">${esc(c["Customer Name"])} · <span class="num">${esc(c.code)}</span></div>
@@ -2845,8 +2850,8 @@ function nfSummary(o,full,who){const row=(k,v)=>v?`<tr><td class="mute" style="p
 const dupAsk=list=>askOk({title:"This number already has a case",ok:"Save anyway",body:`<ul>${list.map(x=>`<li><b>${esc(x.code)}</b> · ${esc(x.name)} · ${esc(x.status||"")}${x.with?" · with "+esc(x.with):""}${x.date?" · "+esc(x.date):""}</li>`).join("")}</ul><div class="small">Save only if this is a new, separate loan for the customer.</div>`});
 // Lead Cases → New lead case (people with Lead Cases access only; callers get the form by marking a customer Interested)
 function openNewCase(){
-  if(!can("cases"))return toast("Mark the customer Interested in your calling list – the lead form opens there");
-  const f={...(view.nf||{})},people=(S.handTo||[]),full=true;
+  if(!canLeadForm())return toast("Mark the customer Interested in your calling list – the lead form opens there");
+  const f={...(view.nf||{})},people=(S.handTo||[]),full=can("cases");
   $("#modal").innerHTML=`<div class="mh"><div class="av">LF</div><div><div style="font-weight:700">Lead &amp; Inquiry form</div><div class="mute small">Fields marked <span style="color:#c0392b">*</span> are required. Choices come from the Lists tab.</div></div><button class="x" id="mx">×</button></div>
    <div class="mb" style="background:#f8faff">${nfHTML(f,full)}</div>
    <div class="mf"><button class="btn" id="nfClear" style="margin-right:auto">Clear form</button><button class="btn" id="mc">Cancel</button><button class="btn pri" id="nfGo">Submit lead</button></div>`;
@@ -2856,7 +2861,7 @@ function openNewCase(){
   $("#nfGo").onclick=async()=>{const o=readNF(),miss=nfMissing(o,full,false);
     if(miss.length){nfMark(miss);return toast("Please fill in: "+miss.join(", "))}
     const d=o["Contact Number"].replace(/\D/g,"").replace(/^(91|0)(?=\d{10}$)/,"");if(!/^[6-9]\d{9}$/.test(d))return toast("Contact Number should be a 10-digit mobile number");
-    if(!(numOf(o["Amount Required"])>0))return toast("Amount Required should be a number, e.g. 500000");
+    if(full&&!(numOf(o["Amount Required"])>0))return toast("Amount Required should be a number, e.g. 500000");
     const to=o.to,who=to?(people.find(x=>x.id===to)||{}).name:"";
     if(!await askOk({title:"Submit this lead?",ok:"Yes, submit",body:nfSummary(o,full,who)})){$("#mbg").classList.add("show");return}
     $("#mbg").classList.add("show");const b=$("#nfGo");b.disabled=true;b.innerHTML='<span class="spin"></span> Submitting…';
