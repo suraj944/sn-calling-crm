@@ -836,7 +836,7 @@ function render(){
 function renderAdmin(){
   if(!S.srv2&&(view.tab==="cases"||view.tab==="myteam"))view.tab="dash";
   const dueN=CASES().filter(c=>{const x=fuState(c);return x==="over"||x==="today"}).length;
-  const tabs=[["today","Today"+(dueN?" · "+dueN:"")],["dash","Dashboard"],["lead","Interested"],...(S.srv2?[["cases","Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine",ME.role==="Sales Manager"?"My page":"My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(S.connSrv?[["conn","🤝 Connectors"]]:[]),["eod","📋 EOD Report"],["perf","📈 Performance"],["reports","⬇ Reports"]]
+  const tabs=[["today","Today"+(dueN?" · "+dueN:"")],["dash","Dashboard"],["lead","Interested"],...(S.srv2?[["cases",ME&&ME.role==="Team Lead"?"My Team Lead Cases":"Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine",ME.role==="Sales Manager"?"My page":"My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(S.connSrv?[["conn","🤝 Connectors"]]:[]),["eod","📋 EOD Report"],["perf","📈 Performance"],["reports","⬇ Reports"]]
     .filter(([k])=>k==="mine"||pcan(k==="myteam"?"team":k));   /* tabs this person is allowed to see */
   if(!tabs.length)tabs.push(["mine","My calls"]);
   if(!tabs.some(t=>t[0]===view.tab))view.tab=tabs[0][0];
