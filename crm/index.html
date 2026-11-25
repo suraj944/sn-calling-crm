@@ -494,7 +494,7 @@ const isLead=()=>!ME||rank(ME.role)<=rank("Team Lead")||TAB_KEYS.some(k=>can(k))
 /* ---- Permission levels (same lists as the server). Role defaults + per-person ticks set by Admin. ---- */
 const SCOPE_OPTS=[["own","Only their own","their own contacts, calls & cases"],["team","Their team","everyone under the same Team Lead"],["all","Everyone","the whole company"]];
 /* "Their own page" tabs are on for everyone by default – Admin can switch any of them off (server 11.15+) */
-const PAGE_DEF=[["pDay","My day"],["pList","My calling list"],["pInt","My interested"],["pLoan","Login · Sanction · Disbursal"],["pCalls","Call history"],["pMeet","My field work"],["pConn","My connectors"]];
+const PAGE_DEF=[["pDay","My day"],["pList","My calling list"],["pInt","Interested & Follow-up"],["pLoan","Login · Sanction · Disbursal & Closed"],["pCalls","Call history"],["pMeet","My field work"],["pConn","My connectors"]];
 const PAGE_KEYS=PAGE_DEF.map(x=>x[0]),NEW_PERM=new Set([...PAGE_KEYS,"today","eod"]);
 const PERM_DEF=[["Their own page",PAGE_DEF],["Team tabs (top bar)",[["today","Today"],["dash","Dashboard"],["lead","Interested"],["cases","Lead Cases"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],["team","Employees / My Team"],["logs","Call Logs"],["meet","Field Work"],["conn","Connectors"],["eod","EOD Report"],["reports","Reports & downloads"],["perf","Performance & targets"]]],
   ["What they can do",[["doAssign","Assign contacts & share out"],["caseEdit","Open & edit lead cases"],["caseTL","Move a case to another Team Lead"],["caseTransfer","Transfer a case (Admin by default)"],["caseRemove","Remove lead cases"],["empEdit","Add, edit & remove employees"],["pinReset","Reset PINs"],["sheet","Open the Google Sheet"],["viewAs","Open anyone's page (Viewing as)"],["targetEdit","Set monthly targets"]]]];
@@ -970,6 +970,17 @@ function bindLeadsTab(){
 const isLeadC=l=>l.status==="int"||l.status==="conv";
 const leadLog=l=>{for(let i=l.logs.length-1;i>=0;i--){const g=l.logs[i];if(g.outcome==="int"||g.outcome==="conv")return g}return null}; // first interested call
 const leadAt=l=>{const g=leadLog(l);return g?g.at:(isLeadC(l)?(l.lastAt||l.created):null)};
+/* where a case is now – each case shows in one tab only: "fu" Follow-up (before login) · "loan" Login / Sanction / Disbursal · "closed" */
+const caseStage=c=>!c?"":stType(c.Status)==="closed"?"closed":atLoan(c)?"loan":"fu";
+/* 🔔 Updated: a case I generated that someone else changed since I last opened it (remembered on this phone / computer) */
+const seenKey=()=>"sncrm_seen_"+(ME?ME.id:""),seenGet=()=>{try{return JSON.parse(localStorage.getItem(seenKey())||"null")}catch(e){return null}},
+  seenPut=m=>{try{localStorage.setItem(seenKey(),JSON.stringify(m))}catch(e){}};
+function caseNew(c){if(!ME||!c||!c.upd||!isMine(c)||heldByMe(c))return false;let m=seenGet();
+  if(!m){m={};CASES().forEach(x=>{if(isMine(x)&&x.upd)m[x.code]=+x.upd});m.__init=1;seenPut(m);return false}   // first time: start from now, no flood of bells
+  if(m[c.code]==null){m[c.code]=+c.upd;seenPut(m);return false}
+  return +c.upd>m[c.code]&&normName(c["Updated by"]||"")!==normName(ME.name)}
+function caseSeen(c){if(!ME||!c||!c.upd)return;const m=seenGet()||{};m[c.code]=+c.upd;seenPut(m)}
+const bell=c=>caseNew(c)?' <span class="pill" style="background:#fff1d6;color:#8a5300;font-size:11px">🔔 Updated</span>':"";
 /* a lead case that reached Login (or Sanction / Disbursal) leaves the Interested lists – it is followed in Lead Cases */
 const atLoan=c=>!!c&&(!!(c.login||c.sanc||c.disbD)||/login|sanction/i.test(c.Status||"")||stType(c.Status)==="disb");
 const leadsIn=(arr=S.leads)=>arr.filter(l=>isLeadC(l)&&inRange(leadAt(l)));
@@ -1939,7 +1950,7 @@ const lastOf=l=>l.logs[0]||(l.lastRemark||l.lastAt?{remark:l.lastRemark,at:l.las
 const pageKind=e=>!e?"both":e.role==="Sales Manager"?"field":e.role==="Telecaller Executive"?"leads":"both";
 const showEtabs=()=>!!ME&&view.who!=="admin"&&(view.who===ME.id||isLead())&&(pageKind(emp(view.who))==="both"||!!S.connSrv);
 /* on their own page a person sees only the tabs Admin allows; Admin / Team Lead looking at someone's page see everything */
-const CTAB_PERM={today:"pDay",leads:"pList",int:"pInt",cases:"pLoan",calls:"pCalls"};
+const CTAB_PERM={today:"pDay",leads:"pList",int:"pInt",fu:"pInt",cases:"pLoan",closed:"pLoan",calls:"pCalls"};
 const pageOk=k=>!ME||view.who!==ME.id||pcan(k);
 const etabList=()=>(ME&&view.who===ME.id?[["leads","My calls"],["meet","My field work"],["conn","🤝 My connectors"]]:[["leads","Calls"],["meet","Field work"],["conn","🤝 Connectors"]]).filter(([k])=>(k!=="meet"||pageKind(emp(view.who))==="both")&&(k!=="conn"||S.connSrv)
   &&(k==="leads"?Object.values(CTAB_PERM).some(pageOk):pageOk(k==="meet"?"pMeet":"pConn")));
@@ -1982,7 +1993,8 @@ function renderEmp(){
   tMates.forEach(e=>{intPool[e.id]=intPool.team.filter(c=>mateOf(c)===e)});
   const intLoan=(intPool[intF]||intPool.mine).filter(c=>atLoan(c)&&inRange(c.leadD||c.at)).sort((a,b)=>(b.leadD||b.at||0)-(a.leadD||a.at||0));
   const loanPool=[...new Set([...CASES().filter(c=>c["Telecaller ID"]===me.id||normName(c["Team Lead"])===normName(me.name)),...intPool.all])].filter(atLoan);
-  Object.keys(intPool).forEach(k=>{intPool[k]=intPool[k].filter(c=>!atLoan(c))});   // Login or later → shown apart, below
+  const closedPool=[...new Set([...CASES().filter(c=>c["Telecaller ID"]===me.id||normName(c["Team Lead"])===normName(me.name)),...intPool.all])].filter(c=>caseStage(c)==="closed").filter(inP).sort(byDate);
+  Object.keys(intPool).forEach(k=>{intPool[k]=intPool[k].filter(c=>caseStage(c)==="fu")});   // Login or later → own tab · closed → Closed tab
   const intAll=intPool[intF]||intPool.mine,intCases=intAll.filter(inP).sort(byDate);
   const intNoCase=intF==="mine"||intF==="all"||intF==="filled"?myLeadsP.filter(l=>!caseOf(l.id)&&!isCP(l)):[],intN=S.srv2?intCases.length+intNoCase.length:myLeadsP.length,intOut=S.srv2?intAll.length-intCases.length:myLeads.length-myLeadsP.length;
   const tlBtn=me.role==="Team Lead"&&isMgr()&&!isTL()&&!own?`<button class="btn sm" id="seeTeam">👥 See ${esc(me.name.split(" ")[0])}'s team view</button>`:"";
@@ -2000,7 +2012,7 @@ function renderEmp(){
   <div class="card stat sclk" ${SD(`Converted – ${rl}`,"calls",ocL("conv"))} title="Calls marked Converted. Click to see them."><span>Converted</span><b style="color:var(--brand)">${oc("conv")}</b><div class="small mute">${oc("cb")} call back later</div><i class="sgo">View list ›</i></div>
   <div class="card stat sclk" ${SD((own?"My calling list":"Calling list – "+me.name),"leads",mine)} title="Everyone on the calling list. Click to see them."><span>${own?"My calling list":"Calling list"}</span><b>${mine.length}</b><div class="small mute">${mine.filter(l=>l.status==="new").length} not yet called</div><i class="sgo">View list ›</i></div>
   <div class="card stat sclk" ${SD("Callbacks due now","leads",due)} title="Call-backs whose time has come. Click to see them."><span>Callbacks due</span><b style="color:var(--amber)">${due.length}</b><div class="small mute">now</div><i class="sgo">View list ›</i></div></div>`;
-  h+=`<div class="tabs" style="margin-bottom:12px">${[["today",(own?"My day":"Today")+" · "+cbAll.length],["leads",(own?"My calling list":"Calling list")+" · "+mine.length],["int",(own?"My interested":"Interested")+" · "+intN],["cases","Login · Sanction · Disbursal · "+loanPool.length],["calls","Call history · "+calls.length]].filter(([k])=>ctOk.includes(k)).map(([k,l])=>`<button class="tab ${ctab===k?"on":""}" data-ctab="${k}">${l}</button>`).join("")}</div>`;
+  h+=`<div class="tabs" style="margin-bottom:12px">${[["today",(own?"My day":"Today")+" · "+cbAll.length],["leads",(own?"My calling list":"Calling list")+" · "+mine.length],["int","Interested · "+intNoCase.length],["fu","Follow-up · "+intCases.length+(intCases.some(caseNew)?" 🔔":"")],["cases","Login · Sanction · Disbursal · "+loanPool.length+(loanPool.some(caseNew)?" 🔔":"")],["closed","Closed · "+closedPool.length],["calls","Call history · "+calls.length]].filter(([k])=>ctOk.includes(k)).map(([k,l])=>`<button class="tab ${ctab===k?"on":""}" data-ctab="${k}">${l}</button>`).join("")}</div>`;
   if(ctab==="none")h+=noTabsMsg();
   if(ctab==="today"){
     const od=cbAll.filter(l=>l.followUp<t0),td=cbAll.filter(l=>l.followUp>=t0),fresh=mine.filter(l=>l.status==="new");
@@ -2022,21 +2034,29 @@ function renderEmp(){
     const when=c=>c.disbD||c.sanc||c.login||c.upd||c.at||0;Object.values(G).forEach(a=>a.sort((x,y)=>when(y)-when(x)));
     const sg=view.stg&&G[view.stg]?view.stg:"all",chip=(k,l,n)=>`<button class="chip ${sg===k?"on":""}" data-stg="${k}">${l} · ${n}</button>`;
     h+=`<div class="intf"><span class="small mute">Show:</span>${chip("all","All",loanPool.length)}${chip("login","📂 Login",G.login.length)}${chip("sanc","✅ Sanction",G.sanc.length)}${chip("disb","💰 Disbursed",G.disb.length)}</div>
-      <div class="small mute" style="margin:-4px 0 10px">Cases ${own?"you":"they"} filled or that are with ${own?"you":"them"}${tMates.length?", and your team's":""}, once they reach <b>Login</b>. Before Login they stay in <b>${own?"My interested":"Interested"}</b>. Open a case to fill its login, sanction and disbursal dates.</div>`;
+      <div class="small mute" style="margin:-4px 0 10px">Cases ${own?"you":"they"} filled or that are with ${own?"you":"them"}${tMates.length?", and your team's":""}, once they reach <b>Login</b>. Before Login they are in <b>Follow-up</b>. Open a case to see (or, if it is with ${own?"you":"them"}, fill) its login, sanction and disbursal.</div>`;
     const sec=(k,t)=>G[k].length?`<h3 style="margin:14px 0 8px">${t} (${G[k].length})</h3>`+casesTable(G[k]):"";
-    h+=sg!=="all"?casesTable(G[sg],{empty:"No cases at this step."}):(loanPool.length?sec("login","📂 Login done")+sec("sanc","✅ Sanctioned")+sec("disb","💰 Disbursed"):`<div class="card empty">No cases at Login or later yet. When a case is logged in at a bank, it moves here from ${own?"My interested":"Interested"}.</div>`);
+    h+=sg!=="all"?casesTable(G[sg],{empty:"No cases at this step."}):(loanPool.length?sec("login","📂 Login done")+sec("sanc","✅ Sanctioned")+sec("disb","💰 Disbursed"):`<div class="card empty">No cases at Login or later yet. When a case is logged in at a bank, it moves here from Follow-up.</div>`);
   }else if(ctab==="int"){
+    // Interested = said yes on a call, lead form not filled yet. Once the form is filled the case goes to the Team Lead → Follow-up
+    h+=`<div class="row" style="margin-bottom:10px;align-items:flex-start"><div class="small mute" style="flex:1;min-width:220px">Customers ${own?"you":"they"} marked <b>Interested</b> on a call whose <b>lead form is not filled yet</b>. Fill the form and the case goes to the Team Lead – then it shows in <b>Follow-up</b>.</div>${own&&can("cases")?`<button class="btn pri sm" data-newcase>📝 Fill lead form</button>`:""}</div>`;
+    h+=`<div class="small" style="margin-bottom:8px">Showing <b>${esc(rangeLabel())}</b></div>`;
+    h+=intNoCase.length?`<div class="card">${intNoCase.slice().sort((a,b)=>(leadAt(b)||0)-(leadAt(a)||0)).map(l=>leadRow(l)).join("")}</div>`:`<div class="card empty">Nobody waiting for a lead form in this period.${intCases.length?` Their cases are in <a class="lnk" href="#" data-ctab="fu">Follow-up</a>.`:""}</div>`;
+  }else if(ctab==="closed"){
+    h+=`<div class="small mute" style="margin-bottom:10px">Cases that ended as <b>Not interested</b>, <b>Cancelled</b>, <b>Rejected</b> or <b>Closed</b> – kept for the record. Showing <b>${esc(rangeLabel())}</b> (by lead date).</div>`;
+    h+=casesTable(closedPool,{empty:"No closed cases in this period – try All time above."});
+  }else if(ctab==="fu"){
     const list=myLeadsP.slice().sort((a,b)=>(leadAt(b)||0)-(leadAt(a)||0)),myCases=intCases,noCase=intNoCase;
     h+=`<div class="small" style="margin-bottom:8px">Showing leads from <b>${esc(rangeLabel())}</b>${intOut?` · <span class="mute">${intOut} more on other dates – pick <b>All time</b> above to see them</span>`:""}</div>`;
     if(!S.srv2){h+=`<div class="small mute" style="margin-bottom:10px">Customers ${own?"you":"they"}'ve marked <b>Interested</b> (or Converted), newest first.</div>`;
       h+=`<div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No leads yet – customers marked Interested on a call show up here.</div>`}</div>`;}else{
-    h+=`<div class="row" style="margin-bottom:10px;align-items:flex-start"><div class="small mute" style="flex:1;min-width:220px">When ${own?"you mark":"they mark"} a customer <b>Interested</b>, the lead form opens in the call window and the case goes to the person ${own?"you choose":"they choose"} for further process. ${own&&!isLead()?"You can see every update here.":""}</div>${own&&can("cases")?`<button class="btn pri sm" data-newcase>📝 Fill lead form</button>`:""}</div>`;
+    h+=`<div class="small mute" style="margin-bottom:10px">Lead cases <b>before login</b>: documents and follow-ups, done by the Team Lead. ${own?"Cases you generated show here too – open one to see every update; 🔔 means the Team Lead changed something since you last looked.":""}</div>`;
     if(tMates.length){const n=k=>intPool[k].filter(inP).length,chip=(k,l)=>`<button class="chip ${intF===k?"on":""}" data-intf="${esc(k)}">${esc(l)} · ${n(k)}</button>`;
       h+=`<div class="intf"><span class="small mute">Show:</span>${chip("all","All")}${chip("filled",own?"Filled by me":"Filled by them")}${chip("sent",own?"Sent to me":"Sent to them")}${chip("team",own?"My team":"Team")}<span class="intf-sep"></span>${tMates.map(e=>chip(e.id,e.name)).join("")}</div>
        <div class="small mute" style="margin:-4px 0 10px">${({all:"Every case below once: filled by you, sent to you, or filled by your team.",filled:own?"Cases you filled yourself.":"Cases they filled themselves.",sent:own?"Cases someone else filled and sent to you – they are with you now.":"Cases someone else filled and sent to them.",team:"Cases filled by your team (by their login, or the SM Name on old cases) – also the ones they sent to you."})[intF]||"Cases filled by "+esc(empName(intF))+" – also the ones sent on to someone else."}</div>`}
     h+=casesTable(myCases,{empty:intOut?"No leads on these dates.":intF!=="mine"?"No cases here in this period – try All time above.":"No lead cases yet – mark a customer Interested on a call to open one."});
-    if(noCase.length)h+=`<h3 style="margin:18px 0 8px">Interested, no case yet</h3><div class="card">${noCase.map(l=>leadRow(l)).join("")}</div>`;
-    if(intLoan.length)h+=`<div class="small" style="margin-top:14px;padding:8px 10px;background:#e8f0fe;border-radius:8px">📂 <b>${intLoan.length}</b> case${intLoan.length===1?"":"s"} in this period reached <b>Login</b> or later – see the <a class="lnk" href="#" data-ctab="cases">Login · Sanction · Disbursal</a> tab.</div>`;}
+
+    }
   }else if(ctab==="calls"){
     const co=view.cOut||"all";const list=calls.filter(g=>co==="all"||g.outcome===co);
     h+=`<div class="row" style="margin-bottom:10px"><select id="cOut"><option value="all">All outcomes</option>${Object.entries(OUTCOMES).map(([k,o])=>`<option value="${k}" ${co===k?"selected":""}>${o.label} · ${oc(k)}</option>`).join("")}</select>
@@ -2100,7 +2120,7 @@ const inr=v=>{const n=parseFloat(String(v).replace(/[^\d.]/g,""));return isFinit
 function casesTable(list,{empty="No lead cases yet.",sel=false}={}){
   const S2=view.csel||new Set(),allOn=sel&&list.length&&list.every(c=>S2.has(c.code));
   return `<div class="card tw"><table class="ctab"><tr>${sel?`<th style="width:28px"><input type="checkbox" id="cselAll" title="Select all shown (${list.length})" ${allOn?"checked":""}></th>`:""}<th>Lead code</th><th>Lead date</th><th>Customer</th><th>SM</th><th>Product</th><th>Amount</th><th>Shared by</th><th>With</th><th>Bank</th><th>Status</th><th>Next follow-up</th><th>Last update</th><th></th></tr>
-   ${list.map(c=>`<tr${sel&&S2.has(c.code)?' class="selrow"':""}>${sel?`<td><input type="checkbox" data-csel="${esc(c.code)}" ${S2.has(c.code)?"checked":""}></td>`:""}<td class="num" style="white-space:nowrap"><b>${esc(c.code)}</b></td><td class="small num" style="white-space:nowrap">${esc(c["Lead Date"])}</td>
+   ${list.map(c=>`<tr${sel&&S2.has(c.code)?' class="selrow"':""}>${sel?`<td><input type="checkbox" data-csel="${esc(c.code)}" ${S2.has(c.code)?"checked":""}></td>`:""}<td class="num" style="white-space:nowrap"><b>${esc(c.code)}</b>${bell(c)}</td><td class="small num" style="white-space:nowrap">${esc(c["Lead Date"])}</td>
      <td><b>${esc(c["Customer Name"])}</b><div class="small mute num" style="white-space:nowrap">${isLead()?`<a class="lnk" href="${telHref(c["Contact Number"])}">${esc(c["Contact Number"])}</a>`:esc(c["Contact Number"])}</div></td>
      <td class="small" style="white-space:nowrap">${c["SM Name"]?`<span class="smtag">${esc(c["SM Name"])}</span>`:'<span class="mute">—</span>'}</td><td class="small">${esc(c.Product)||'<span class="mute">—</span>'}</td><td class="num" style="white-space:nowrap">${inr(c["Amount Required"])||'<span class="mute">—</span>'}</td>
      <td class="small">${esc(c["Lead Shared by"])}</td><td class="small" style="white-space:nowrap">${esc(c["Team Lead"])||NA}</td><td class="small">${esc(c["Bank Name"])||'<span class="mute">—</span>'}</td>
@@ -2154,7 +2174,7 @@ function loanStepsCheck(o){
   for(const h of LS_AMT)if(o[h]&&!(numOf(o[h])>0))return h+" should be a number, e.g. 500000";
   return ""}
 function openCase(code){
-  const c=CASES().find(x=>x.code===code);if(!c)return;const canEd=canEditCase(c),sentByMe=isMine(c)&&!heldByMe(c);
+  const c=CASES().find(x=>x.code===code);if(!c)return;caseSeen(c);const canEd=canEditCase(c),sentByMe=isMine(c)&&!heldByMe(c);
   const ro=(h,v)=>`<div><div class="small mute">${h}</div><div style="font-weight:600">${v||'<span class="mute" style="font-weight:400">—</span>'}</div></div>`;
   const inp=(h,type="text")=>{const id="cf_"+h.replace(/\W/g,"");const v=c[h]||"";
     if(!canEd)return ro(h,h==="Amount Required"?inr(v):esc(v));
@@ -2762,6 +2782,7 @@ function updatesTimeline(c){const parts=String(c.Remarks||"").split(" // ").map(
 function nfHTML(f,full,o={}){
   if(!f["SM Name"]&&ME&&ME.role!=="Admin"){const me=(caseOpts("SM Name")||[]).find(x=>normName(x)===normName(ME.name));if(me)f["SM Name"]=me}   // whoever fills the form is the SM unless they pick someone else
   const opt=h=>(caseOpts(h)||[]).filter(Boolean),people=(S.handTo||[]).slice().sort((a,b)=>a.name.localeCompare(b.name)),need=!full,id=h=>"nf_"+h.replace(/\W/g,"");
+  const tls=people.filter(x=>x.role==="Team Lead"),myTl=(ME&&(emp(ME.id)||{}).tl)||(tls.length===1?tls[0].id:"");if(need&&!f.to&&myTl&&people.some(x=>x.id===myTl))f.to=myTl;   // callers: their own Team Lead is chosen already
   const fld=(h,req,inner,{hint="",wide=false,label=h}={})=>`<div class="fld" data-f="${esc(h)}"${wide?' style="grid-column:1/-1"':""}><label for="${id(h)}">${esc(label)}${req?"<i>*</i>":""}${hint?` <em>${hint}</em>`:""}</label>${inner}<div class="msg">${h==="Send this case to"?"Choose who will take this case":"Required"}</div></div>`;
   const group=(h,cls)=>{const v=opt(h);if(!v.length)return`<input id="${id(h)}" value="${esc(f[h]||"")}">`;
     if(v.length>10)return`<select id="${id(h)}"><option value="">Choose…</option>${v.map(x=>`<option ${f[h]===x?"selected":""}>${esc(x)}</option>`).join("")}</select>`;
@@ -2770,7 +2791,7 @@ function nfHTML(f,full,o={}){
   const txt=(h,ph,extra="",dv="")=>`<input id="${id(h)}" value="${esc(f[h]||dv)}" placeholder="${ph}" autocomplete="off" ${extra}>`;
   const ini=n=>String(n).split(/\s+/).map(w=>w[0]||"").join("").slice(0,2).toUpperCase();
   const pick=`<input type="hidden" id="nf_to" value="${esc(f.to||"")}">${people.length>8?`<input class="ppq" id="nf_toq" placeholder="Search a name…" autocomplete="off">`:""}
-    <div class="pp" id="nf_pp">${full?`<button type="button" class="keep ${!f.to?"on":""}" data-to=""><span class="pa">✓</span><span class="n">Keep it with me for now</span></button>`:""}${people.map(x=>`<button type="button" class="${f.to===x.id?"on":""}" data-to="${esc(x.id)}" data-n="${esc(x.name.toLowerCase())}"><span class="pa">${esc(ini(x.name))}</span><span class="n">${esc(x.name)}</span></button>`).join("")}</div>`;
+    <div class="pp" id="nf_pp">${full?`<button type="button" class="keep ${!f.to?"on":""}" data-to=""><span class="pa">✓</span><span class="n">Keep it with me for now</span></button>`:""}${people.map(x=>`<button type="button" class="${f.to===x.id?"on":""}" data-to="${esc(x.id)}" data-n="${esc(x.name.toLowerCase())}"><span class="pa">${esc(ini(x.name))}</span><span class="n">${esc(x.name)}${x.role==="Team Lead"?' <em style="font-style:normal;opacity:.7">· Team Lead</em>':""}</span></button>`).join("")}</div>`;
   return `<div class="lf">
    ${o.inCall?`<div class="lf-top"><div><b>Lead &amp; Inquiry form</b><div class="small mute">The customer is interested – complete this to open their case.</div></div><span class="lf-date">Lead date · ${esc(new Date().toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}))}</span></div>`:""}
    <div class="lf-sec"><div class="lf-h">Customer${o.inCall?"":`<span>Lead date ${esc(new Date().toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}))} · automatic</span>`}</div>
@@ -2791,7 +2812,7 @@ function nfHTML(f,full,o={}){
     </div></div>
    <div class="lf-sec"><div class="lf-h">${need?"Send this case to":"Who takes this case"}<span>${need?"required – they take it forward":"optional"}</span></div>
     ${fld("Send this case to",need,pick,{label:need?"Choose a person":"Choose a person, or keep it"})}
-    <div class="note">${need?"After you send it, the case shows in your <b>My cases</b> with every update – only the person it's with (or Admin) can change it.":"If you send it, you'll still see every update; only the person it's with (or Admin) can change it."}</div></div>
+    <div class="note">${need?"After you send it, the case shows in your <b>Follow-up</b> tab with every update – only the person it's with (or Admin) can change it.":"If you send it, you'll still see every update; only the person it's with (or Admin) can change it."}</div></div>
   </div>`}
 function bindNF(full){
   document.querySelectorAll("[data-nfh] .chip").forEach(b=>b.onclick=()=>{b.parentNode.querySelectorAll(".chip").forEach(x=>x.classList.remove("on"));b.classList.add("on");b.closest(".fld")&&b.closest(".fld").classList.remove("err")});
