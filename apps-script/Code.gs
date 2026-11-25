@@ -786,7 +786,12 @@ function canEditCase_(me, row, emps) {
   return perms_(me).has("caseEdit") && scope_(me) !== "own" && canSeeCase_(me, row, emps, teamFor_(me, emps));
 }
 // Who a case can be handed to for further process: any active person (executives, telecallers, Team Leads, Managers) – never Admin
-const handTargets_ = (me, emps) => emps.filter(x => x.active && x.id !== me.id && x.role !== "Admin");
+const handTargets_ = (me, emps) => {
+  const all = emps.filter(x => x.active && x.id !== me.id && x.role !== "Admin");
+  if (me.role !== "SM - Field work") return all;
+  const tls = all.filter(x => x.role === "Team Lead"), mine = tls.filter(x => x.id === me.tl);   // 11.17: field work leads go to their own Team Lead only
+  return mine.length ? mine : tls;
+};
 const teamFor_ = (me, emps) => scope_(me) === "team" ? teamOf_(me, emps) : new Set();
 function cases_(me, emps) {
   const team = teamFor_(me, emps);

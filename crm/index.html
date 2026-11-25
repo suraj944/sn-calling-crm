@@ -113,6 +113,7 @@ svg.chart rect[data-tip]:hover+*,svg.chart rect[data-tip]:hover{fill:rgba(36,83,
 @media(max-width:560px){.g2,.g3{grid-template-columns:1fr}}
 .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}.seg button{flex:1;border:0;background:none;padding:8px 6px;font:inherit;font-size:13.5px;cursor:pointer;border-left:1px solid var(--line)}
 .seg button:first-child{border-left:0}.seg button.on{background:var(--brand);color:#fff;font-weight:600}
+.mchips{display:flex;flex-wrap:wrap;gap:6px}.mchips button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 14px;font:inherit;font-size:13.5px;cursor:pointer;color:var(--ink)}.mchips button.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
 .seg-int button.on:first-child{background:var(--green)}.seg-int button.on:last-child{background:var(--red)}
 .mform .f{margin-top:12px}.mtable td{vertical-align:middle}.mrow:hover{background:#fafbff}
 .modal:has(.mform){max-width:640px}
@@ -1508,8 +1509,8 @@ function openMeeting(id){
   <form id="mfm"><div class="mb mform">
     <div class="g2"><div><label class="f">${L.at}</label><input type="datetime-local" id="m_at" value="${dtv}" style="width:100%"></div>
       <div><label class="f">${L.sm}</label>${canPickSm?sel("m_sm",S.employees.map(e=>e.name),curSm):`<input value="${esc(curSm)}" disabled style="width:100%">`}</div></div>
-    <div class="g2"><div><label class="f">${L.type}</label>${seg("m_type",M_TYPES,m?m.type:"Physical")}</div>
-      <div><label class="f">${L.ent}</label>${sel("m_ent",M_ENTITY,m?m.ent:"",m?"":"Choose…")}</div></div>
+    <label class="f">${L.type}</label>${seg("m_type",M_TYPES,m?m.type:"Physical")}
+    <label class="f">${L.ent}</label>${(()=>{const cur=m?m.ent:"",opts=cur&&!M_ENTITY.includes(cur)?[...M_ENTITY,cur]:M_ENTITY;return `<div class="mchips" data-seg="m_ent" role="group" aria-label="${esc(L.ent)}">${opts.map(t=>`<button type="button" class="${cur===t?"on":""}">${esc(t)}</button>`).join("")}</div>`})()}
     <label class="f">${L.person} *</label><input id="m_person" value="${v("person")}" placeholder="Person you met, e.g. Rohan" style="width:100%" maxlength="120">
     <div class="g2"><div><label class="f">${L.entity}</label><input id="m_entity" value="${v("entity")}" placeholder="e.g. Vaishnavi Paradise" style="width:100%" maxlength="120"></div>
       <div><label class="f">${L.phone}</label><input id="m_phone" inputmode="tel" value="${v("phone")}" placeholder="98XXX XXXXX" style="width:100%" maxlength="40"></div></div>
@@ -1543,7 +1544,7 @@ function openMeeting(id){
     if(person.length<2&&entity.length<2){$("#mErr").textContent="Enter the name of the person or the entity you met.";return}
     const ph=$("#m_phone").value.trim();if(ph&&ph.replace(/\D/g,"").length<10){$("#mErr").textContent="Contact number looks too short – enter 10 digits or leave it empty.";return}
     const smName=canPickSm?$("#m_sm").value:curSm;const smEmp=S.allEmps.find(x=>x.name===smName);
-    const rec={id:m?m.id:"",at:toSheetTime(parseT($("#m_at").value)||Date.now()),sm:smName,smId:smEmp?smEmp.id:(m?m.smId:""),type:segVal("m_type")||"Physical",ent:$("#m_ent").value,
+    const rec={id:m?m.id:"",at:toSheetTime(parseT($("#m_at").value)||Date.now()),sm:smName,smId:smEmp?smEmp.id:(m?m.smId:""),type:segVal("m_type")||"Physical",ent:segVal("m_ent"),
       person,entity,willing:segVal("m_willing"),existing:$("#m_exist").value.trim(),phone:ph,purpose:$("#m_purpose").value.trim(),outcome:$("#m_outcome").value.trim(),interest:segVal("m_interest"),
       remarks:$("#m_remarks").value.trim(),tieup:segVal("m_tieup"),tieupWith:segVal("m_tieup")==="Yes"?$("#m_tuw").value.trim():"",passback:$("#m_pass").value.trim(),feedback:$("#m_fb").value.trim(),location:$("#m_loc")?properName($("#m_loc").value):(m?m.location:"")};
     if(m&&!await askOk({title:"Save changes to this field work entry?",ok:"Yes, save"}))return;
@@ -2803,8 +2804,9 @@ function updatesTimeline(c){const parts=String(c.Remarks||"").split(" // ").map(
 // the form's fields – used in the call window (customer marked Interested) and in Lead Cases (people with Lead Cases access)
 function nfHTML(f,full,o={}){
   if(!f["SM Name"]&&ME&&ME.role!=="Admin"){const me=(caseOpts("SM Name")||[]).find(x=>normName(x)===normName(ME.name));if(me)f["SM Name"]=me}   // whoever fills the form is the SM unless they pick someone else
-  const opt=h=>(caseOpts(h)||[]).filter(Boolean),people=(S.handTo||[]).slice().sort((a,b)=>a.name.localeCompare(b.name)),need=!full,id=h=>"nf_"+h.replace(/\W/g,"");
-  const tls=people.filter(x=>x.role==="Team Lead"),myTl=(ME&&(emp(ME.id)||{}).tl)||(tls.length===1?tls[0].id:"");if(need&&!f.to&&myTl&&people.some(x=>x.id===myTl))f.to=myTl;   // callers: their own Team Lead is chosen already
+  const opt=h=>(caseOpts(h)||[]).filter(Boolean);let people=(S.handTo||[]).slice().sort((a,b)=>a.name.localeCompare(b.name)),need=!full,id=h=>"nf_"+h.replace(/\W/g,"");
+  const tls=people.filter(x=>x.role==="Team Lead"),myTl=(ME&&(emp(ME.id)||{}).tl)||(tls.length===1?tls[0].id:"");
+  if(ME&&isFieldSM(emp(ME.id))){const only=tls.filter(x=>x.id===myTl);people=only.length?only:tls;if(people.length===1)f.to=people[0].id}   // SM - Field work: leads go to their Team Lead only (Suraj, 25 Nov)if(need&&!f.to&&myTl&&people.some(x=>x.id===myTl))f.to=myTl;   // callers: their own Team Lead is chosen already
   const fld=(h,req,inner,{hint="",wide=false,label=h}={})=>`<div class="fld" data-f="${esc(h)}"${wide?' style="grid-column:1/-1"':""}><label for="${id(h)}">${esc(label)}${req?"<i>*</i>":""}${hint?` <em>${hint}</em>`:""}</label>${inner}<div class="msg">${h==="Send this case to"?"Choose who will take this case":"Required"}</div></div>`;
   const group=(h,cls)=>{const v=opt(h);if(!v.length)return`<input id="${id(h)}" value="${esc(f[h]||"")}">`;
     if(v.length>10)return`<select id="${id(h)}"><option value="">Choose…</option>${v.map(x=>`<option ${f[h]===x?"selected":""}>${esc(x)}</option>`).join("")}</select>`;
