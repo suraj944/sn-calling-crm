@@ -331,7 +331,7 @@ function loadAll_(me) {
     connectors: connectorsFor_(me, emps),
     cpData: true,
     pagePerms: true,
-    leadForm: true, cpLead: true, meetLoc: true,      // 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
+    leadForm: true, cpLead: true, meetLoc: true, keepLead: true,   // 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
     stages: true,                                     // case window can save login / sanction dates and amounts (11.14+)
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
@@ -829,7 +829,7 @@ function createCaseFor_(me, leadId) {                                  // open a
 function prepareCase_(me, c, force, to, src) {
   src = src || {};
   const L = lists_(), emps = emps_(), now = new Date(), full = perms_(me).has("cases"), cp = full || perms_(me).has("leadForm");   // 11.17: SM - Field work can name the CP who gave the lead
-  if (!full && !to) throw new Error("Choose who to send this case to");
+  // 11.18: nobody has to send the case on straight away – they can keep it until the documents come, then send it (Suraj, 25 Nov)
   const cl = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "").replace(/\s+/g, " ").trim().slice(0, 300);
   const need = (h, label) => { const v = cl(c[h]); if (!v) throw new Error("Fill in " + (label || h)); return v; };
   const choose = h => { const v = need(h); const list = h === "SM Name" ? smList_(L) : (L.lists[h] || []); if (!list.length) return properName_(v);

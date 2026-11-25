@@ -622,7 +622,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.leadForm=!!j.leadForm;S.cpLead=!!j.cpLead;S.meetLoc=!!j.meetLoc;S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.leadForm=!!j.leadForm;S.cpLead=!!j.cpLead;S.meetLoc=!!j.meetLoc;S.keepLead=!!j.keepLead;S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu,by,form,force,connector){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force,connector})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -1646,7 +1646,8 @@ function impCheckRemote(){clearTimeout(impTimer);impTimer=setTimeout(async()=>{i
   try{const j=await Script.req("checkPhones",{phones:keys});view.impRemote=Object.assign(view.impRemote||{},j.found||{});(view.impAsked=view.impAsked||new Set());keys.forEach(k=>view.impAsked.add(k))}catch(e){}
   view.impChecking=false;impPreview()},500)}
 const customRoles=()=>[...new Set((S.allEmps||S.employees||[]).map(e=>e.role).filter(isCustomRole))].sort();
-const roleOpts=sel=>ROLES.filter(r=>canManageRole(r)).map(r=>`<option ${r===sel?"selected":""}>${r}</option>`).join("")
+const roleOpts=sel=>ROLES.filter(r=>canManageRole(r)&&(r!=="Sales Manager"||r===sel)).map(   /* Sales Manager no longer offered (Suraj, 25 Nov) – kept only on old rows that have it */
+  r=>`<option ${r===sel?"selected":""}>${r}</option>`).join("")
   +customRoles().map(r=>`<option ${r===sel?"selected":""}>${esc(r)}</option>`).join("")
   +(isMgr()?`<option value="__custom">✏ Type a designation…</option>`:"");
 /* When "Type a designation…" is picked, show a text box next to the list; returns the role to save (or "" if empty) */
@@ -1965,6 +1966,8 @@ const lastOf=l=>l.logs[0]||(l.lastRemark||l.lastAt?{remark:l.lastRemark,at:l.las
 const pageKind=e=>!e?"both":e.role==="Sales Manager"?"field":e.role==="Telecaller Executive"?"leads":"both";   // "SM - Field work": field work + connectors + their leads
 const isFieldSM=e=>!!e&&e.role==="SM - Field work";
 /* SM - Field work, own page: one "My field work" tab with sub-tabs Field work · My follow-up · Login · Sanction · Disbursal · Closed (Suraj, 25 Nov) */
+/* whoever fills the lead form (telecallers and SM - Field work too) can keep the case until the documents come, then send it to the Team Lead (Suraj, 25 Nov) – needs server 11.18 */
+const fsmKeep=()=>!!S.keepLead;
 const isFsmOwn=me=>!!ME&&!!me&&me.id===ME.id&&isFieldSM(me);
 function fsmBar(me,on){
   const pool=CASES().filter(c=>c["Telecaller ID"]===me.id||(!String(c["Telecaller ID"]||"").trim()&&normName(c["SM Name"])===normName(me.name))||normName(c["Team Lead"])===normName(me.name));
@@ -2243,18 +2246,18 @@ function openCase(code){
     ${c["Follow-up history"]?`<details style="margin-top:10px"><summary class="small"><b>Earlier follow-up history</b> <span class="mute">(from the old sheet)</span></summary><div class="small" style="margin-top:6px;white-space:pre-wrap;background:#f7f8fa;border-radius:8px;padding:8px 10px">${esc(c["Follow-up history"])}</div></details>`:""}
     <div class="small mute" style="margin-top:8px">Monthly: ${esc(c.Monthly)} · Last update ${c.upd?fmt(c.upd):"—"} by ${esc(c["Updated by"])}</div>
    </div>
-   <div class="mf">${isLead()&&can("caseRemove")?`<button class="btn" id="crm" style="margin-right:auto;color:var(--red)">🗑 Remove case</button>`:""}${canTransferCase(c)?`<button class="btn" id="ctr">⇄ Transfer case</button>`:""}<button class="btn" id="mc">${canEd?"Cancel":"Close"}</button>${canEd?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
+   <div class="mf">${isLead()&&can("caseRemove")?`<button class="btn" id="crm" style="margin-right:auto;color:var(--red)">🗑 Remove case</button>`:""}${canTransferCase(c)?`<button class="btn" id="ctr">${!can("caseTransfer")&&ownerCanSend(c)?((S.handTo||[]).length===1?"📤 Send to "+esc(S.handTo[0].name)+" (documents ready)":"📤 Send case (documents ready)"):"⇄ Transfer case"}</button>`:""}<button class="btn" id="mc">${canEd?"Cancel":"Close"}</button>${canEd?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
   $("#modal").style.maxWidth="880px";$("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#mc").onclick=close;
   if(canEd)bindLoanSteps(c);
   document.querySelectorAll("[data-fq]").forEach(b=>b.onclick=()=>{const v=b.dataset.fq;$("#cf_fu").value=v==="x"?"":ymd(sod(Date.now())+(+v)*DAY+3600e3)});
   const trb=$("#ctr");if(trb)trb.onclick=async()=>{
     const adm=can("caseTransfer")&&(S.transferTo||[]).length>0,cur=c["Team Lead"]||"",list=(adm?S.transferTo:S.handTo||[]).filter(x=>normName(x.name)!==normName(cur));
     if(!list.length)return toast("There's nobody else to transfer to");
-    const pr=askOk({title:"Transfer case "+c.code+"?",ok:"Yes, transfer",body:`<b>${esc(c["Customer Name"])}</b> · ${esc(c["Contact Number"])}<div class="small mute" style="margin:2px 0 10px">Now with: <b>${esc(cur||"nobody – not assigned yet")}</b></div>
-      <label class="f" for="trTo">Transfer to</label><select id="trTo" style="width:100%"><option value="">— Choose a person —</option>${peopleOptions(list)}</select>
+    const pr=askOk({title:(adm?"Transfer case ":"Send case ")+c.code+"?",ok:adm?"Yes, transfer":"Yes, send",body:`<b>${esc(c["Customer Name"])}</b> · ${esc(c["Contact Number"])}<div class="small mute" style="margin:2px 0 10px">Now with: <b>${esc(cur||"nobody – not assigned yet")}</b></div>
+      <label class="f" for="trTo">${adm?"Transfer to":"Send to"}</label><select id="trTo" style="width:100%"><option value="">— Choose a person —</option>${peopleOptions(list,!adm?(()=>{const my=(emp(ME&&ME.id)||{}).tl,tl=list.filter(x=>x.role==="Team Lead");return my&&list.some(x=>x.id===my)?my:list.length===1?list[0].id:tl.length===1?tl[0].id:""})():"")}</select>
       <label class="f" for="trNote" style="margin-top:10px">Reason (optional)</label><textarea id="trNote" maxlength="200" style="width:100%;min-height:60px" placeholder="e.g. Customer is in Thane – Amit's area"></textarea>
       <div class="small mute" style="margin-top:8px">The case moves to their list and a line is added to Remarks. ${!adm?"<b>After this you can still see every update, but you can't change the case.</b>":ME&&ME.role!=="Admin"?"You may stop seeing it if the telecaller isn't in your team.":""}</div>`});
-    $("#cfmYes").disabled=true;$("#trTo").onchange=()=>$("#cfmYes").disabled=!$("#trTo").value;
+    $("#cfmYes").disabled=!$("#trTo").value;$("#trTo").onchange=()=>$("#cfmYes").disabled=!$("#trTo").value;
     if(!await pr)return;const to=$("#trTo").value,note=$("#trNote").value.trim(),who=(list.find(x=>x.id===to)||{}).name||"";if(!to)return;
     const done=btnBusy(trb,"Transferring…");if(await write(api=>api.transferCase(c.code,to,note),"Case "+c.code+" transferred to "+who,"Transferring case "+c.code+" to "+who+"…"))close();else done()};
   const rmb=$("#crm");if(rmb)rmb.onclick=async()=>{
@@ -2819,9 +2822,9 @@ function updatesTimeline(c){const parts=String(c.Remarks||"").split(" // ").map(
 // the form's fields – used in the call window (customer marked Interested) and in Lead Cases (people with Lead Cases access)
 function nfHTML(f,full,o={}){
   if(!f["SM Name"]&&ME&&ME.role!=="Admin"){const me=(caseOpts("SM Name")||[]).find(x=>normName(x)===normName(ME.name));if(me)f["SM Name"]=me}   // whoever fills the form is the SM unless they pick someone else
-  const opt=h=>(caseOpts(h)||[]).filter(Boolean);let people=(S.handTo||[]).slice().sort((a,b)=>a.name.localeCompare(b.name)),need=!full,id=h=>"nf_"+h.replace(/\W/g,"");
+  const opt=h=>(caseOpts(h)||[]).filter(Boolean);let people=(S.handTo||[]).slice().sort((a,b)=>a.name.localeCompare(b.name)),keep=full||fsmKeep(),need=!keep,id=h=>"nf_"+h.replace(/\W/g,"");
   const tls=people.filter(x=>x.role==="Team Lead"),myTl=(ME&&(emp(ME.id)||{}).tl)||(tls.length===1?tls[0].id:"");
-  if(ME&&isFieldSM(emp(ME.id))){const only=tls.filter(x=>x.id===myTl);people=only.length?only:tls;if(people.length===1)f.to=people[0].id}   // SM - Field work: leads go to their Team Lead only (Suraj, 25 Nov)if(need&&!f.to&&myTl&&people.some(x=>x.id===myTl))f.to=myTl;   // callers: their own Team Lead is chosen already
+  if(ME&&isFieldSM(emp(ME.id))){const only=tls.filter(x=>x.id===myTl);people=only.length?only:tls;if(people.length===1&&!keep)f.to=people[0].id}   // SM - Field work: leads go to their Team Lead only (Suraj, 25 Nov)if(need&&!f.to&&myTl&&people.some(x=>x.id===myTl))f.to=myTl;   // callers: their own Team Lead is chosen already
   const fld=(h,req,inner,{hint="",wide=false,label=h}={})=>`<div class="fld" data-f="${esc(h)}"${wide?' style="grid-column:1/-1"':""}><label for="${id(h)}">${esc(label)}${req?"<i>*</i>":""}${hint?` <em>${hint}</em>`:""}</label>${inner}<div class="msg">${h==="Send this case to"?"Choose who will take this case":"Required"}</div></div>`;
   const group=(h,cls)=>{const v=opt(h);if(!v.length)return`<input id="${id(h)}" value="${esc(f[h]||"")}">`;
     if(v.length>10)return`<select id="${id(h)}"><option value="">Choose…</option>${v.map(x=>`<option ${f[h]===x?"selected":""}>${esc(x)}</option>`).join("")}</select>`;
@@ -2830,7 +2833,7 @@ function nfHTML(f,full,o={}){
   const txt=(h,ph,extra="",dv="")=>`<input id="${id(h)}" value="${esc(f[h]||dv)}" placeholder="${ph}" autocomplete="off" ${extra}>`;
   const ini=n=>String(n).split(/\s+/).map(w=>w[0]||"").join("").slice(0,2).toUpperCase();
   const pick=`<input type="hidden" id="nf_to" value="${esc(f.to||"")}">${people.length>8?`<input class="ppq" id="nf_toq" placeholder="Search a name…" autocomplete="off">`:""}
-    <div class="pp" id="nf_pp">${full?`<button type="button" class="keep ${!f.to?"on":""}" data-to=""><span class="pa">✓</span><span class="n">Keep it with me for now</span></button>`:""}${people.map(x=>`<button type="button" class="${f.to===x.id?"on":""}" data-to="${esc(x.id)}" data-n="${esc(x.name.toLowerCase())}"><span class="pa">${esc(ini(x.name))}</span><span class="n">${esc(x.name)}${x.role==="Team Lead"?' <em style="font-style:normal;opacity:.7">· Team Lead</em>':""}</span></button>`).join("")}</div>`;
+    <div class="pp" id="nf_pp">${keep?`<button type="button" class="keep ${!f.to?"on":""}" data-to=""><span class="pa">✓</span><span class="n">${full?"Keep it with me for now":"Keep it with me – documents pending"}</span></button>`:""}${people.map(x=>`<button type="button" class="${f.to===x.id?"on":""}" data-to="${esc(x.id)}" data-n="${esc(x.name.toLowerCase())}"><span class="pa">${esc(ini(x.name))}</span><span class="n">${esc(x.name)}${x.role==="Team Lead"?' <em style="font-style:normal;opacity:.7">· Team Lead</em>':""}</span></button>`).join("")}</div>`;
   return `<div class="lf">
    ${o.inCall?`<div class="lf-top"><div><b>Lead &amp; Inquiry form</b><div class="small mute">The customer is interested – complete this to open their case.</div></div><span class="lf-date">Lead date · ${esc(new Date().toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}))}</span></div>`:""}
    <div class="lf-sec"><div class="lf-h">Customer${o.inCall?"":`<span>Lead date ${esc(new Date().toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}))} · automatic</span>`}</div>
@@ -2852,11 +2855,12 @@ function nfHTML(f,full,o={}){
     </div></div>
    <div class="lf-sec"><div class="lf-h">${need?"Send this case to":"Who takes this case"}<span>${need?"required – they take it forward":"optional"}</span></div>
     ${fld("Send this case to",need,pick,{label:need?"Choose a person":"Choose a person, or keep it"})}
-    <div class="note">${need?"After you send it, the case shows in your <b>Follow-up</b> tab with every update – only the person it's with (or Admin) can change it.":"If you send it, you'll still see every update; only the person it's with (or Admin) can change it."}</div></div>
+    <div class="note">${need?"After you send it, the case shows in your <b>Follow-up</b> tab with every update – only the person it's with (or Admin) can change it.":full?"If you send it, you'll still see every update; only the person it's with (or Admin) can change it.":"Documents pending? Keep it – it stays in your <b>Follow-up</b> tab and you can update it. When the documents come, open the case and press <b>📤 Send</b>. After you send it you still see every update, but only the person it's with (or Admin) can change it."}</div></div>
   </div>`}
 function bindNF(full){
   document.querySelectorAll("[data-nfh] .chip").forEach(b=>b.onclick=()=>{b.parentNode.querySelectorAll(".chip").forEach(x=>x.classList.remove("on"));b.classList.add("on");b.closest(".fld")&&b.closest(".fld").classList.remove("err")});
-  document.querySelectorAll("#nf_pp [data-to]").forEach(b=>b.onclick=()=>{document.querySelectorAll("#nf_pp [data-to]").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#nf_to").value=b.dataset.to;b.closest(".fld").classList.remove("err")});
+  document.querySelectorAll("#nf_pp [data-to]").forEach(b=>b.onclick=()=>{document.querySelectorAll("#nf_pp [data-to]").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#nf_to").value=b.dataset.to;b.closest(".fld").classList.remove("err");
+    const ms=$("#ms");if(ms&&$("#lfWrap")&&!can("cases"))ms.textContent=b.dataset.to?"Save call & send case":"Save call & open case"});
   const q=$("#nf_toq");if(q)q.oninput=()=>{const t=q.value.trim().toLowerCase();document.querySelectorAll("#nf_pp [data-n]").forEach(b=>b.style.display=!t||b.dataset.n.includes(t)?"":"none")};
   document.querySelectorAll(".lf .fld input,.lf .fld select").forEach(e=>e.addEventListener("input",()=>e.closest(".fld").classList.remove("err")));
   const ph=$("#nf_ContactNumber"),dupBox=$("#nf_dup"),amt=$("#nf_AmountRequired"),amtBox=$("#nf_amt");
@@ -2873,10 +2877,10 @@ function bindNF(full){
 function nfMark(miss){document.querySelectorAll(".lf .fld.err").forEach(x=>x.classList.remove("err"));let first=null;
   miss.forEach(h=>{const f=document.querySelector(`.lf .fld[data-f="${CSS.escape(h)}"]`);if(f){f.classList.add("err");first=first||f}});if(first)first.scrollIntoView({block:"center",behavior:"smooth"})}
 // what's missing before the form can be saved (Remarks and connector are optional)
-function nfMissing(o,full,inCall){return["Lead Type","Customer Name","Contact Number","SM Name","Product","Lead Shared by",...(full&&!inCall?["Amount Required","Lead Source"]:[]),...(!full?["Send this case to"]:[])].filter(h=>!(h==="Send this case to"?o.to:o[h]))}
+function nfMissing(o,full,inCall){return["Lead Type","Customer Name","Contact Number","SM Name","Product","Lead Shared by",...(full&&!inCall?["Amount Required","Lead Source"]:[]),...(!full&&!fsmKeep()?["Send this case to"]:[])].filter(h=>!(h==="Send this case to"?o.to:o[h]))}
 function nfSummary(o,full,who){const row=(k,v)=>v?`<tr><td class="mute" style="padding:2px 12px 2px 0">${esc(k)}</td><td><b>${esc(v)}</b></td></tr>`:"";
   return `<table class="small">${row("Customer",o["Customer Name"]+" · "+o["Contact Number"])}${row("Lead Type",o["Lead Type"])}${row("SM Name",o["SM Name"])}${row("Product",o.Product+(full&&numOf(o["Amount Required"])?" · "+fmtL(numOf(o["Amount Required"])):""))}${row("Lead Source",o["Lead Source"])}${row("Lead Shared by",o["Lead Shared by"])}${row("Connector",[o["Connector Name"],o["Connector Contact No"],o["Connector Location"]].filter(Boolean).join(" · "))}</table>
-   <div class="small" style="margin-top:8px">${who?`The case goes to <b>${esc(who)}</b> straight away. You'll still see every update.`:"It stays with you until you transfer it."}</div>`}
+   <div class="small" style="margin-top:8px">${who?`The case goes to <b>${esc(who)}</b> straight away. You'll still see every update.`:"It stays with you until you send it – open the case and press <b>📤 Send</b> when the documents come."}</div>`}
 const dupAsk=list=>askOk({title:"This number already has a case",ok:"Save anyway",body:`<ul>${list.map(x=>`<li><b>${esc(x.code)}</b> · ${esc(x.name)} · ${esc(x.status||"")}${x.with?" · with "+esc(x.with):""}${x.date?" · "+esc(x.date):""}</li>`).join("")}</ul><div class="small">Save only if this is a new, separate loan for the customer.</div>`});
 // Lead Cases → New lead case (people with Lead Cases access only; callers get the form by marking a customer Interested)
 function openNewCase(pre){
@@ -2963,7 +2967,7 @@ function openLead(id,fromCall){
     $("#fuWrap").style.display=M.out==="cb"?"block":"none";
     {const cw=$("#cfWrap");if(cw){cw.style.display=M.out==="int"?"block":"none";$("#ms").textContent=M.out==="int"?"Save call & add connector":"Save call log"}}
     {const r=$("#rem"),auto="Ringing – no answer";if(r){if(M.out==="rg"&&!r.value.trim()){r.value=auto;r.dataset.auto="1"}else if(M.out!=="rg"&&r.dataset.auto&&r.value===auto){r.value="";delete r.dataset.auto}}}   // ready-made remark for Ringing (can be changed)
-    const lf=$("#lfWrap");if(lf){lf.style.display=M.out==="int"?"block":"none";$("#ms").textContent=M.out==="int"?(fullF?"Save call & open case":"Save call & send case"):"Save call log";if(M.out==="int")$("#modal").style.maxWidth="760px"}
+    const lf=$("#lfWrap");if(lf){lf.style.display=M.out==="int"?"block":"none";$("#ms").textContent=M.out==="int"?(fullF||(fsmKeep()&&!$("#nf_to").value)?"Save call & open case":"Save call & send case"):"Save call log";if(M.out==="int")$("#modal").style.maxWidth="760px"}
     if(M.out==="cb"&&!$("#fu").value){const d=new Date(Date.now()+864e5);$("#fu").value=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T11:00`}});
   if(withForm)bindNF(fullF);
   document.querySelectorAll('[data-seg="cf_sig"] button').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-seg="cf_sig"] button').forEach(x=>x.classList.toggle("on",x===b))});
