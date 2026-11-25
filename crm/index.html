@@ -1959,7 +1959,7 @@ const showEtabs=()=>!!ME&&view.who!=="admin"&&(view.who===ME.id||isLead())&&(pag
 /* on their own page a person sees only the tabs Admin allows; Admin / Team Lead looking at someone's page see everything */
 const CTAB_PERM={today:"pDay",leads:"pList",int:"pInt",fu:"pInt",cases:"pLoan",closed:"pLoan",calls:"pCalls"};
 const pageOk=k=>!ME||view.who!==ME.id||pcan(k);
-const etabList=()=>(ME&&view.who===ME.id?[["leads",pageOk("pList")||pageOk("pDay")||pageOk("pCalls")?"My calls":"📋 My leads"],["meet","My field work"],["conn","🤝 My connectors"]]:[["leads","Calls"],["meet","Field work"],["conn","🤝 Connectors"]]).filter(([k])=>(k!=="meet"||pageKind(emp(view.who))==="both")&&(k!=="conn"||S.connSrv)
+const etabList=()=>(ME&&view.who===ME.id?[["leads",pageOk("pList")||pageOk("pDay")||pageOk("pCalls")?"My calls":"📋 My leads"],["meet","My field work"],["conn","🤝 My connectors"]]:[["leads","Calls"],["meet","Field work"],["conn","🤝 Connectors"]]).filter(([k])=>(k!=="meet"||pageKind(emp(view.who))==="both")&&(k!=="conn"||(S.connSrv&&!isFieldSM(emp(view.who))))   // SM - Field work: connectors are part of field work
   &&(k==="leads"?Object.values(CTAB_PERM).some(pageOk):pageOk(k==="meet"?"pMeet":"pConn")));
 const noTabsMsg=()=>`<div class="card empty" style="margin-top:10px">🔒 Admin has not switched on any tabs for you yet. Ask Admin to give you access in <b>Employees → Permissions</b>.</div>`;
 const etabs=()=>showEtabs()?`<div class="tabs">${etabList().map(([k,l])=>`<button class="tab ${(view.etab||"leads")===k?"on":""}" data-etab="${k}">${l}</button>`).join("")}</div>`:"";
