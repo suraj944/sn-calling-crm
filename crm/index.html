@@ -2289,7 +2289,7 @@ function bindCasesTab(){const q=$("#cq");if(!q)return;
 function leadRow(l){
   const last=lastOf(l);
   return `<div class="lead"><div class="av">${initials(l.name)}</div><div class="info">
-   <div class="nm">${esc(l.name)} ${isCP(l)?'<span class="pill s-cp" title="Connector / channel-partner data">CP</span> ':""}${pill(l.status)}${!isCP(l)&&caseOf(l.id)?` <span class="pill" style="background:#efe9fd;color:#5b3cc4">🤝 ${isLead()?"Case "+esc(caseOf(l.id).code):"With Team Lead"} · ${esc(caseOf(l.id).Status)}</span>`:""}</div>
+   <div class="nm">${esc(l.name)} ${isCP(l)?'<span class="pill s-cp" title="Connector / channel-partner data">CP</span> ':""}${openCaseOf(l)?"":pill(l.status)}${!isCP(l)&&caseOf(l.id)?` <span class="pill" style="background:#efe9fd;color:#5b3cc4">🤝 ${isLead()?"Case "+esc(caseOf(l.id).code):"With Team Lead"} · ${esc(caseOf(l.id).Status)}</span>`:""}</div>
    <div class="num" style="margin-top:2px">${esc(l.phone)} <span class="mute small">· ${esc(l.city)}</span></div>
    ${last?`<div class="last">📝 ${esc(last.remark)||"No remark"} · ${fmt(last.at)}${l.status==="cb"&&l.followUp?` · <b style="color:var(--amber)">Callback ${fmt(l.followUp)}</b>`:""}</div>`:""}
   </div><div class="row acts" style="gap:6px;flex-wrap:nowrap">
