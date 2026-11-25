@@ -494,7 +494,7 @@ const isLead=()=>!ME||rank(ME.role)<=rank("Team Lead")||TAB_KEYS.some(k=>can(k))
 /* ---- Permission levels (same lists as the server). Role defaults + per-person ticks set by Admin. ---- */
 const SCOPE_OPTS=[["own","Only their own","their own contacts, calls & cases"],["team","Their team","everyone under the same Team Lead"],["all","Everyone","the whole company"]];
 /* "Their own page" tabs are on for everyone by default – Admin can switch any of them off (server 11.15+) */
-const PAGE_DEF=[["pDay","My day"],["pList","My calling list"],["pInt","Interested & Follow-up"],["pLoan","Login · Sanction · Disbursal & Closed"],["pCalls","Call history"],["pMeet","My field work"],["pConn","My connectors"]];
+const PAGE_DEF=[["pDay","My day"],["pList","My calling list"],["pInt","My follow-up"],["pLoan","Login · Sanction · Disbursal & Closed"],["pCalls","Call history"],["pMeet","My field work"],["pConn","My connectors"]];
 const PAGE_KEYS=PAGE_DEF.map(x=>x[0]),NEW_PERM=new Set([...PAGE_KEYS,"today","eod"]);
 const PERM_DEF=[["Their own page",PAGE_DEF],["Team tabs (top bar)",[["today","Today"],["dash","Dashboard"],["lead","Interested"],["cases","Lead Cases"],["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],["team","Employees / My Team"],["logs","Call Logs"],["meet","Field Work"],["conn","Connectors"],["eod","EOD Report"],["reports","Reports & downloads"],["perf","Performance & targets"]]],
   ["What they can do",[["doAssign","Assign contacts & share out"],["caseEdit","Open & edit lead cases"],["caseTL","Move a case to another Team Lead"],["caseTransfer","Transfer a case (Admin by default)"],["caseRemove","Remove lead cases"],["empEdit","Add, edit & remove employees"],["pinReset","Reset PINs"],["sheet","Open the Google Sheet"],["viewAs","Open anyone's page (Viewing as)"],["targetEdit","Set monthly targets"]]]];
@@ -1980,7 +1980,7 @@ function renderEmp(){
   const con=calls.filter(g=>CONNECTED(g.outcome)).length;
   const oc=k=>calls.filter(g=>g.outcome===k).length;
   const ctOk=Object.keys(CTAB_PERM).filter(k=>pageOk(CTAB_PERM[k]));
-  const ctab=ctOk.includes(view.ctab||(own?"today":"leads"))?(view.ctab||(own?"today":"leads")):(ctOk[0]||"none");
+  let ctab=ctOk.includes(view.ctab||(own?"today":"leads"))?(view.ctab||(own?"today":"leads")):(ctOk[0]||"none");
   const t0=sod(Date.now()),cbAll=mine.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<t0+DAY).sort((a,b)=>a.followUp-b.followUp);
   const myLeadsP=leadsIn(mine),myLeads=mine.filter(isLeadC);
   /* Leads tab follows the date chosen above (by lead date) */
@@ -2003,6 +2003,7 @@ function renderEmp(){
   Object.keys(intPool).forEach(k=>{intPool[k]=intPool[k].filter(c=>caseStage(c)==="fu")});   // Login or later → own tab · closed → Closed tab
   const intAll=intPool[intF]||intPool.mine,intCases=intAll.slice().sort(byDate);   // Follow-up is a work list: every open case before login, whatever the date filter
   const intNoCase=intF==="mine"||intF==="all"||intF==="filled"?myLeadsP.filter(l=>!caseOf(l.id)&&!isCP(l)):[],intN=S.srv2?intCases.length+intNoCase.length:myLeadsP.length,intOut=S.srv2?intAll.length-intCases.length:myLeads.length-myLeadsP.length;
+  if(ctab==="int")ctab=ctOk.includes("fu")?"fu":(ctOk.find(k=>k!=="int")||"none");   // no Interested tab any more (Suraj, 25 Nov) – leftovers show at the top of My follow-up
   const tlBtn=me.role==="Team Lead"&&isMgr()&&!isTL()&&!own?`<button class="btn sm" id="seeTeam">👥 See ${esc(me.name.split(" ")[0])}'s team view</button>`:"";
   const backBtn=ME&&own&&isLead()&&!canViewAs()?`<button class="btn sm" id="backTeam">← Team overview</button>`:"";
   let h=etabs()+`<div style="margin-bottom:14px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">${backBtn}<div style="flex:1"><div class="mute small">${own||!ME?"Good day,":"Viewing the list of"}</div><div style="font-size:20px;font-weight:700">${esc(me.name)}</div></div>${tlBtn}</div>`;
@@ -2018,7 +2019,7 @@ function renderEmp(){
   <div class="card stat sclk" ${SD(`Converted – ${rl}`,"calls",ocL("conv"))} title="Calls marked Converted. Click to see them."><span>Converted</span><b style="color:var(--brand)">${oc("conv")}</b><div class="small mute">${oc("cb")} call back later</div><i class="sgo">View list ›</i></div>
   <div class="card stat sclk" ${SD((own?"My calling list":"Calling list – "+me.name),"leads",mine)} title="Everyone on the calling list. Click to see them."><span>${own?"My calling list":"Calling list"}</span><b>${mine.length}</b><div class="small mute">${mine.filter(l=>l.status==="new").length} not yet called</div><i class="sgo">View list ›</i></div>
   <div class="card stat sclk" ${SD("Callbacks due now","leads",due)} title="Call-backs whose time has come. Click to see them."><span>Callbacks due</span><b style="color:var(--amber)">${due.length}</b><div class="small mute">now</div><i class="sgo">View list ›</i></div></div>`;
-  h+=`<div class="tabs" style="margin-bottom:12px">${[["today",(own?"My day":"Today")+" · "+cbAll.length],["leads",(own?"My calling list":"Calling list")+" · "+mine.length],["int","Interested · "+intNoCase.length],["fu",(own?"My follow-up":"Follow-up")+" · "+intCases.length+(intCases.some(caseNew)?" 🔔":"")],["cases","Login · Sanction · Disbursal · "+loanPool.length+(loanPool.some(caseNew)?" 🔔":"")],["closed","Closed · "+closedPool.length],["calls","Call history · "+calls.length]].filter(([k])=>ctOk.includes(k)).map(([k,l])=>`<button class="tab ${ctab===k?"on":""}" data-ctab="${k}">${l}</button>`).join("")}</div>`;
+  h+=`<div class="tabs" style="margin-bottom:12px">${[["today",(own?"My day":"Today")+" · "+cbAll.length],["leads",(own?"My calling list":"Calling list")+" · "+mine.length],["fu",(own?"My follow-up":"Follow-up")+" · "+intCases.length+(intCases.some(caseNew)?" 🔔":"")],["cases","Login · Sanction · Disbursal · "+loanPool.length+(loanPool.some(caseNew)?" 🔔":"")],["closed","Closed · "+closedPool.length],["calls","Call history · "+calls.length]].filter(([k])=>ctOk.includes(k)).map(([k,l])=>`<button class="tab ${ctab===k?"on":""}" data-ctab="${k}">${l}</button>`).join("")}</div>`;
   if(ctab==="none")h+=noTabsMsg();
   if(ctab==="today"){
     const od=cbAll.filter(l=>l.followUp<t0),td=cbAll.filter(l=>l.followUp>=t0),fresh=mine.filter(l=>l.status==="new");
@@ -2056,6 +2057,7 @@ function renderEmp(){
     h+=`<div class="small" style="margin-bottom:8px">Showing <b>every open case before login</b> – the date filter above does not change this list.</div>`;
     if(!S.srv2){h+=`<div class="small mute" style="margin-bottom:10px">Customers ${own?"you":"they"}'ve marked <b>Interested</b> (or Converted), newest first.</div>`;
       h+=`<div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No leads yet – customers marked Interested on a call show up here.</div>`}</div>`;}else{
+    if(intNoCase.length)h+=`<div class="card pad" style="margin-bottom:12px;background:#fff7e8;border-color:#f0c983"><b>📝 Lead form pending (${intNoCase.length})</b> <span class="small mute">– marked Interested on a call but no case yet. Press <b>✎ Remark</b>, pick <b>Interested</b> and fill the lead form – the case then shows below.</span><div class="card" style="margin-top:8px">${intNoCase.slice().sort((a,b)=>(leadAt(b)||0)-(leadAt(a)||0)).map(l=>leadRow(l)).join("")}</div></div>`;
     h+=`<div class="small mute" style="margin-bottom:10px">Lead cases <b>before login</b>: documents and follow-ups, done by the Team Lead. ${own?"Cases you generated show here too – open one to see every update; 🔔 means the Team Lead changed something since you last looked.":""}</div>`;
     if(tMates.length){const n=k=>intPool[k].length,chip=(k,l)=>`<button class="chip ${intF===k?"on":""}" data-intf="${esc(k)}">${esc(l)} · ${n(k)}</button>`;
       h+=`<div class="intf"><span class="small mute">Show:</span>${chip("all","All")}${chip("filled",own?"Filled by me":"Filled by them")}${chip("sent",own?"Sent to me":"Sent to them")}${chip("team",own?"My team":"Team")}<span class="intf-sep"></span>${tMates.map(e=>chip(e.id,e.name)).join("")}</div>
