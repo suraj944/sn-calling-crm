@@ -83,7 +83,12 @@ function perms_(e) {
   return set;
 }
 function can_(me, key) { if (!perms_(me).has(key)) throw new Error("You don't have permission to do that – ask Admin"); }
-const MEET_COLS = 21;
+const MEET_COLS = 22;   // 11.17: column V = Location (area of the CP / connector / developer)
+function meetCols_(sh) {                 // add the Location column to an older sheet the first time it is needed
+  if (sh.getMaxColumns() < MEET_COLS) { sh.insertColumnsAfter(sh.getMaxColumns(), MEET_COLS - sh.getMaxColumns()); }
+  if (String(sh.getRange(1, MEET_COLS, 1, 1).getDisplayValues()[0][0] || "").trim() === "") sh.getRange(1, MEET_COLS).setValue("Location");
+  return MEET_COLS;
+}
 // Lead Cases tab – column order follows the team's own lead sheet, then a few columns the CRM fills in
 const CASE_HDR = ["Timestamp", "SM Name", "Customer Name", "Contact Number", "Product", "Amount Required", "Lead Source",
   "Connector Name", "Connector Contact No", "Connector Location", "Lead Type", "Lead Shared by", "Lead Date", "Monthly",
@@ -326,7 +331,7 @@ function loadAll_(me) {
     connectors: connectorsFor_(me, emps),
     cpData: true,
     pagePerms: true,
-    leadForm: true,                                   // 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
+    leadForm: true, cpLead: true, meetLoc: true,      // 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
     stages: true,                                     // case window can save login / sanction dates and amounts (11.14+)
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
@@ -543,8 +548,8 @@ function removeEmp_(me, id) {
 function mSheet_() { return sheet_("Field Work"); }
 function meetings_(me, isLead) {
   try {
-    const sh = mSheet_(), n = sh.getLastRow() - 1;
-    let rows = n < 1 ? [] : sh.getRange(2, 1, n, MEET_COLS).getDisplayValues();
+    const sh = mSheet_(), n = sh.getLastRow() - 1, w = Math.min(MEET_COLS, sh.getMaxColumns());
+    let rows = n < 1 ? [] : sh.getRange(2, 1, n, w).getDisplayValues();
     if (!isLead) rows = rows.filter(r => String(r[3]).trim() === me.id || norm_(r[2]) === norm_(me.name));
     return { meetings: rows };
   } catch (e) { return { meetings: [], meetingsError: String(e && e.message || e) }; }
@@ -554,7 +559,7 @@ function saveMeeting_(me, m) {
   const c = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "'$&").trim();
   const person = properName_(c(m.person)).slice(0, 120), entity = properName_(c(m.entity)).slice(0, 120);
   if (person.length < 2 && entity.length < 2) throw new Error("Enter the name of the person or the entity you met");
-  const sh = mSheet_(), n = sh.getLastRow() - 1;
+  const sh = mSheet_(); meetCols_(sh); const n = sh.getLastRow() - 1;
   const rows = n < 1 ? [] : sh.getRange(2, 1, n, MEET_COLS).getDisplayValues();
   let idx = -1;
   if (m.id) {
@@ -573,7 +578,7 @@ function saveMeeting_(me, m) {
   const row = [id, at, smName, smId, c(m.type).slice(0, 20), c(m.ent).slice(0, 40), person, entity, c(m.willing).slice(0, 10), t(m.existing).slice(0, 60),
     text_(c(m.phone).slice(0, 40)), t(m.purpose).slice(0, 100), t(m.outcome).slice(0, 120),
     (/^(Interested|Not interested)$/.test(m.interest || "") ? m.interest : ""), t(m.remarks).slice(0, 300), c(m.tieup).slice(0, 10),
-    properName_(c(m.tieupWith)).slice(0, 100), t(m.passback).slice(0, 100), t(m.feedback).slice(0, 1000), now_(), me.name];
+    properName_(c(m.tieupWith)).slice(0, 100), t(m.passback).slice(0, 100), t(m.feedback).slice(0, 1000), now_(), me.name, properName_(c(m.location)).slice(0, 100)];
   if (idx >= 0) sh.getRange(idx + 2, 1, 1, MEET_COLS).setValues([row]);
   else sh.getRange(sh.getLastRow() + 1, 1, 1, MEET_COLS).setValues([row]);
   return { saved: true, id };
@@ -818,7 +823,7 @@ function createCaseFor_(me, leadId) {                                  // open a
 // People without Lead Cases access fill only the basics and must send the case to someone for further process.
 function prepareCase_(me, c, force, to, src) {
   src = src || {};
-  const L = lists_(), emps = emps_(), now = new Date(), full = perms_(me).has("cases");
+  const L = lists_(), emps = emps_(), now = new Date(), full = perms_(me).has("cases"), cp = full || perms_(me).has("leadForm");   // 11.17: SM - Field work can name the CP who gave the lead
   if (!full && !to) throw new Error("Choose who to send this case to");
   const cl = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "").replace(/\s+/g, " ").trim().slice(0, 300);
   const need = (h, label) => { const v = cl(c[h]); if (!v) throw new Error("Fill in " + (label || h)); return v; };
@@ -828,7 +833,7 @@ function prepareCase_(me, c, force, to, src) {
   if (!/^[6-9]\d{9}$/.test(ph)) throw new Error("Contact Number should be a 10-digit mobile number");
   const amt = full ? Math.round(num_(c["Amount Required"])) : "";
   if (full && !src.contactId && !(amt > 0)) throw new Error("Amount Required should be a number, e.g. 500000");
-  let cph = full ? digits_(cl(c["Connector Contact No"])).replace(/^(91|0)(?=\d{10}$)/, "") : "";
+  let cph = cp ? digits_(cl(c["Connector Contact No"])).replace(/^(91|0)(?=\d{10}$)/, "") : "";
   if (cph && !/^\d{10}$/.test(cph)) throw new Error("Connector Contact No should have 10 digits");
   const rows = caseRows_();
   if (!force) {                                                        // same mobile number already has a case?
@@ -842,9 +847,9 @@ function prepareCase_(me, c, force, to, src) {
   row[C_["Lead Type"]] = choose("Lead Type"); row[C_["Customer Name"]] = properName_(cl(c["Customer Name"]) || src.name || need("Customer Name"));
   row[C_["Contact Number"]] = ph.slice(0, 5) + " " + ph.slice(5); row[C_["SM Name"]] = choose("SM Name"); row[C_["Product"]] = choose("Product");
   row[C_["Lead Shared by"]] = choose("Lead Shared by");
-  row[C_["Lead Source"]] = full && cl(c["Lead Source"]) ? choose("Lead Source") : src.source || "";
-  if (full) {                                                          // the rest only from people with Lead Cases access
-    row[C_["Amount Required"]] = amt || "";
+  row[C_["Lead Source"]] = cp && cl(c["Lead Source"]) ? choose("Lead Source") : src.source || "";
+  if (full) row[C_["Amount Required"]] = amt || "";                   // amount only from people with Lead Cases access
+  if (cp) {                                                            // connector / CP who gave the lead
     row[C_["Connector Name"]] = properName_(cl(c["Connector Name"])); row[C_["Connector Contact No"]] = cph ? cph.slice(0, 5) + " " + cph.slice(5) : "";
     row[C_["Connector Location"]] = properName_(cl(c["Connector Location"]));
   }

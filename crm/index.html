@@ -621,7 +621,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.leadForm=!!j.leadForm;S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.leadForm=!!j.leadForm;S.cpLead=!!j.cpLead;S.meetLoc=!!j.meetLoc;S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu,by,form,force,connector){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force,connector})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -1424,20 +1424,26 @@ const M_YESNO=["Yes","No","Maybe"];
 const M_PURPOSE=["For lead","Tie-up","Login","Disbursement","Follow-up","Payout discussion","Other"];
 const FW_LABEL={at:"Timestamp",sm:"SM Name",type:"Meeting Type",ent:"Meeting Entity",person:"Name of the CP/Developer/Customer/Connector",entity:"Name of The Entity",
   willing:"Willing to work with SN",existing:"Existing % received in market if any",phone:"Contact no of the Entity",purpose:"Purpose of Meeting",outcome:"Meeting Outcome",
-  interest:"Interested / Not interested",remarks:"Remarks",tieup:"Any Tieup currently?",tieupWith:"If Yes, Tie up with which company",passback:"Current pass back received",feedback:"Feedback"};
+  interest:"Interested / Not interested",remarks:"Remarks",tieup:"Any Tieup currently?",tieupWith:"If Yes, Tie up with which company",passback:"Current pass back received",feedback:"Feedback",location:"Location / Area"};
 function buildMeetings(rows){
   const g=(r,i)=>String(r[i]||"").trim();
   return (rows||[]).map(r=>({id:g(r,0),at:parseT(r[1]),sm:g(r,2),smId:g(r,3),type:g(r,4),ent:g(r,5),person:g(r,6),entity:g(r,7),willing:g(r,8),existing:g(r,9),
-    phone:g(r,10),purpose:g(r,11),outcome:g(r,12),interest:g(r,13),remarks:g(r,14),tieup:g(r,15),tieupWith:g(r,16),passback:g(r,17),feedback:g(r,18),updated:parseT(r[19]),updatedBy:g(r,20)}))
+    phone:g(r,10),purpose:g(r,11),outcome:g(r,12),interest:g(r,13),remarks:g(r,14),tieup:g(r,15),tieupWith:g(r,16),passback:g(r,17),feedback:g(r,18),updated:parseT(r[19]),updatedBy:g(r,20),location:g(r,21)}))
     .filter(m=>m.id||m.person||m.entity).sort((a,b)=>(b.at||0)-(a.at||0));
 }
+/* 11.17: a CP / connector met in field work can give leads – the lead form names them (Suraj, 25 Nov) */
+const isMyMeet=m=>!!ME&&(m.smId===ME.id||normName(m.sm)===normName(ME.name));
+const myCPs=()=>{const seen=new Set();return(S.meetings||[]).filter(isMyMeet).filter(m=>{const k=(String(m.phone).replace(/\D/g,"").slice(-10))||normName(m.person||m.entity);if(!k||seen.has(k))return false;seen.add(k);return true}).sort((a,b)=>String(a.person||a.entity).localeCompare(String(b.person||b.entity)))};
+const cpSrc=m=>{const o=caseOpts("Lead Source")||[],w=m.ent==="CP"?"CP":m.ent==="Connector"?"Connector":"";return o.find(x=>x.toLowerCase()===w.toLowerCase())||""};
+const cpPrefill=m=>({cp:m.id,"Connector Name":m.person||m.entity,"Connector Contact No":String(m.phone||"").split("/")[0].trim(),"Connector Location":m.location||"","Lead Source":cpSrc(m)});
+const mLeadBtn=m=>S.cpLead&&isMyMeet(m)&&view.who!=="admin"&&canLeadForm()?`<button class="btn sm" data-mlead="${esc(m.id)}" title="This CP / connector gave a lead – fill the lead form">📝 Lead</button> `:"";
 const canEditMeeting=m=>!ME||isLead()||m.smId===ME.id||normName(m.sm)===normName(ME.name);
-if(!view.mq){view.mq="";view.mSm="all";view.mEnt="all";view.mType="all";view.mInt="all"}
+if(!view.mq){view.mq="";view.mSm="all";view.mEnt="all";view.mType="all";view.mInt="all"}if(!view.mLoc)view.mLoc="all";
 function meetingsInView(){
   const q=view.mq.toLowerCase();
   const pe=view.who!=="admin"&&emp(view.who);   // viewing one person's page
-  return (S.meetings||[]).filter(m=>inRange(m.at)&&(!pe||m.smId===pe.id||normName(m.sm)===normName(pe.name))&&(view.mSm==="all"||view.who!=="admin"||m.sm===view.mSm)&&(view.mEnt==="all"||m.ent===view.mEnt)&&(view.mType==="all"||m.type===view.mType)&&(view.mInt==="all"||(view.mInt==="none"?!m.interest:m.interest===view.mInt))
-    &&srch(q,[m.person,m.entity,m.purpose,m.outcome,m.remarks,m.feedback,m.sm,m.tieupWith],[m.phone]));
+  return (S.meetings||[]).filter(m=>inRange(m.at)&&(!pe||m.smId===pe.id||normName(m.sm)===normName(pe.name))&&(view.mSm==="all"||view.who!=="admin"||m.sm===view.mSm)&&(view.mEnt==="all"||m.ent===view.mEnt)&&(view.mType==="all"||m.type===view.mType)&&(view.mInt==="all"||(view.mInt==="none"?!m.interest:m.interest===view.mInt))&&(view.mLoc==="all"||normName(m.location)===normName(view.mLoc))
+    &&srch(q,[m.person,m.entity,m.purpose,m.outcome,m.remarks,m.feedback,m.sm,m.tieupWith,m.location],[m.phone]));
 }
 const entCls=w=>({Customer:"s-int",Banker:"s-conv",Connector:"s-cb",Developer:"s-na",CP:"s-wn"})[w]||"s-new";
 const yesCls=v=>v==="Yes"?"s-int":v==="No"?"s-ni":v?"s-cb":"";
@@ -1460,32 +1466,34 @@ function aMeetings(){
     ${isLead()&&view.who==="admin"?`<select id="mSm"><option value="all">All SMs</option>${sms.map(s=>`<option ${view.mSm===s?"selected":""}>${esc(s)}</option>`).join("")}</select>`:""}
     <select id="mEnt"><option value="all">Meeting entity: all</option>${M_ENTITY.map(s=>`<option ${view.mEnt===s?"selected":""}>${esc(s)}</option>`).join("")}</select>
     <select id="mInt"><option value="all">Interested & not</option>${[["Interested","Interested"],["Not interested","Not interested"],["none","Not marked yet"]].map(([k,l])=>`<option value="${k}" ${view.mInt===k?"selected":""}>${l}</option>`).join("")}</select>
+    ${(()=>{const locs=[...new Set(all.map(m=>m.location).filter(Boolean))].sort();return locs.length?`<select id="mLoc"><option value="all">Location: all</option>${locs.map(s=>`<option ${view.mLoc===s?"selected":""}>${esc(s)}</option>`).join("")}</select>`:""})()}
     <select id="mType"><option value="all">Physical & call</option>${M_TYPES.map(s=>`<option ${view.mType===s?"selected":""}>${esc(s)}</option>`).join("")}</select>
     ${view.who!=="admin"&&ME&&view.who===ME.id&&canLeadForm()?`<button class="btn" data-newcase>📝 Fill lead form</button>`:""}<button class="btn pri" id="mAdd">＋ Add field work</button></div></div>`;
-  h+=`<div class="card tw"><table class="mtable"><tr><th>Timestamp</th>${isLead()?"<th>SM Name</th>":""}<th>Meeting Entity</th><th>Name of CP / Developer / Customer / Connector</th><th>Contact no</th><th>Interested?</th><th>Purpose</th><th>Meeting Outcome</th><th>Remarks / Feedback</th><th></th></tr>`;
+  h+=`<div class="card tw"><table class="mtable"><tr><th>Timestamp</th>${isLead()?"<th>SM Name</th>":""}<th>Meeting Entity</th><th>Name of CP / Developer / Customer / Connector</th><th>Contact no</th><th>Location</th><th>Interested?</th><th>Purpose</th><th>Meeting Outcome</th><th>Remarks / Feedback</th><th></th></tr>`;
   h+=list.map(m=>`<tr class="mrow"><td class="num small" style="white-space:nowrap">${m.at?fmt(m.at):"—"}<div class="mute">${esc(m.type)}</div></td>
     ${isLead()?`<td>${esc(m.sm)}</td>`:""}<td>${m.ent?`<span class="pill ${entCls(m.ent)}">${esc(m.ent)}</span>`:"—"}</td>
     <td><b>${esc(m.person)||"—"}</b>${m.entity?`<div class="small mute">${esc(m.entity)}</div>`:""}${m.tieup==="Yes"?`<div class="small" style="color:var(--amber)">Tie-up${m.tieupWith?": "+esc(m.tieupWith):""}${m.passback?" · "+esc(m.passback):""}</div>`:""}</td>
-    <td class="num" style="white-space:nowrap">${m.phone?`<a href="${telHref(m.phone.split("/")[0])}" class="lnk">${esc(m.phone)}</a>`:"—"}</td>
+    <td class="num" style="white-space:nowrap">${m.phone?`<a href="${telHref(m.phone.split("/")[0])}" class="lnk">${esc(m.phone)}</a>`:"—"}</td><td>${esc(m.location)||"—"}</td>
     <td>${intPill(m.interest)||"—"}${m.willing?`<div class="small mute" style="margin-top:3px">Willing: ${esc(m.willing)}</div>`:""}</td><td>${esc(m.purpose)||"—"}</td><td>${esc(m.outcome)||"—"}</td>
     <td class="small" style="max-width:280px">${[m.remarks,m.feedback].filter(Boolean).map(esc).join("<br>")||'<span class="mute">—</span>'}</td>
-    <td style="white-space:nowrap">${canEditMeeting(m)?`<button class="btn sm" data-medit="${esc(m.id)}">✎ Edit</button>`:""}</td></tr>`).join("")||`<tr><td colspan="10"><div class="empty">No field work in this period${all.length?" – try All time or clear the filters":" yet – add your first meeting"}.</div></td></tr>`;
+    <td style="white-space:nowrap">${mLeadBtn(m)}${canEditMeeting(m)?`<button class="btn sm" data-medit="${esc(m.id)}">✎ Edit</button>`:""}</td></tr>`).join("")||`<tr><td colspan="11"><div class="empty">No field work in this period${all.length?" – try All time or clear the filters":" yet – add your first meeting"}.</div></td></tr>`;
   h+=`</table></div>`;
   h+=`<div class="mcards">${list.map(m=>`<div class="card mcard"><div class="mc-top"><div><b>${esc(m.person)||esc(m.entity)||"—"}</b>${m.person&&m.entity?`<div class="small mute">${esc(m.entity)}</div>`:""}</div>
       ${canEditMeeting(m)?`<button class="btn sm" data-medit="${esc(m.id)}">✎ Edit</button>`:""}</div>
     <div class="mc-tags">${m.ent?`<span class="pill ${entCls(m.ent)}">${esc(m.ent)}</span>`:""}${m.type?`<span class="pill s-new">${esc(m.type)}</span>`:""}${intPill(m.interest)}${m.willing?`<span class="pill ${yesCls(m.willing)}">Willing: ${esc(m.willing)}</span>`:""}</div>
-    <div class="small mute">${m.at?fmt(m.at):""}${isLead()&&m.sm?" · "+esc(m.sm):""}</div>
+    <div class="small mute">${m.at?fmt(m.at):""}${isLead()&&m.sm?" · "+esc(m.sm):""}${m.location?" · 📍 "+esc(m.location):""}</div>
     ${m.phone?`<a class="btn call sm" style="margin-top:8px" href="${telHref(m.phone.split("/")[0])}">📞 ${esc(m.phone)}</a>`:""}
     ${m.purpose||m.outcome?`<div class="small" style="margin-top:8px">${m.purpose?`<b>Purpose:</b> ${esc(m.purpose)}`:""}${m.purpose&&m.outcome?" · ":""}${m.outcome?`<b>Outcome:</b> ${esc(m.outcome)}`:""}</div>`:""}
     ${m.tieup==="Yes"?`<div class="small" style="color:var(--amber);margin-top:4px">Tie-up${m.tieupWith?": "+esc(m.tieupWith):""}${m.passback?" · "+esc(m.passback):""}</div>`:""}
-    ${m.remarks||m.feedback?`<div class="small" style="margin-top:6px">${[m.remarks,m.feedback].filter(Boolean).map(esc).join("<br>")}</div>`:""}</div>`).join("")||`<div class="card empty">No field work in this period${all.length?" – try All time or clear the filters":" yet – add your first meeting"}.</div>`}</div>`;
+    ${m.remarks||m.feedback?`<div class="small" style="margin-top:6px">${[m.remarks,m.feedback].filter(Boolean).map(esc).join("<br>")}</div>`:""}${mLeadBtn(m)?`<div style="margin-top:8px">${mLeadBtn(m)}</div>`:""}</div>`).join("")||`<div class="card empty">No field work in this period${all.length?" – try All time or clear the filters":" yet – add your first meeting"}.</div>`}</div>`;
   return h;
 }
 function bindMeetings(){
   wireSearch("mq",v=>{view.mq=v});
-  [["#mSm","mSm"],["#mEnt","mEnt"],["#mType","mType"],["#mInt","mInt"]].forEach(([s,k])=>{const el=$(s);if(el)el.onchange=()=>{view[k]=el.value;render()}});
+  [["#mSm","mSm"],["#mEnt","mEnt"],["#mType","mType"],["#mInt","mInt"],["#mLoc","mLoc"]].forEach(([s,k])=>{const el=$(s);if(el)el.onchange=()=>{view[k]=el.value;render()}});
   const add=$("#mAdd");if(add)add.onclick=()=>openMeeting(null);document.querySelectorAll("[data-newcase]").forEach(b=>b.onclick=()=>openNewCase());
   document.querySelectorAll("[data-medit]").forEach(b=>b.onclick=e=>{e.stopPropagation();openMeeting(b.dataset.medit)});
+  document.querySelectorAll("[data-mlead]").forEach(b=>b.onclick=e=>{e.stopPropagation();const m=(S.meetings||[]).find(x=>x.id===b.dataset.mlead);if(m)openNewCase(cpPrefill(m))});
 }
 function openMeeting(id){
   const m=id?(S.meetings||[]).find(x=>x.id===id):null;
@@ -1505,6 +1513,7 @@ function openMeeting(id){
     <label class="f">${L.person} *</label><input id="m_person" value="${v("person")}" placeholder="Person you met, e.g. Rohan" style="width:100%" maxlength="120">
     <div class="g2"><div><label class="f">${L.entity}</label><input id="m_entity" value="${v("entity")}" placeholder="e.g. Vaishnavi Paradise" style="width:100%" maxlength="120"></div>
       <div><label class="f">${L.phone}</label><input id="m_phone" inputmode="tel" value="${v("phone")}" placeholder="98XXX XXXXX" style="width:100%" maxlength="40"></div></div>
+    ${S.meetLoc?`<label class="f">${L.location}</label><input id="m_loc" value="${v("location")}" placeholder="e.g. Thane West, Badlapur East" style="width:100%" maxlength="100">`:""}
     <div class="g2"><div><label class="f">${L.willing}</label>${seg("m_willing",M_YESNO,m?m.willing:"")}</div>
       <div><label class="f">${L.existing}</label><input id="m_exist" value="${v("existing")}" placeholder="e.g. 60% or Not applicable" style="width:100%" maxlength="60"></div></div>
     <div class="g2"><div><label class="f">${L.purpose}</label><input id="m_purpose" value="${v("purpose")}" list="dl_purpose" style="width:100%" maxlength="100"></div>
@@ -1526,7 +1535,7 @@ function openMeeting(id){
   tuw();
   if($("#mDel")){$("#mDel").onclick=async()=>{if(!await askOk({title:"Delete this field work entry?",ok:"Yes, delete",danger:true,body:"This can't be undone."}))return;
     if(await write(api=>api.deleteMeeting(m.id),"Field work entry deleted","Deleting field work entry…"))close()}}
-  ["#m_person","#m_entity","#m_tuw"].forEach(s=>{const el=$(s);if(el)el.addEventListener("blur",()=>{el.value=properName(el.value)})});
+  ["#m_person","#m_entity","#m_tuw","#m_loc"].forEach(s=>{const el=$(s);if(el)el.addEventListener("blur",()=>{el.value=properName(el.value)})});
   ["#m_purpose","#m_outcome","#m_remarks","#m_pass","#m_exist"].forEach(s=>{const el=$(s);if(el)el.addEventListener("blur",()=>{el.value=tidyText(el.value)})});
   $("#m_person").focus();
   $("#mfm").onsubmit=async e=>{e.preventDefault();
@@ -1536,7 +1545,7 @@ function openMeeting(id){
     const smName=canPickSm?$("#m_sm").value:curSm;const smEmp=S.allEmps.find(x=>x.name===smName);
     const rec={id:m?m.id:"",at:toSheetTime(parseT($("#m_at").value)||Date.now()),sm:smName,smId:smEmp?smEmp.id:(m?m.smId:""),type:segVal("m_type")||"Physical",ent:$("#m_ent").value,
       person,entity,willing:segVal("m_willing"),existing:$("#m_exist").value.trim(),phone:ph,purpose:$("#m_purpose").value.trim(),outcome:$("#m_outcome").value.trim(),interest:segVal("m_interest"),
-      remarks:$("#m_remarks").value.trim(),tieup:segVal("m_tieup"),tieupWith:segVal("m_tieup")==="Yes"?$("#m_tuw").value.trim():"",passback:$("#m_pass").value.trim(),feedback:$("#m_fb").value.trim()};
+      remarks:$("#m_remarks").value.trim(),tieup:segVal("m_tieup"),tieupWith:segVal("m_tieup")==="Yes"?$("#m_tuw").value.trim():"",passback:$("#m_pass").value.trim(),feedback:$("#m_fb").value.trim(),location:$("#m_loc")?properName($("#m_loc").value):(m?m.location:"")};
     if(m&&!await askOk({title:"Save changes to this field work entry?",ok:"Yes, save"}))return;
     const b=$("#mok");b.disabled=true;b.innerHTML=`<span class="spin"></span> Saving…`;
     if(await write(api=>api.saveMeeting(rec),m?"Field work updated":"Field work added","Saving field work…"))close();else{b.disabled=false;b.textContent=m?"Save changes":"Add field work"}};
@@ -2819,8 +2828,9 @@ function nfHTML(f,full,o={}){
      ${fld("Product",true,sel("Product"))}
      ${full?fld("Amount Required",!o.inCall,txt("Amount Required","e.g. 500000",'inputmode="numeric"')+'<div id="nf_amt" class="hint mute"></div>',{label:"Amount required (₹)"})+fld("Lead Source",!o.inCall,sel("Lead Source")):""}
      ${fld("Lead Shared by",true,group("Lead Shared by","pills"),{wide:true})}
-     ${full?`<div class="fld" style="grid-column:1/-1"><details ${f["Connector Name"]||f["Connector Contact No"]?"open":""}><summary class="small"><b>Connector details</b> <span class="mute">– optional, if a connector gave this lead</span></summary>
-       <div class="lf-g" style="grid-template-columns:1fr 1fr 1fr">${fld("Connector Name",false,txt("Connector Name",""))}${fld("Connector Contact No",false,txt("Connector Contact No","",'inputmode="tel"'),{label:"Contact no"})}${fld("Connector Location",false,txt("Connector Location",""),{label:"Location"})}</div></details></div>`:""}
+     ${full||(S.cpLead&&!o.inCall&&can("leadForm"))?(()=>{const cps=S.cpLead&&!o.inCall?myCPs():[];const pickCP=cps.length?`<div class="fld" style="grid-column:1/-1"><label for="nf_cp">Choose from your field work <em>fills the details below</em></label><select id="nf_cp"><option value="">— Not from a CP / connector —</option>${cps.map(m=>`<option value="${esc(m.id)}" ${f.cp===m.id?"selected":""}>${esc(m.person||m.entity)}${m.ent?" · "+esc(m.ent):""}${m.location?" · "+esc(m.location):""}${m.phone?" · "+esc(m.phone):""}</option>`).join("")}</select></div>`:"";
+       return `<div class="fld" style="grid-column:1/-1"><details ${f["Connector Name"]||f["Connector Contact No"]||f.cp||!full?"open":""}><summary class="small"><b>${full?"Connector details":"CP / connector who gave this lead"}</b> <span class="mute">– optional, if a ${full?"connector":"CP or connector"} gave this lead</span></summary>
+       <div class="lf-g" style="grid-template-columns:1fr 1fr 1fr">${pickCP}${fld("Connector Name",false,txt("Connector Name",""),{label:full?"Connector Name":"CP / connector name"})}${fld("Connector Contact No",false,txt("Connector Contact No","",'inputmode="tel"'),{label:"Contact no"})}${fld("Connector Location",false,txt("Connector Location",""),{label:"Location"})}</div>${full?"":`<input type="hidden" id="nf_LeadSource" value="${esc(f["Lead Source"]||"")}">`}</details></div>`})():""}
      ${o.inCall?"":fld("Remarks",false,`<textarea id="nf_Remarks" maxlength="300" style="min-height:60px" placeholder="e.g. Salaried, wants the loan in 2 weeks">${esc(f.Remarks||"")}</textarea>`,{wide:true,hint:"optional"})}
     </div></div>
    <div class="lf-sec"><div class="lf-h">${need?"Send this case to":"Who takes this case"}<span>${need?"required – they take it forward":"optional"}</span></div>
@@ -2838,7 +2848,10 @@ function bindNF(full){
     const hit=CASES().filter(c=>String(c["Contact Number"]).replace(/\D/g,"").slice(-10)===d);
     dupBox.innerHTML=hit.length?`<span style="color:#b26a00">⚠ Already a case: ${hit.slice(0,3).map(c=>`<b>${esc(c.code)}</b> (${esc(c.Status)}${holderOf(c)?", with "+esc(holderOf(c)):""})`).join(", ")}</span>`:'<span style="color:var(--green)">✓ Looks good</span>'};
   if(ph){ph.addEventListener("input",chkPh);chkPh()}
-  if(amt){const chk=()=>{const n=numOf(amt.value);amtBox.textContent=n?"= "+fmtL(n):""};amt.addEventListener("input",chk);chk()}}
+  if(amt){const chk=()=>{const n=numOf(amt.value);amtBox.textContent=n?"= "+fmtL(n):""};amt.addEventListener("input",chk);chk()}
+  const cpSel=$("#nf_cp");if(cpSel)cpSel.onchange=()=>{const m=(S.meetings||[]).find(x=>x.id===cpSel.value),p=m?cpPrefill(m):{"Connector Name":"","Connector Contact No":"","Connector Location":"","Lead Source":""};
+    [["Connector Name","ConnectorName"],["Connector Contact No","ConnectorContactNo"],["Connector Location","ConnectorLocation"]].forEach(([h,i])=>{const e=$("#nf_"+i);if(e)e.value=p[h]});
+    const ls=$("#nf_LeadSource");if(ls&&(p["Lead Source"]||ls.type==="hidden"))ls.value=p["Lead Source"]}}
 // show which fields are missing, right on the form
 function nfMark(miss){document.querySelectorAll(".lf .fld.err").forEach(x=>x.classList.remove("err"));let first=null;
   miss.forEach(h=>{const f=document.querySelector(`.lf .fld[data-f="${CSS.escape(h)}"]`);if(f){f.classList.add("err");first=first||f}});if(first)first.scrollIntoView({block:"center",behavior:"smooth"})}
@@ -2849,8 +2862,9 @@ function nfSummary(o,full,who){const row=(k,v)=>v?`<tr><td class="mute" style="p
    <div class="small" style="margin-top:8px">${who?`The case goes to <b>${esc(who)}</b> straight away. You'll still see every update.`:"It stays with you until you transfer it."}</div>`}
 const dupAsk=list=>askOk({title:"This number already has a case",ok:"Save anyway",body:`<ul>${list.map(x=>`<li><b>${esc(x.code)}</b> · ${esc(x.name)} · ${esc(x.status||"")}${x.with?" · with "+esc(x.with):""}${x.date?" · "+esc(x.date):""}</li>`).join("")}</ul><div class="small">Save only if this is a new, separate loan for the customer.</div>`});
 // Lead Cases → New lead case (people with Lead Cases access only; callers get the form by marking a customer Interested)
-function openNewCase(){
+function openNewCase(pre){
   if(!canLeadForm())return toast("Mark the customer Interested in your calling list – the lead form opens there");
+  if(pre&&pre.cp)view.nf={...(view.nf||{}),...pre};
   const f={...(view.nf||{})},people=(S.handTo||[]),full=can("cases");
   $("#modal").innerHTML=`<div class="mh"><div class="av">LF</div><div><div style="font-weight:700">Lead &amp; Inquiry form</div><div class="mute small">Fields marked <span style="color:#c0392b">*</span> are required. Choices come from the Lists tab.</div></div><button class="x" id="mx">×</button></div>
    <div class="mb" style="background:#f8faff">${nfHTML(f,full)}</div>
@@ -2875,7 +2889,7 @@ function readNF(){const v=id=>{const e=$("#nf_"+id);return e?String(e.value).tri
   document.querySelectorAll("[data-nfh]").forEach(g=>{const on=g.querySelector(".chip.on");o[g.dataset.nfh]=on?on.dataset.v:""});
   [["Lead Type","LeadType"],["Lead Shared by","LeadSharedby"]].forEach(([h,id])=>{if(o[h]===undefined)o[h]=v(id)});
   o["Customer Name"]=v("CustomerName");o["Contact Number"]=v("ContactNumber");o["SM Name"]=v("SMName");o.Product=v("Product");o["Amount Required"]=v("AmountRequired");o["Lead Source"]=v("LeadSource");
-  o["Connector Name"]=v("ConnectorName");o["Connector Contact No"]=v("ConnectorContactNo");o["Connector Location"]=v("ConnectorLocation");o.Remarks=v("Remarks");o.to=v("to");return o}
+  o["Connector Name"]=v("ConnectorName");o["Connector Contact No"]=v("ConnectorContactNo");o["Connector Location"]=v("ConnectorLocation");o.Remarks=v("Remarks");o.to=v("to");o.cp=v("cp");return o}
 
 /* ---------- LEAD MODAL (log call / remark) ---------- */
 let M={};
