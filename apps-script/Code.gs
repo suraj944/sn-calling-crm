@@ -331,7 +331,7 @@ function loadAll_(me) {
     connectors: connectorsFor_(me, emps),
     cpData: true,
     pagePerms: true,
-    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true, phoneEdit: true, cpShared: true, pinView: true,   // 11.23: Admin sees PINs · 11.21: CP details when Lead Shared by = CP · 11.20: add a missing customer number in the case window · 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
+    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true, phoneEdit: true, cpShared: true, pinView: true, sharedLoan: true,   // 11.24: Lead Shared by sees their cases · 11.23: Admin sees PINs · 11.21: CP details when Lead Shared by = CP · 11.20: add a missing customer number in the case window · 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
     stages: true,                                     // case window can save login / sanction dates and amounts (11.14+)
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
@@ -766,10 +766,13 @@ function caseTL_(emps, assigneeId, me) {
   return me && me.role === "Team Lead" ? me : null;
 }
 const tlMatch_ = (val, e) => !!e && (String(val).trim() === e.id || norm_(val) === norm_(e.name));
+// 11.24: the person named in "Lead Shared by" sees that case (read only) once it has a lead code – every step
+function sharedLoan_(row, me) { return !!norm_(me.name) && norm_(row[C_["Lead Shared by"]]) === norm_(me.name); }
 function canSeeCase_(me, row, emps, team) {
   const sc = scope_(me);
   if (sc === "all") return true;
   if (tlMatch_(row[C_["Team Lead"]], me)) return true;                  // cases sent to them as Team Lead
+  if (sharedLoan_(row, me)) return true;
   const tel = String(row[C_["Telecaller ID"]]).trim();
   if (sc !== "team") return tel === me.id;                               // their own cases
   if (team.has(tel)) return true;                                        // filled in the CRM by someone in the team

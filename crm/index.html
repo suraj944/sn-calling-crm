@@ -623,7 +623,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.leadForm=!!j.leadForm;S.cpLead=!!j.cpLead;S.meetLoc=!!j.meetLoc;S.keepLead=!!j.keepLead;S.fwNoShared=!!j.fwNoShared;S.phoneEdit=!!j.phoneEdit;S.cpShared=!!j.cpShared;S.pinView=!!j.pinView;S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.leadForm=!!j.leadForm;S.cpLead=!!j.cpLead;S.meetLoc=!!j.meetLoc;S.keepLead=!!j.keepLead;S.fwNoShared=!!j.fwNoShared;S.phoneEdit=!!j.phoneEdit;S.cpShared=!!j.cpShared;S.pinView=!!j.pinView;S.sharedLoan=!!j.sharedLoan;S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu,by,form,force,connector){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force,connector})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -1972,7 +1972,9 @@ const fsmKeep=()=>!!S.keepLead;
 /* SM - Field work generate their own leads (or get them from CPs) – no "Lead Shared by" for them (Suraj, 25 Nov) – needs server 11.19 */
 const noShared=()=>!!S.fwNoShared&&!!ME&&isFieldSM(emp(ME.id));
 const isFsmOwn=me=>!!ME&&!!me&&me.id===ME.id&&isFieldSM(me);
-const fsmPool=me=>CASES().filter(c=>c["Telecaller ID"]===me.id||(!String(c["Telecaller ID"]||"").trim()&&normName(c["SM Name"])===normName(me.name))||normName(c["Team Lead"])===normName(me.name));
+/* Lead Shared by = this person → once the case has a lead code they see it at every step, read only (Suraj, 26 Nov) */
+const sharedByMe=(c,me)=>!!S.sharedLoan&&!!me&&!!c.code&&normName(c["Lead Shared by"])===normName(me.name);
+const fsmPool=me=>CASES().filter(c=>sharedByMe(c,me)||c["Telecaller ID"]===me.id||(!String(c["Telecaller ID"]||"").trim()&&normName(c["SM Name"])===normName(me.name))||normName(c["Team Lead"])===normName(me.name));
 const fsmRej=me=>fsmPool(me).filter(c=>/reject/i.test(c.Status||"")).sort((a,b)=>(b.upd||b.at||0)-(a.upd||a.at||0));   // all time (Suraj, 26 Nov)
 function fsmBar(me,on){
   const pool=fsmPool(me);
@@ -2017,7 +2019,7 @@ function renderEmp(){
   const myLeadsP=leadsIn(mine),myLeads=mine.filter(isLeadC);
   /* Leads tab follows the date chosen above (by lead date) */
   // Team Leads: Mine (filled by me or with me) · My team (filled by a team member, by ID or SM Name) · All · one member
-  const isMine2=c=>c["Telecaller ID"]===me.id||(me.role==="Team Lead"&&c.tlId===me.id)||(isFieldSM(me)&&!String(c["Telecaller ID"]||"").trim()&&normName(c["SM Name"])===normName(me.name));
+  const isMine2=c=>sharedByMe(c,me)||c["Telecaller ID"]===me.id||(me.role==="Team Lead"&&c.tlId===me.id)||(isFieldSM(me)&&!String(c["Telecaller ID"]||"").trim()&&normName(c["SM Name"])===normName(me.name));
   const tMates=me.role==="Team Lead"?(S.allEmps||[]).filter(e=>e.active!==false&&e.id!==me.id&&teamOf(e)===me.id).sort((a,b)=>a.name.localeCompare(b.name)):[];
   const mateOf=c=>tMates.find(e=>c["Telecaller ID"]===e.id||normName(c["SM Name"])===normName(e.name));
   const intF=tMates.length?(view.intF&&view.intF!=="mine"?view.intF:"all"):"mine",inP=c=>inRange(c.leadD||c.at),byDate=(a,b)=>(b.leadD||b.at||0)-(a.leadD||a.at||0);
@@ -2026,11 +2028,11 @@ function renderEmp(){
   /* a Team Lead set to "Own only" sees just the cases she filled herself in My calls (Suraj, 25 Nov) */
   const ownOnly=me.role==="Team Lead"&&scopeOf(ME&&me.id===ME.id&&Array.isArray(ME.perms)?new Set(ME.perms):permsOf(me))==="own";
   const intPool={mine:CASES().filter(c=>ownOnly?filledByMe(c):isMine2(c)),filled:CASES().filter(filledByMe),sent:ownOnly?[]:CASES().filter(sentToMe),team:tMates.length&&!ownOnly?CASES().filter(c=>!!mateOf(c)):[]};
-  intPool.all=CASES().filter(c=>filledByMe(c)||(!ownOnly&&(sentToMe(c)||!!mateOf(c))));
+  intPool.all=CASES().filter(c=>filledByMe(c)||sharedByMe(c,me)||(!ownOnly&&(sentToMe(c)||!!mateOf(c))));
   tMates.forEach(e=>{intPool[e.id]=intPool.team.filter(c=>mateOf(c)===e)});
   const intLoan=(intPool[intF]||intPool.mine).filter(c=>atLoan(c)&&inRange(c.leadD||c.at)).sort((a,b)=>(b.leadD||b.at||0)-(a.leadD||a.at||0));
   const myBase=ownOnly?CASES().filter(filledByMe):CASES().filter(c=>c["Telecaller ID"]===me.id||normName(c["Team Lead"])===normName(me.name));
-  const loanPool=[...new Set([...myBase,...intPool.all])].filter(atLoan);
+  const loanPool=[...new Set([...myBase,...intPool.all,...CASES().filter(c=>sharedByMe(c,me))])].filter(atLoan);
   const closedPool=[...new Set([...myBase,...intPool.all])].filter(c=>caseStage(c)==="closed").filter(inP).sort(byDate);
   Object.keys(intPool).forEach(k=>{intPool[k]=intPool[k].filter(c=>caseStage(c)==="fu")});   // Login or later → own tab · closed → Closed tab
   const intAll=intPool[intF]||intPool.mine,intCases=intAll.slice().sort(byDate);   // Follow-up is a work list: every open case before login, whatever the date filter
