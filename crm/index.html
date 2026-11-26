@@ -840,8 +840,8 @@ function render(){
 function renderAdmin(){
   if(!S.srv2&&(view.tab==="cases"||view.tab==="myteam"))view.tab="dash";
   const dueN=CASES().filter(c=>fuOver(c)||fuState(c)==="today").length;
-  const tabs=[["today","Today"+(dueN?" · "+dueN:"")],["dash","Dashboard"],["lead","Interested"],...(S.srv2?[["cases",ME&&ME.role==="Team Lead"?"My Team Lead Cases":"Lead Cases"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine",ME.role==="Sales Manager"?"My page":"My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(S.connSrv?[["conn","🤝 Connectors"]]:[]),["eod","📋 EOD Report"],["perf","📈 Performance"],["reports","⬇ Reports"]]
-    .filter(([k])=>k==="mine"||pcan(k==="myteam"?"team":k));   /* tabs this person is allowed to see */
+  const tabs=[["today","Today"+(dueN?" · "+dueN:"")],["dash","Dashboard"],["lead","Interested"],...(S.srv2?[["cases",ME&&ME.role==="Team Lead"?"My Team Lead Cases":"Lead Cases"]]:[]),...(ME&&ME.role==="Admin"&&S.srv2?[["disb","💰 Disbursal"]]:[]),["byemp","By Employee"],["assign","Calling List & Assign"],["import","Add / Import Contacts"],...(isMgr()?[["team","Employees"]]:[]),...(isTL()&&S.srv2?[["myteam","My Team"]]:[]),...(isLead()&&!canViewAs()&&ME?[["mine",ME.role==="Sales Manager"?"My page":"My calls"]]:[]),["logs","Call Logs"],["meet","Field Work"],...(S.connSrv?[["conn","🤝 Connectors"]]:[]),["eod","📋 EOD Report"],["perf","📈 Performance"],["reports","⬇ Reports"]]
+    .filter(([k])=>k==="mine"||k==="disb"||pcan(k==="myteam"?"team":k));   /* tabs this person is allowed to see */
   if(!tabs.length)tabs.push(["mine","My calls"]);
   if(!tabs.some(t=>t[0]===view.tab))view.tab=tabs[0][0];
   let h=`<div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${view.tab===k?"on":""}" data-tab="${k}">${l}</button>`).join("")}</div>`;
@@ -850,11 +850,11 @@ function renderAdmin(){
       <select id="teamSel"><option value="all">All teams</option>${TLs.map(e=>`<option value="${esc(e.id)}" ${view.team===e.id?"selected":""}>${esc(e.name)}'s team</option>`).join("")}<option value="none" ${view.team==="none"?"selected":""}>No team</option></select></label>
       ${view.team&&view.team!=="all"?`<span class="small mute">Showing only ${esc(teamName(view.team))}${view.team!=="none"?" ("+RAW.allEmps.filter(e=>e.active&&teamOf(e)===view.team).length+" people)":""}</span>`:""}</div>`;
   else if(isTL()||(ME&&rank(ME.role)>rank("Team Lead")))h+=`<div class="small mute" style="margin:-4px 0 12px">${S.employees.length>1?"Showing your team: "+esc(S.employees.map(e=>e.name).join(", ")):"Showing only your own contacts, calls and cases"}</div>`;
-  h+=({today:aToday,perf:aPerf,dash:aDash,lead:aLeadsTab,cases:aCases,byemp:aByEmp,myteam:aMyTeam,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings,eod:aEOD,conn:()=>aConn(null)})[view.tab]();
+  h+=({today:aToday,perf:aPerf,dash:aDash,lead:aLeadsTab,cases:aCases,disb:aDisb,byemp:aByEmp,myteam:aMyTeam,assign:aAssign,import:aImport,team:aTeam,logs:aLogs,reports:aReports,meet:aMeetings,eod:aEOD,conn:()=>aConn(null)})[view.tab]();
   setApp(h);
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{if(b.dataset.tab==="mine"){view.who=ME.id;view.etab="leads";render();return}view.tab=b.dataset.tab;render()});
   const ts=$("#teamSel");if(ts)ts.onchange=()=>{view.team=ts.value;view.sel.clear();if(view.lsel)view.lsel.clear();render()};
-  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();bindCasesTab();bindCases();bindToday();bindPerf();bindMonthly();if(view.tab==="eod")bindEOD();if(view.tab==="reports")bindSmReport();if(view.tab==="conn")bindConn();
+  bindAdmin();bindRange();bindReports();bindMeetings();bindTips();bindLeadsTab();bindByEmp();bindCasesTab();bindCases();bindToday();bindPerf();bindMonthly();if(view.tab==="eod")bindEOD();if(view.tab==="disb"){wireSearch("dq",v=>{view.dq=v});document.querySelectorAll("[data-dsm]").forEach(e=>e.onclick=ev=>{ev.preventDefault();const k=e.dataset.dsm;view.dsm=view.dsm===k?"":k;render();if(view.dsm){const t=document.querySelector("table.ctab");if(t)t.scrollIntoView({behavior:"smooth",block:"start"})}})}if(view.tab==="reports")bindSmReport();if(view.tab==="conn")bindConn();
 }
 /* ---------- MY TEAM (Team Leads): members' details + reset PIN ---------- */
 function aMyTeam(){
@@ -2310,6 +2310,25 @@ function openCase(code){
     if(!await askOk({title:"Save changes to "+c.code+"?",ok:"Yes, save",body:`<ul>${ch.map(([h,a,b])=>`<li><b>${esc(h)}</b>: ${LS_AMT.has(h)?(numOf(a)?inr(a):'<span class="mute">empty</span>'):cut(a)} → ${LS_AMT.has(h)?(numOf(b)?inr(b):'<span class="mute">empty</span>'):cut(b)}</li>`).join("")}</ul>${phDup}${noFu}`}))return;
     sv.disabled=true;sv.innerHTML=`<span class="spin"></span> Saving…`;if(await write(api=>api.saveCase(o),"Case "+c.code+" saved","Saving case "+c.code+"…"))close();else{sv.disabled=false;sv.textContent="Save case"}};
 }
+/* 💰 Disbursal – Admin only: every disbursed case in the chosen dates (Suraj, 26 Nov) */
+function aDisb(){
+  const q=view.dq||"",dsm=view.dsm||"",smOf=c=>String(c["SM Name"]||"").trim()||"—",all=CASES().filter(c=>stType(c.Status)==="disb"||!!c.disbD),inDates=all.filter(c=>inRange(c.disbD||c.upd||c.at)),list=inDates.filter(c=>!dsm||smOf(c)===dsm).filter(c=>srch(q,[c["Customer Name"],c.code,c["Bank Name"],c["SM Name"],c["Team Lead"],c.Product,c["Lead Shared by"]],[c["Contact Number"]])).sort((a,b)=>(b.disbD||0)-(a.disbD||0));
+  const sum=k=>list.reduce((s,c)=>s+(numOf(c[k])||0),0),dTot=list.reduce((s,c)=>s+dAmt(c),0),sTot=sum("Sanction amount"),aTot=sum("Amount Required");
+  let h=rangeBar();
+  h+=`<div class="stats"><div class="card stat sclk" data-dsm="" title="Show every disbursed case"><span>Disbursed cases</span><b style="color:var(--green)">${list.length}</b><div class="small mute">in the dates above</div></div>
+    <div class="card stat"><span>Disbursed amount</span><b style="color:var(--green)">${dTot?fmtL(dTot):"₹0"}</b><div class="small mute">${dTot?inr(dTot):"—"}</div></div>
+    <div class="card stat"><span>Sanctioned amount</span><b style="color:#1f6feb">${sTot?fmtL(sTot):"—"}</b><div class="small mute">of these cases</div></div>
+    <div class="card stat"><span>Amount asked</span><b>${aTot?fmtL(aTot):"—"}</b><div class="small mute">of these cases</div></div></div>`;
+  const by={};inDates.forEach(c=>{const k=smOf(c);(by[k]=by[k]||{n:0,a:0}).n++;by[k].a+=dAmt(c)});
+  const rows=Object.entries(by).sort((a,b)=>b[1].a-a[1].a);
+  /* click an SM to see only their cases; click again (or "All SMs") to see everyone */
+  if(rows.length)h+=`<div class="card tw" style="margin-bottom:12px"><table><tr><th>SM <span class="small mute" style="font-weight:400;text-transform:none;letter-spacing:0">– click a name to see only their cases</span></th><th class="num">Cases</th><th class="num">Disbursed amount</th></tr>
+    <tr class="sclk" data-dsm="" style="cursor:pointer;${dsm?"":"background:#eef4ff"}"><td><b>All SMs</b></td><td class="num">${inDates.length}</td><td class="num">${inr(inDates.reduce((s,c)=>s+dAmt(c),0))}</td></tr>
+    ${rows.map(([k,v])=>`<tr class="sclk" data-dsm="${esc(k)}" style="cursor:pointer;${dsm===k?"background:#eef4ff":""}"><td><a class="lnk" href="#">${esc(k)}</a>${dsm===k?' <span class="small mute">· showing</span>':""}</td><td class="num">${v.n}</td><td class="num">${inr(v.a)} <span class="small mute">(${fmtL(v.a)})</span></td></tr>`).join("")}</table></div>`;
+  if(dsm)h+=`<div class="small" style="margin:-4px 0 10px">Showing <b>${esc(dsm)}</b>'s disbursed cases · <a class="lnk" href="#" data-dsm="">show all SMs</a></div>`;
+  h+=`<div class="card pad" style="margin-bottom:12px"><div class="sbox"><input id="dq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search name, number, lead code, bank, SM" value="${esc(q)}"><button type="button" class="btn sbtn" data-sgo="dq">🔍 Search</button></div></div>`;
+  h+=casesTable(list,{empty:q?"No case matches your search.":"No disbursed cases in these dates – try All time above."});
+  return h}
 function aCases(){
   const f=view.cf||(view.cf={st:"all",mon:"all",q:"",fu:"all",sm:"all"}),q=f.q.toLowerCase(),all=CASES().filter(c=>inRangeAll(c.leadD||c.at));f.fu=f.fu||"all";f.sm=f.sm||"all";
   // SM buttons: a Team Lead sees only the people in her team (plus one "Other SMs" button); Admin sees every SM
