@@ -390,6 +390,10 @@ ol.tl{list-style:none;margin:6px 0 0;padding:0 0 0 14px;border-left:2px solid va
 .ls-dot{flex:0 0 26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;background:#eef0f3;color:#667;border:2px solid #d5dae3}
 .ls-step.on .ls-dot{background:var(--green);color:#fff;border-color:var(--green)}
 .ls-b{min-width:0;flex:1}.ls-t{font-weight:700}.ls-h{margin:1px 0 5px}
+.msel{position:relative}.msel>summary{list-style:none;cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:9px 14px;background:#fff;min-width:170px;white-space:nowrap}.msel>summary::-webkit-details-marker{display:none}
+.msel-pop{position:absolute;right:0;top:calc(100% + 4px);z-index:30;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:8px;min-width:240px;max-height:360px;overflow:auto}
+.msel-pop label{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:8px;cursor:pointer}.msel-pop label:hover{background:#f3f6fb}.msel-pop .msel-all{border-bottom:1px solid var(--line);border-radius:0;margin-bottom:4px}
+.msel-pop label .mute{margin-left:auto}.msel-ft{display:flex;justify-content:space-between;gap:8px;padding:6px 4px 2px}
 .lakh{color:var(--green);font-weight:600;margin-top:3px;min-height:1em}
 .ls-in{display:flex;gap:6px;align-items:center;margin-top:4px}.ls-in input{flex:1;min-width:0;width:100%}.ls-rs{color:#667;font-weight:600}
 .ls-v{font-weight:600;margin-top:2px}
@@ -2330,7 +2334,7 @@ function aDisb(){
   h+=casesTable(list,{empty:q?"No case matches your search.":"No disbursed cases in these dates – try All time above."});
   return h}
 function aCases(){
-  const f=view.cf||(view.cf={st:"all",mon:"all",q:"",fu:"all",sm:"all"}),q=f.q.toLowerCase(),all=CASES().filter(c=>inRangeAll(c.leadD||c.at));f.fu=f.fu||"all";f.sm=f.sm||"all";
+  const f=view.cf||(view.cf={st:"all",mon:"all",q:"",fu:"all",sm:"all"}),q=f.q.toLowerCase(),all=CASES().filter(c=>inRangeAll(c.leadD||c.at));f.fu=f.fu||"all";f.sm=f.sm||"all";if(!Array.isArray(f.sts))f.sts=f.st&&f.st!=="all"?[f.st]:[];   /* several statuses at once (Suraj, 26 Nov) */
   // SM buttons: a Team Lead sees only the people in her team (plus one "Other SMs" button); Admin sees every SM
   const teamView=!!ME&&ME.role!=="Admin"&&isTL(),teamNames=teamView?(S.employees||[]).map(e=>e.name):[],nk=s=>String(s||"").trim().toLowerCase();
   const crmEmps=(S.allEmps&&S.allEmps.length?S.allEmps:S.employees||[]).filter(e=>e.active!==false&&e.role!=="Admin"),inCRM=s=>crmEmps.some(e=>nk(e.name)===nk(s));
@@ -2340,7 +2344,7 @@ function aCases(){
   const smList=Object.entries(smCnt).filter(([k,n])=>k!=="__other"||n).sort((a,b)=>(a[0]==="__other")-(b[0]==="__other")||b[1]-a[1]);
   const smLabel=k=>k==="__other"?"Other SMs":k;
   const months=[...new Set(all.map(c=>c.Monthly).filter(Boolean))];
-  const list=all.filter(c=>(f.sm==="all"||(f.sm==="__notcrm"?!inCRM(smOf(c)):smOf(c)===f.sm))&&(f.fu==="all"||fuMatch(c,f.fu))&&(f.st==="all"||c.Status===f.st)&&(srch(q,[c["Customer Name"],c.code,c["Bank Name"],c["Lead Shared by"],c["SM Name"]],[c["Contact Number"]]))).sort((a,b)=>(b.at||0)-(a.at||0));
+  const list=all.filter(c=>(f.sm==="all"||(f.sm==="__notcrm"?!inCRM(smOf(c)):smOf(c)===f.sm))&&(f.fu==="all"||fuMatch(c,f.fu))&&(!f.sts.length||f.sts.includes(c.Status||"New"))&&(srch(q,[c["Customer Name"],c.code,c["Bank Name"],c["Lead Shared by"],c["SM Name"]],[c["Contact Number"]]))).sort((a,b)=>(b.at||0)-(a.at||0));
   const ofType=t=>all.filter(c=>stType(c.Status)===t),disb=ofType("disb"),closed=ofType("closed").length,newN=ofType("new").length,cnt=st=>st==="New"?newN:all.filter(c=>c.Status===st).length;
   const amt=disb.reduce((s,c)=>s+dAmt(c),0);
   let h=rangeBar()+`<div class="stats sm"><div class="card stat"><span>Lead cases</span><b>${all.length}</b><div class="small mute">${cnt("New")} new – not yet followed up</div></div>
@@ -2348,7 +2352,11 @@ function aCases(){
     <div class="card stat"><span>Disbursed</span><b style="color:var(--green)">${disb.length}</b><div class="small mute">${amt?"₹"+amt.toLocaleString("en-IN"):"—"}</div></div>
     <div class="card stat"><span>Closed / dropped</span><b style="color:#c0392b">${closed}</b><div class="small mute">not interested, cancelled, rejected, closed</div></div></div>`;
   h+=`<div class="card pad" style="margin-bottom:12px"><div class="row"><div class="sbox" style="flex:1;min-width:200px"><input id="cq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search customer, number, lead code, bank" value="${esc(f.q)}"><button type="button" class="btn sbtn" data-sgo="cq">🔍 Search</button></div>
-    <select id="cst"><option value="all">All statuses</option>${[...new Set([...caseOpts("Status"),...all.map(c=>c.Status).filter(Boolean)])].map(x=>`<option ${f.st===x?"selected":""}>${x}</option>`).join("")}</select>
+    ${(()=>{const opts=[...new Set([...caseOpts("Status"),...all.map(c=>c.Status).filter(Boolean)])],n=x=>all.filter(c=>(c.Status||"New")===x).length,lab=!f.sts.length?"All statuses":f.sts.length===1?f.sts[0]:f.sts.length+" statuses";
+      return `<details class="msel" id="cstBox" ${view.cstOpen?"open":""}><summary title="Choose one or more statuses">${esc(lab)} ▾</summary><div class="msel-pop">
+        <label class="msel-all"><input type="checkbox" data-cst="" ${f.sts.length?"":"checked"}> All statuses</label>
+        ${opts.map(x=>`<label><input type="checkbox" data-cst="${esc(x)}" ${f.sts.includes(x)?"checked":""}> ${esc(x)} <span class="mute small">${n(x)}</span></label>`).join("")}
+        <div class="msel-ft"><button type="button" class="btn sm" id="cstClr">Clear</button><button type="button" class="btn sm pri" id="cstDone">Done</button></div></div></details>`})()}
     <span class="small mute">${list.length} case${list.length===1?"":"s"}</span></div>
     ${teamView?(smList.length>1?`<div class="chips" style="margin:10px 0 0"><span class="small mute" style="align-self:center">My team:</span><button class="chip ${f.sm==="all"?"on":""}" data-csm="all">All · ${all.length}</button>${smList.map(([k,n])=>`<button class="chip ${f.sm===k?"on":""}" data-csm="${esc(k)}" ${k==="__other"?'title="Cases with you whose SM is not in your team"':""}>${esc(smLabel(k))} · ${n}</button>`).join("")}</div>`:""):(()=>{
       const inL0=smList.filter(([k])=>inCRM(k)),inL=[...inL0,...crmEmps.filter(e=>!inL0.some(([k])=>nk(k)===nk(e.name))).map(e=>[e.name,0]).sort((a,b)=>a[0].localeCompare(b[0]))],outL=smList.filter(([k])=>!inCRM(k)),outN=outL.reduce((s,[,n])=>s+n,0),eid=k=>(crmEmps.find(e=>nk(e.name)===nk(k))||{}).id||"";
@@ -2362,7 +2370,9 @@ function aCases(){
   return h+casesTable(list,{empty:all.length?"No cases match these filters.":"No lead cases yet – they appear when a customer is marked Interested.",sel:bulk});
 }
 function bindCasesTab(){const q=$("#cq");if(!q)return;
-  $("#cst").onchange=e=>{view.cf.st=e.target.value;render()};document.querySelectorAll("[data-newcase]").forEach(b=>b.onclick=()=>openNewCase());document.querySelectorAll("[data-cfu]").forEach(b=>b.onclick=()=>{view.cf.fu=b.dataset.cfu;render()});document.querySelectorAll("[data-csm]").forEach(b=>b.onclick=()=>{view.cf.sm=b.dataset.csm;render()});
+  document.querySelectorAll("[data-cst]").forEach(b=>b.onchange=()=>{const k=b.dataset.cst,f=view.cf;if(!k)f.sts=[];else f.sts=b.checked?[...new Set([...f.sts,k])]:f.sts.filter(x=>x!==k);view.cstOpen=true;render()});
+  const cb=$("#cstBox");if(cb)cb.ontoggle=()=>{view.cstOpen=cb.open};
+  const cd=$("#cstDone");if(cd)cd.onclick=()=>{view.cstOpen=false;render()};const cc=$("#cstClr");if(cc)cc.onclick=()=>{view.cf.sts=[];view.cstOpen=true;render()};document.querySelectorAll("[data-newcase]").forEach(b=>b.onclick=()=>openNewCase());document.querySelectorAll("[data-cfu]").forEach(b=>b.onclick=()=>{view.cf.fu=b.dataset.cfu;render()});document.querySelectorAll("[data-csm]").forEach(b=>b.onclick=()=>{view.cf.sm=b.dataset.csm;render()});
   document.querySelectorAll("[data-csel]").forEach(x=>x.onchange=()=>{x.checked?view.csel.add(x.dataset.csel):view.csel.delete(x.dataset.csel);render()});
   const ca=$("#cselAll");if(ca)ca.onchange=()=>{(view.casesShown||[]).forEach(k=>ca.checked?view.csel.add(k):view.csel.delete(k));render()};
   const bc=$("#bkClr");if(bc)bc.onclick=()=>{view.csel.clear();render()};
