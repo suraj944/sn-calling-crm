@@ -331,7 +331,7 @@ function loadAll_(me) {
     connectors: connectorsFor_(me, emps),
     cpData: true,
     pagePerms: true,
-    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true, phoneEdit: true, cpShared: true, pinView: true, sharedLoan: true,   // 11.24: Lead Shared by sees their cases · 11.23: Admin sees PINs · 11.21: CP details when Lead Shared by = CP · 11.20: add a missing customer number in the case window · 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
+    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true, phoneEdit: true, cpShared: true, pinView: true, sharedLoan: true, stageNew: true,   // 11.25: new case at its step; field SM leads = Own field work · 11.24: Lead Shared by sees their cases · 11.23: Admin sees PINs · 11.21: CP details when Lead Shared by = CP · 11.20: add a missing customer number in the case window · 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
     stages: true,                                     // case window can save login / sanction dates and amounts (11.14+)
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
@@ -854,14 +854,25 @@ function prepareCase_(me, c, force, to, src) {
   row[C_["Timestamp"]] = now_(); row[C_["Lead Date"]] = today; row[C_["Monthly"]] = Utilities.formatDate(now, "Asia/Kolkata", "MMM-yyyy");
   row[C_["Lead Type"]] = choose("Lead Type"); row[C_["Customer Name"]] = properName_(cl(c["Customer Name"]) || src.name || need("Customer Name"));
   row[C_["Contact Number"]] = ph.slice(0, 5) + " " + ph.slice(5); row[C_["SM Name"]] = choose("SM Name"); row[C_["Product"]] = choose("Product");
-  row[C_["Lead Shared by"]] = me.role === "SM - Field work" && !cl(c["Lead Shared by"]) ? "" : choose("Lead Shared by");   // 11.19: field SM generate their own leads – no "Lead Shared by"
+  row[C_["Lead Shared by"]] = me.role === "SM - Field work" && !cl(c["Lead Shared by"]) ? "Own field work" : choose("Lead Shared by");   // 11.25: a field SM's own lead is "Own field work"
   row[C_["Lead Source"]] = cp && cl(c["Lead Source"]) ? choose("Lead Source") : src.source || "";
   if (full) row[C_["Amount Required"]] = amt || "";                   // amount only from people with Lead Cases access
   if (cp) {                                                            // connector / CP who gave the lead
     row[C_["Connector Name"]] = properName_(cl(c["Connector Name"])); row[C_["Connector Contact No"]] = cph ? cph.slice(0, 5) + " " + cph.slice(5) : "";
     row[C_["Connector Location"]] = properName_(cl(c["Connector Location"]));
   }
-  row[C_["Status"]] = "New"; row[C_["Telecaller ID"]] = me.id; row[C_["Contact ID"]] = src.contactId || ""; row[C_["Next follow-up"]] = today;
+  row[C_["Status"]] = "New";
+  // 11.25: a case that already moved ahead can be added at its step – Login / Sanction / Disbursal with dates and amounts
+  const stage = full ? String(c.stage || "") : "", lv = { login: 1, sanc: 2, disb: 3 }[stage] || 0;
+  if (lv && C_["Login date"] !== undefined) {
+    const day = k => { const v = cl(c[k]); if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || v > today) throw new Error("Fill a correct date for the step the case is at"); return v; };
+    const money = k => { const n = Number(String(c[k] || "").replace(/[^\d.]/g, "")); if (!n) throw new Error("Fill the amount for the step the case is at"); return n; };
+    row[C_["Login date"]] = day("loginD"); row[C_["Login by"]] = me.name; row[C_["Status"]] = "Login Done";
+    if (lv >= 2) { row[C_["Sanction date"]] = day("sancD"); row[C_["Sanction amount"]] = money("sancA"); row[C_["Sanction by"]] = me.name; row[C_["Status"]] = "Sanction Done"; }
+    if (lv >= 3) { const d = day("disbD"); row[C_["Disbursed Date"]] = d; row[C_["Disbursed Month"]] = Utilities.formatDate(new Date(d + "T12:00:00"), "Asia/Kolkata", "MMM-yyyy");
+      row[C_["Disbursed amount"]] = money("disbA"); row[C_["Disbursed by"]] = me.name; row[C_["Status"]] = "Disbursed"; }
+  }
+  row[C_["Telecaller ID"]] = me.id; row[C_["Contact ID"]] = src.contactId || ""; row[C_["Next follow-up"]] = today;
   const note = tidyText_(cl(c.Remarks)), lines = [];
   if (t) lines.push(d + " Transferred from " + me.name + " to " + t.name + " by " + me.name);
   if (note) lines.push(d + " " + note);
