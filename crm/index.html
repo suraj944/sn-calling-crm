@@ -1596,7 +1596,7 @@ function aImport(){
    <p class="small mute" style="margin:10px 0 0">A duplicate = <b>same name and same mobile number</b>. Duplicates already in the calling list (any team), lines repeated in this list and invalid numbers are skipped automatically. The same number with a different name is added as a separate contact.</p></div></div>`;
 }
 const isCP=l=>!!l&&l.source==="CP data";   // contact imported as connector / channel-partner data
-const typeSel=(id)=>S.cpData?`<label class="f">Data type</label><select id="${id}" style="width:100%"><option value="">Customers – loan enquiries</option><option value="cp" ${view.impType==="cp"?"selected":""}>Connectors – CP data</option></select><div class="small mute" style="margin-top:4px">CP data: when the caller marks <b>Interested</b>, the contact is added to their <b>Connectors</b> (not a lead case).</div>`:"";
+const typeSel=(id)=>S.cpData?`<label class="f">Data type</label><select id="${id}" style="width:100%"><option value="">Lead (customer)</option><option value="cp" ${view.impType==="cp"?"selected":""}>CP Calling (channel partner)</option></select>`:"";
 /* ---- import helpers: one mobile number = one contact ---- */
 const phoneKey=p=>{let d=String(p||"").replace(/\D/g,"");if(d.length===12&&d.startsWith("91"))d=d.slice(2);if(d.length===11&&d.startsWith("0"))d=d.slice(1);return d};
 const validMob=k=>/^[6-9]\d{9}$/.test(k);
@@ -2126,7 +2126,7 @@ function renderEmp(){
     if(due.length)h+=`<div class="card due pad" style="margin-bottom:14px"><h3 style="color:var(--amber)">⏰ Callbacks due now (${due.length})</h3>${due.map(l=>leadRow(l)).join("")}</div>`;
     const counts=k=>k==="all"?mine.length:k==="cp"?mine.filter(isCP).length:mine.filter(l=>l.status===k).length;
     h+=`<div class="row" style="margin-bottom:10px"><div class="sbox" style="flex:1;min-width:180px"><input id="eq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search contacts" value="${esc(view.q)}"><button type="button" class="btn sbtn" data-sgo="eq">🔍 Search</button></div></div>
-    <div class="chips">${["all",...(mine.some(isCP)?["cp"]:[]),"new",...Object.keys(OUTCOMES)].map(k=>`<button class="chip ${f===k?"on":""}" data-f="${k}">${k==="all"?"All":k==="cp"?"CP data":STATUS[k].label} · ${counts(k)}</button>`).join("")}</div>
+    <div class="chips">${["all",...(mine.some(isCP)?["cp"]:[]),"new",...Object.keys(OUTCOMES)].map(k=>`<button class="chip ${f===k?"on":""}" data-f="${k}">${k==="all"?"All":k==="cp"?"CP Calling":STATUS[k].label} · ${counts(k)}</button>`).join("")}</div>
     <div class="card">${list.map(l=>leadRow(l)).join("")||`<div class="empty">No contacts here${mine.length?"":" yet – your manager will assign a list"}.</div>`}</div>`;
   }
   setApp(h);
@@ -2971,7 +2971,7 @@ function openLead(id,fromCall){
    <label class="f">Call outcome</label>
    <div class="outs">${Object.entries(OUTCOMES).map(([k,o])=>`<button class="out" data-out="${k}"><span class="pill ${o.cls}">${o.label}</span></button>`).join("")}</div>
    <div id="fuWrap" style="display:none"><label class="f">Call back on</label><input type="datetime-local" id="fu" style="width:100%"></div>
-   ${cp?`<div class="small" style="margin-top:10px;padding:8px 10px;border-radius:10px;background:#f3efff;color:#4c1d95"><b>CP data</b> – marking <b>Interested</b> adds ${esc(l.name)} to ${ME&&view.who===ME.id?"your":"the caller's"} <b>Connectors</b> (not a lead case).</div>
+   ${cp?`<div class="small" style="margin-top:10px;padding:8px 10px;border-radius:10px;background:#f3efff;color:#4c1d95"><b>CP Calling</b> – marking <b>Interested</b> adds ${esc(l.name)} to ${ME&&view.who===ME.id?"your":"the caller's"} <b>Connectors</b> (not a lead case).</div>
    <div id="cfWrap" style="display:none;margin-top:14px;border:1px solid #ddd3fb;background:#faf8ff;border-radius:14px;padding:14px">
     <div style="font-weight:700">🤝 Connector details</div><div class="small mute">${esc(l.name)} · ${esc(l.phone)} – fill what you learnt on the call; everything is optional.</div>
     <div class="g2"><div><label class="f">Meeting Type</label><input id="cf_mt" list="dl_cfmt" value="Call" style="width:100%" maxlength="60"></div>
