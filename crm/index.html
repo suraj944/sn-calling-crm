@@ -2604,7 +2604,7 @@ function eodData(dayTs){
   (S.employees||[]).filter(e=>e.active!==false&&!/^(admin|manager|sales manager|team lead)$/i.test(e.role||"")).forEach(e=>byP.set(e.id,[]));   // calling staff always listed (0 if no calls); others only when they called
   logs.forEach(g=>{if(!byP.has(g.by))byP.set(g.by,[]);byP.get(g.by).push(g)});
   const st=L=>{const u=uniqN(L),c=uniqConn(L),I=L.filter(g=>g.outcome==="int"||g.outcome==="conv");return{calls:u,total:L.length,conn:c,pct:u?Math.round(c/u*100):0,int:uniqN(I),L,CL:L.filter(g=>CONNECTED(g.outcome)),IL:I}};
-  const callAll=[...byP].map(([id,L])=>({id,name:empName(id),role:((S.allEmps||[]).find(e=>e.id===id)||{}).role||"",d:st(L.filter(g=>inD(g.at))),m:st(L)})).sort((a,b)=>b.m.calls-a.m.calls||a.name.localeCompare(b.name));
+  const callAll=[...byP].map(([id,L])=>({id,name:empName(id),role:((S.allEmps||[]).find(e=>e.id===id)||{}).role||"",d:st(L.filter(g=>inD(g.at))),m:st(L)})).filter(r=>r.role!=="SM - Field work").sort((a,b)=>b.m.calls-a.m.calls||a.name.localeCompare(b.name));   // SM - Field work do no calling (Suraj, 26 Nov)
   const hid=eodHid(),calling=callAll.filter(r=>!hid.has(r.id));   // people unticked in "Show people" are left out of every table, totals, WhatsApp text and Excel
   const nk=n=>String(n||"").trim().toLowerCase().replace(/\s+/g," "),empByN=new Map((S.allEmps||S.employees||[]).map(e=>[nk(e.name),e])),keyOf=n=>{const e=empByN.get(nk(n));return e?e.id:"nm:"+nk(n)};
   const sumC=k=>{const o={L:[],CL:[],IL:[]};calling.forEach(r=>{["L","CL","IL"].forEach(f=>o[f]=o[f].concat(r[k][f]))});   // team totals: each mobile number once, same as the lists behind them
