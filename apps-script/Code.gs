@@ -331,7 +331,7 @@ function loadAll_(me) {
     connectors: connectorsFor_(me, emps),
     cpData: true,
     pagePerms: true,
-    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true,   // 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
+    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true, phoneEdit: true,   // 11.20: add a missing customer number in the case window · 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
     stages: true,                                     // case window can save login / sanction dates and amounts (11.14+)
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
@@ -1024,6 +1024,14 @@ function saveCase_(me, c) {
     if (String(row[C_[d]]).trim() && !String(row[C_[b]]).trim()) row[C_[b]] = who; });
   if (String(row[C_["Sanction date"]]).trim() && !String(row[C_["Login date"]]).trim()) row[C_["Login date"]] = row[C_["Sanction date"]];
   if (ty === "disb" || ty === "closed") row[C_["Next follow-up"]] = "";   // nothing more to follow up
+  if (c["Contact Number"] !== undefined && String(c["Contact Number"]).trim()) {   // 11.20: add a missing customer number (Admin can also correct one)
+    const was = digits_(rows[i][C_["Contact Number"]]), d = digits_(c["Contact Number"]).replace(/^(91|0)(?=\d{10}$)/, "");
+    if (d !== was.slice(-10)) {
+      if (was && me.role !== "Admin") throw new Error("Only Admin can change a customer number that is already there");
+      if (!/^[6-9]\d{9}$/.test(d)) throw new Error("Customer mobile should be a 10-digit number");
+      row[C_["Contact Number"]] = d.slice(0, 5) + " " + d.slice(5);
+    }
+  }
   row[C_["Contact Number"]] = text_(row[C_["Contact Number"]]);
   ["Connector Contact No", "Banker Contact No"].forEach(h => row[C_[h]] = text_(row[C_[h]]));
   const dd = String(row[C_["Disbursed Date"]]).match(/^(\d{4})-(\d{2})-(\d{2})/);

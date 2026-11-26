@@ -622,7 +622,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.leadForm=!!j.leadForm;S.cpLead=!!j.cpLead;S.meetLoc=!!j.meetLoc;S.keepLead=!!j.keepLead;S.fwNoShared=!!j.fwNoShared;S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.leadForm=!!j.leadForm;S.cpLead=!!j.cpLead;S.meetLoc=!!j.meetLoc;S.keepLead=!!j.keepLead;S.fwNoShared=!!j.fwNoShared;S.phoneEdit=!!j.phoneEdit;S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu,by,form,force,connector){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force,connector})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -2222,6 +2222,7 @@ function loanStepsCheck(o){
   return ""}
 function openCase(code){
   const c=CASES().find(x=>x.code===code);if(!c)return;caseSeen(c);const canEd=canEditCase(c),sentByMe=isMine(c)&&!heldByMe(c);
+  const phEd=canEd&&!!S.phoneEdit&&(!String(c["Contact Number"]||"").trim()||(ME&&ME.role==="Admin"));   // add a missing customer number (Admin can also correct one) – server 11.20
   const ro=(h,v)=>`<div><div class="small mute">${h}</div><div style="font-weight:600">${v||'<span class="mute" style="font-weight:400">—</span>'}</div></div>`;
   const inp=(h,type="text")=>{const id="cf_"+h.replace(/\W/g,"");const v=c[h]||"";
     if(!canEd)return ro(h,h==="Amount Required"?inr(v):esc(v));
@@ -2243,6 +2244,7 @@ function openCase(code){
      :`<div class="row" style="margin-bottom:10px;gap:14px">${ro("Next follow-up",c.fu?dShort(c.fu)+" · "+fuBadge(c):(caseActive(c)?'<span class="mute" style="font-weight:400">Not set</span>':"—"))}</div>`}
     ${loanSteps(c,canEd)}
     <div class="cgrid">
+     ${phEd?`<div style="grid-column:1/-1"><label class="f" for="cf_ContactNumber">Customer mobile number${c["Contact Number"]?"":' <span style="color:var(--amber);font-weight:600">· missing – add it</span>'}</label><input id="cf_ContactNumber" inputmode="tel" maxlength="14" value="${esc(c["Contact Number"]||"")}" placeholder="10-digit mobile, e.g. 98XXX XXXXX" style="width:100%;max-width:320px"><div id="cf_phMsg" class="small" style="margin-top:4px"></div></div>`:""}
      ${tlSel}${inp("SM Name")}${inp("Status")}${inp("Customer Status")}
      ${inp("Product")}${inp("Amount Required")}${inp("Lead Type")}${inp("Lead Source")}
      ${inp("Bank Name")}${inp("Banker Name")}${inp("Banker Contact No","tel")}${inp("Lead Shared by")}
@@ -2275,6 +2277,10 @@ function openCase(code){
     const lsErr=loanStepsCheck(o);if(lsErr)return toast(lsErr);
     const upd=($("#cf_upd")||{}).value;if(upd&&upd.trim()){const d=new Date();o.Remarks=`${d.getDate()}-${pad(d.getMonth()+1)} ${upd.trim()}`+(o.Remarks?" // "+o.Remarks:"")}
     const fuEl=$("#cf_fu");if(fuEl)o["Next follow-up"]=fuEl.value;
+    const phEl=$("#cf_ContactNumber");let phDup="";if(phEl){const d=String(phEl.value).replace(/\D/g,"").replace(/^(91|0)(?=\d{10}$)/,""),was=String(c["Contact Number"]||"").replace(/\D/g,"");
+      if(d!==was){if(!d&&was)return toast("The customer number can't be emptied");if(!/^[6-9]\d{9}$/.test(d))return toast("Customer mobile should be a 10-digit number");
+        o["Contact Number"]=d.slice(0,5)+" "+d.slice(5);const hit=CASES().filter(x=>x.code!==c.code&&String(x["Contact Number"]).replace(/\D/g,"").slice(-10)===d);
+        if(hit.length)phDup=`<div class="small" style="margin-top:8px;padding:8px 10px;background:#fff4e0;border-radius:8px;color:#8a5300">⚠ This number is already on ${hit.slice(0,3).map(x=>`<b>${esc(x.code)}</b> (${esc(x["Customer Name"])})`).join(", ")}.</div>`}}
     const willClose=["disb","closed"].includes(stType(o.Status||c.Status));if(willClose)o["Next follow-up"]="";
     const tl=$("#cf_TL");if(tl)o["Team Lead"]=tl.value;
     const ch=Object.keys(o).filter(h=>h!=="code"&&h!=="Team Lead"&&(h==="Next follow-up"?(o[h]||"")!==(c.fu?ymd(c.fu):""):LS_DATE[h]?(o[h]||"")!==(c[LS_DATE[h]]?ymd(c[LS_DATE[h]]):""):LS_AMT.has(h)?numOf(o[h])!==numOf(c[h]):String(o[h])!==String(c[h]||""))).map(h=>[h,h==="Next follow-up"?(c.fu?dShort(c.fu):""):c[h]||"",h==="Next follow-up"&&o[h]?dShort(dayOf(o[h])):o[h]]);
@@ -2282,7 +2288,7 @@ function openCase(code){
     if(!ch.length)return toast("Nothing changed");
     const cut=v=>esc(String(v).length>60?String(v).slice(0,60)+"…":v)||'<span class="mute">empty</span>';
     const noFu=!willClose&&!o["Next follow-up"]?`<div class="small" style="margin-top:8px;padding:8px 10px;background:#fff4e0;border-radius:8px;color:#8a5300">⚠ No next follow-up date – this case won't show in anyone's <b>Today</b> list.</div>`:"";
-    if(!await askOk({title:"Save changes to "+c.code+"?",ok:"Yes, save",body:`<ul>${ch.map(([h,a,b])=>`<li><b>${esc(h)}</b>: ${LS_AMT.has(h)?(numOf(a)?inr(a):'<span class="mute">empty</span>'):cut(a)} → ${LS_AMT.has(h)?(numOf(b)?inr(b):'<span class="mute">empty</span>'):cut(b)}</li>`).join("")}</ul>${noFu}`}))return;
+    if(!await askOk({title:"Save changes to "+c.code+"?",ok:"Yes, save",body:`<ul>${ch.map(([h,a,b])=>`<li><b>${esc(h)}</b>: ${LS_AMT.has(h)?(numOf(a)?inr(a):'<span class="mute">empty</span>'):cut(a)} → ${LS_AMT.has(h)?(numOf(b)?inr(b):'<span class="mute">empty</span>'):cut(b)}</li>`).join("")}</ul>${phDup}${noFu}`}))return;
     sv.disabled=true;sv.innerHTML=`<span class="spin"></span> Saving…`;if(await write(api=>api.saveCase(o),"Case "+c.code+" saved","Saving case "+c.code+"…"))close();else{sv.disabled=false;sv.textContent="Save case"}};
 }
 function aCases(){
