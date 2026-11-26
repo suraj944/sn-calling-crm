@@ -331,7 +331,7 @@ function loadAll_(me) {
     connectors: connectorsFor_(me, emps),
     cpData: true,
     pagePerms: true,
-    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true, phoneEdit: true,   // 11.20: add a missing customer number in the case window · 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
+    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true, phoneEdit: true, cpShared: true,   // 11.21: CP details when Lead Shared by = CP · 11.20: add a missing customer number in the case window · 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
     stages: true,                                     // case window can save login / sanction dates and amounts (11.14+)
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
@@ -828,7 +828,7 @@ function createCaseFor_(me, leadId) {                                  // open a
 // People without Lead Cases access fill only the basics and must send the case to someone for further process.
 function prepareCase_(me, c, force, to, src) {
   src = src || {};
-  const L = lists_(), emps = emps_(), now = new Date(), full = perms_(me).has("cases"), cp = full || perms_(me).has("leadForm");   // 11.17: SM - Field work can name the CP who gave the lead
+  const L = lists_(), emps = emps_(), now = new Date(), full = perms_(me).has("cases"), cp = full || perms_(me).has("leadForm") || String(c["Lead Shared by"] || "").trim() === "CP";   // 11.21: Lead Shared by = CP → anyone may name the CP   // 11.17: SM - Field work can name the CP who gave the lead
   // 11.18: nobody has to send the case on straight away – they can keep it until the documents come, then send it (Suraj, 25 Nov)
   const cl = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "").replace(/\s+/g, " ").trim().slice(0, 300);
   const need = (h, label) => { const v = cl(c[h]); if (!v) throw new Error("Fill in " + (label || h)); return v; };
