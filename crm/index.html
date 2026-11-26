@@ -352,6 +352,7 @@ ol.tl{list-style:none;margin:6px 0 0;padding:0 0 0 14px;border-left:2px solid va
 .lf-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;font-weight:700;color:#5b6472;padding-bottom:8px;border-bottom:1px solid #f0f1f4}
 .lf-h span{font-weight:400;color:var(--mute)}
 .lf-g{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.cpdd{position:relative;min-width:0}.cpdd-btn{width:100%;display:flex;align-items:center;gap:8px;text-align:left;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer;min-height:38px}.cpdd-btn:hover{border-color:#c9cfd8}.cpdd.open .cpdd-btn,.cpdd-btn:focus-visible{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft);outline:none}.cpdd-val{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cpdd-val b{font-weight:600}.cpdd-car{color:var(--mute);font-size:12px}.cpdd-x{color:var(--mute);font-size:12px;padding:0 4px;border-radius:4px}.cpdd-x:hover{background:var(--gray-soft);color:var(--ink)}.cpdd-id{display:inline-block;font-size:11px;font-weight:600;color:var(--brand);background:var(--brand-soft);border-radius:5px;padding:1px 6px;margin-right:6px;vertical-align:1px}.cpdd-pop{position:absolute;top:calc(100% + 4px);left:0;z-index:60;width:max(100%,340px);max-width:min(420px,92vw);background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(17,24,39,.16)}.cpdd-sbox{padding:8px;border-bottom:1px solid var(--line)}.cpdd-q{width:100%}.cpdd-list{max-height:280px;overflow-y:auto;padding:4px}.cpdd-opt{padding:8px 10px;border-radius:7px;cursor:pointer}.cpdd-opt.hi{background:var(--gray-soft)}.cpdd-opt.on .cpdd-nm{color:var(--brand)}.cpdd-nm{font-weight:600;display:flex;justify-content:space-between;gap:8px}.cpdd-ck{color:var(--brand)}.cpdd-sub{font-size:12px;color:var(--mute);margin-top:2px}.cpdd-new{border-top:1px solid var(--line);border-radius:0 0 7px 7px;margin-top:4px}.cpdd-new .cpdd-nm{color:var(--brand)}.cpdd-none{padding:12px 10px;color:var(--mute);font-size:13px}
 .lf .fld{margin-top:12px;min-width:0}.lf .fld>label{display:block;font-size:12.5px;font-weight:600;color:#3d4350;margin-bottom:6px}
 .lf .fld>label i{font-style:normal;color:#c0392b;margin-left:2px}.lf .fld>label em{font-style:normal;font-weight:400;color:var(--mute)}
 .lf .fld input,.lf .fld select,.lf .fld textarea{width:100%}
@@ -627,7 +628,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.leadForm=!!j.leadForm;S.cpLead=!!j.cpLead;S.meetLoc=!!j.meetLoc;S.keepLead=!!j.keepLead;S.fwNoShared=!!j.fwNoShared;S.phoneEdit=!!j.phoneEdit;S.cpShared=!!j.cpShared;S.pinView=!!j.pinView;S.sharedLoan=!!j.sharedLoan;S.stageNew=!!j.stageNew;S.cpFirm=!!j.cpFirm;S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.leadForm=!!j.leadForm;S.cpLead=!!j.cpLead;S.meetLoc=!!j.meetLoc;S.keepLead=!!j.keepLead;S.fwNoShared=!!j.fwNoShared;S.phoneEdit=!!j.phoneEdit;S.cpShared=!!j.cpShared;S.pinView=!!j.pinView;S.sharedLoan=!!j.sharedLoan;S.stageNew=!!j.stageNew;S.cpFirm=!!j.cpFirm;S.cpFirms=Array.isArray(j.cpFirms)?j.cpFirms.map(r=>({id:r[0]||"",name:r[1]||"",person:r[2]||"",phone:String(r[3]||"").split("/")[0].trim(),loc:r[4]||""})).filter(f=>f.name):[];S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu,by,form,force,connector){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force,connector})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -1441,6 +1442,39 @@ function buildMeetings(rows){
 const isMyMeet=m=>!!ME&&(m.smId===ME.id||normName(m.sm)===normName(ME.name));
 const myCPs=()=>{const seen=new Set();return(S.meetings||[]).filter(isMyMeet).filter(m=>{const k=(String(m.phone).replace(/\D/g,"").slice(-10))||normName(m.person||m.entity);if(!k||seen.has(k))return false;seen.add(k);return true}).sort((a,b)=>String(a.person||a.entity).localeCompare(String(b.person||b.entity)))};
 const cpSrc=m=>{const o=caseOpts("Lead Source")||[],w=m.ent==="CP"?"CP":m.ent==="Connector"?"Connector":"";return o.find(x=>x.toLowerCase()===w.toLowerCase())||""};
+/* CP firm drop-down (server 11.27, "CP List" tab): a searchable list in place of the CP name (firm) box.
+   Each row: firm name + CP ID · person · area. "New firm" shows the box to type a name that is not in the list.
+   Picking a firm fills CP person / contact / location only when those boxes are empty. */
+function cpFirmPick(p){const inp=$("#"+p+"_CPName"),L=S.cpFirms||[];if(!inp||!L.length||inp.tagName!=="INPUT"||inp.dataset.fp)return;inp.dataset.fp="1";
+  const w=document.createElement("div");w.className="cpdd";w.id=p+"_cpdd";
+  w.innerHTML=`<button type="button" class="cpdd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="cpdd-val"></span><span class="cpdd-x" title="Clear" hidden>✕</span><span class="cpdd-car">▾</span></button>
+    <div class="cpdd-pop" hidden><div class="cpdd-sbox"><input class="cpdd-q" placeholder="Search firm, person, area or CP ID" autocomplete="off"></div><div class="cpdd-list" role="listbox"></div></div>`;
+  inp.parentNode.insertBefore(w,inp);inp.parentNode.style.minWidth="0";inp.placeholder="Type the new CP firm name";
+  const btn=w.querySelector(".cpdd-btn"),val=w.querySelector(".cpdd-val"),x=w.querySelector(".cpdd-x"),pop=w.querySelector(".cpdd-pop"),q=w.querySelector(".cpdd-q"),list=w.querySelector(".cpdd-list");
+  let mode="",hi=0,rows=[];   /* mode: "" nothing, "i" a firm from the list, "o" new firm typed */
+  const cur=()=>L.findIndex(f=>normName(f.name)===normName(inp.value.trim()));
+  const paint=()=>{const i=cur();mode=i>=0?"i":inp.value.trim()?"o":mode==="o"?"o":"";
+    val.innerHTML=i>=0?`${L[i].id?`<span class="cpdd-id">${esc(L[i].id)}</span>`:""}<b>${esc(L[i].name)}</b>`:mode==="o"?`<b>New firm</b> <span class="mute">– type below</span>`:`<span class="mute">Choose CP firm</span>`;
+    x.hidden=mode===""||btn.disabled;inp.style.display=mode==="o"?"":"none";inp.style.marginTop=mode==="o"?"6px":""};
+  const draw=()=>{const t=q.value.trim().toLowerCase(),sel=cur();
+    rows=L.map((f,i)=>({f,i})).filter(({f})=>!t||[f.name,f.id,f.person,f.loc,f.phone].join(" ").toLowerCase().includes(t));
+    hi=Math.max(0,Math.min(hi,rows.length));
+    list.innerHTML=(rows.length?rows.map(({f,i},k)=>`<div class="cpdd-opt${k===hi?" hi":""}${i===sel?" on":""}" role="option" data-k="${k}"><div class="cpdd-nm">${esc(f.name)}${i===sel?'<span class="cpdd-ck">✓</span>':""}</div><div class="cpdd-sub">${f.id?`<span class="cpdd-id">${esc(f.id)}</span>`:""}${esc([f.person,f.loc].filter(Boolean).join(" · "))}</div></div>`).join(""):`<div class="cpdd-none">No CP firm matches “${esc(q.value.trim())}”</div>`)
+      +`<div class="cpdd-opt cpdd-new${hi===rows.length?" hi":""}" data-k="${rows.length}"><div class="cpdd-nm">➕ New firm – not in this list</div><div class="cpdd-sub">Type the firm name yourself</div></div>`;
+    const h=list.querySelector(".hi");if(h)h.scrollIntoView({block:"nearest"})};
+  const open=()=>{if(btn.disabled)return;pop.hidden=false;btn.setAttribute("aria-expanded","true");w.classList.add("open");q.value="";hi=Math.max(0,rows.length&&cur()>=0?cur():0);draw();
+    pop.style.left="0";pop.style.right="";const r=pop.getBoundingClientRect();if(r.right>innerWidth-8){pop.style.left="auto";pop.style.right="0"}setTimeout(()=>q.focus(),0)};
+  const close=()=>{pop.hidden=true;btn.setAttribute("aria-expanded","false");w.classList.remove("open")};
+  const choose=k=>{const r=rows[k];close();if(!r){mode="o";inp.value="";paint();inp.focus();return}const f=r.f;inp.value=f.name;paint();
+    [["ConnectorName",f.person],["ConnectorContactNo",f.phone],["ConnectorLocation",f.loc]].forEach(([k2,v])=>{const e=$("#"+p+"_"+k2);if(e&&!e.value.trim()&&v)e.value=v});
+    const fl=w.closest(".fld");if(fl)fl.classList.remove("err");btn.focus()};
+  btn.onclick=e=>{if(e.target===x){inp.value="";mode="";paint();return}pop.hidden?open():close()};
+  q.oninput=()=>{hi=0;draw()};
+  q.onkeydown=e=>{if(e.key==="ArrowDown"){hi=Math.min(hi+1,rows.length);draw();e.preventDefault()}else if(e.key==="ArrowUp"){hi=Math.max(hi-1,0);draw();e.preventDefault()}else if(e.key==="Enter"){choose(hi);e.preventDefault()}else if(e.key==="Escape"){close();btn.focus();e.preventDefault();e.stopPropagation()}};
+  list.onmousedown=e=>{const o=e.target.closest(".cpdd-opt");if(o){e.preventDefault();choose(+o.dataset.k)}};
+  document.addEventListener("mousedown",e=>{if(!pop.hidden&&!w.contains(e.target))close()});
+  btn.disabled=inp.disabled||inp.readOnly;
+  inp.cpSync=()=>{mode="";paint()};paint()}
 const cpPrefill=m=>({cp:m.id,"CP Name":m.entity||"","Connector Name":m.person||m.entity,"Connector Contact No":String(m.phone||"").split("/")[0].trim(),"Connector Location":m.location||"","Lead Source":cpSrc(m)});
 const mLeadBtn=m=>S.cpLead&&isMyMeet(m)&&view.who!=="admin"&&canLeadForm()?`<button class="btn sm" data-mlead="${esc(m.id)}" title="This CP / connector gave a lead – fill the lead form">📝 Lead</button> `:"";
 const canEditMeeting=m=>!ME||isLead()||m.smId===ME.id||normName(m.sm)===normName(ME.name);
@@ -2277,9 +2311,9 @@ function openCase(code){
    <div class="mf">${isLead()&&can("caseRemove")?`<button class="btn" id="crm" style="margin-right:auto;color:var(--red)">🗑 Remove case</button>`:""}${canTransferCase(c)?`<button class="btn" id="ctr">${!can("caseTransfer")&&ownerCanSend(c)?((S.handTo||[]).length===1?"📤 Send to "+esc(S.handTo[0].name)+" (documents ready)":"📤 Send case (documents ready)"):"⇄ Transfer case"}</button>`:""}<button class="btn" id="mc">${canEd?"Cancel":"Close"}</button>${canEd?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
   $("#modal").style.maxWidth="880px";$("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#mc").onclick=close;
   if(canEd)bindLoanSteps(c);
-  lakhHints();
+  lakhHints();cpFirmPick("cf");
   document.querySelectorAll("#cf_cpq [data-cpq]").forEach(b=>b.onclick=()=>{document.querySelectorAll("#cf_cpq .chip").forEach(x=>x.classList.remove("on"));b.classList.add("on");const on=!!b.dataset.cpq,blk=$("#cf_cpBlk");if(blk)blk.style.display=on?"contents":"none";
-    const ls=$("#cf_LeadSource");if(on){if(ls&&!ls.value&&[...ls.options].some(o=>o.value==="CP"))ls.value="CP";const nm=$("#cf_CPName")||$("#cf_ConnectorName");if(nm)nm.focus()}else{["CPName","ConnectorName","ConnectorContactNo","ConnectorLocation"].forEach(k=>{const e=$("#cf_"+k);if(e)e.value=""});if(ls&&ls.value==="CP")ls.value=""}});
+    const ls=$("#cf_LeadSource");if(on){if(ls&&!ls.value&&[...ls.options].some(o=>o.value==="CP"))ls.value="CP";const nm=$("#cf_CPName")||$("#cf_ConnectorName");if(nm)nm.focus()}else{["CPName","ConnectorName","ConnectorContactNo","ConnectorLocation"].forEach(k=>{const e=$("#cf_"+k);if(e)e.value=""});{const e=$("#cf_CPName");if(e&&e.cpSync)e.cpSync()}if(ls&&ls.value==="CP")ls.value=""}});
   document.querySelectorAll("[data-fq]").forEach(b=>b.onclick=()=>{const v=b.dataset.fq;$("#cf_fu").value=v==="x"?"":ymd(sod(Date.now())+(+v)*DAY+3600e3)});
   const trb=$("#ctr");if(trb)trb.onclick=async()=>{
     const adm=can("caseTransfer")&&(S.transferTo||[]).length>0,cur=c["Team Lead"]||"",list=(adm?S.transferTo:S.handTo||[]).filter(x=>normName(x.name)!==normName(cur));
@@ -2960,9 +2994,9 @@ function bindNF(full){
   const stageShow=k=>{const lv={"":0,login:1,sanc:2,disb:3}[k]||0,bx=$("#nf_stageBox");if(!bx)return;bx.style.display=lv?"":"none";bx.querySelectorAll("[data-lv]").forEach(d=>d.style.display=+d.dataset.lv<=lv?"":"none")};
   document.querySelectorAll("#nf_stage [data-stage]").forEach(b=>b.onclick=()=>{document.querySelectorAll("#nf_stage .chip").forEach(x=>x.classList.remove("on"));b.classList.add("on");stageShow(b.dataset.stage);b.closest(".fld").classList.remove("err")});
   {const on=document.querySelector("#nf_stage .chip.on");stageShow(on?on.dataset.stage:"")}
-  lakhHints();
+  lakhHints();cpFirmPick("nf");
   const cpSel=$("#nf_cp");if(cpSel)cpSel.onchange=()=>{const m=(S.meetings||[]).find(x=>x.id===cpSel.value),p=m?cpPrefill(m):{"Connector Name":"","Connector Contact No":"","Connector Location":"","Lead Source":""};
-    [["CP Name","CPName"],["Connector Name","ConnectorName"],["Connector Contact No","ConnectorContactNo"],["Connector Location","ConnectorLocation"]].forEach(([h,i])=>{const e=$("#nf_"+i);if(e)e.value=p[h]||""});
+    [["CP Name","CPName"],["Connector Name","ConnectorName"],["Connector Contact No","ConnectorContactNo"],["Connector Location","ConnectorLocation"]].forEach(([h,i])=>{const e=$("#nf_"+i);if(e)e.value=p[h]||""});{const e=$("#nf_CPName");if(e&&e.cpSync)e.cpSync()}
     const ls=$("#nf_LeadSource");if(ls&&(p["Lead Source"]||ls.type==="hidden"))ls.value=p["Lead Source"]}}
 // show which fields are missing, right on the form
 function nfMark(miss){document.querySelectorAll(".lf .fld.err").forEach(x=>x.classList.remove("err"));let first=null;

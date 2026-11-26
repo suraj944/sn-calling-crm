@@ -331,7 +331,7 @@ function loadAll_(me) {
     connectors: connectorsFor_(me, emps),
     cpData: true,
     pagePerms: true,
-    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true, phoneEdit: true, cpShared: true, pinView: true, sharedLoan: true, stageNew: true, cpFirm: true,   // 11.26: CP name (firm) + CP person name · 11.25: new case at its step; field SM leads = Own field work · 11.24: Lead Shared by sees their cases · 11.23: Admin sees PINs · 11.21: CP details when Lead Shared by = CP · 11.20: add a missing customer number in the case window · 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
+    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true, phoneEdit: true, cpShared: true, pinView: true, sharedLoan: true, stageNew: true, cpFirm: true, cpFirms: cpFirms_(),   // 11.27: CP firm drop-down from the "CP List" tab · 11.26: CP name (firm) + CP person name · 11.25: new case at its step; field SM leads = Own field work · 11.24: Lead Shared by sees their cases · 11.23: Admin sees PINs · 11.21: CP details when Lead Shared by = CP · 11.20: add a missing customer number in the case window · 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
     stages: true,                                     // case window can save login / sanction dates and amounts (11.14+)
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
@@ -582,6 +582,23 @@ function saveMeeting_(me, m) {
   if (idx >= 0) sh.getRange(idx + 2, 1, 1, MEET_COLS).setValues([row]);
   else sh.getRange(sh.getLastRow() + 1, 1, 1, MEET_COLS).setValues([row]);
   return { saved: true, id };
+}
+// 11.27: the CP firm drop-down comes from the "CP List" tab (one row per CP firm). Columns found by header:
+// CP ID, CP Firm, CP Person, Contact No, Location. Admin adds a new CP by typing a row there.
+function cpFirms_() {
+  try {
+    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("CP List");
+    if (!sh || sh.getLastRow() < 2) return [];
+    const d = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getDisplayValues(), hdr = d[0].map(h => String(h).trim().toLowerCase());
+    const col = h => hdr.indexOf(h), ci = col("cp id"), cf = col("cp firm"), cpn = col("cp person"), cc = col("contact no"), cl = col("location");
+    if (cf < 0) return [];
+    const g = (r, j) => j < 0 ? "" : String(r[j] || "").trim(), out = [], seen = new Set();
+    d.slice(1).forEach(r => {
+      const firm = g(r, cf); if (!firm || seen.has(firm.toLowerCase())) return; seen.add(firm.toLowerCase());
+      out.push([g(r, ci), firm, g(r, cpn), g(r, cc), g(r, cl)]);
+    });
+    return out;
+  } catch (e) { return []; }
 }
 function deleteMeeting_(id) {
   const sh = mSheet_(), n = sh.getLastRow() - 1;
