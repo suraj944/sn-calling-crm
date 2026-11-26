@@ -390,6 +390,7 @@ ol.tl{list-style:none;margin:6px 0 0;padding:0 0 0 14px;border-left:2px solid va
 .ls-dot{flex:0 0 26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;background:#eef0f3;color:#667;border:2px solid #d5dae3}
 .ls-step.on .ls-dot{background:var(--green);color:#fff;border-color:var(--green)}
 .ls-b{min-width:0;flex:1}.ls-t{font-weight:700}.ls-h{margin:1px 0 5px}
+.lakh{color:var(--green);font-weight:600;margin-top:3px;min-height:1em}
 .ls-in{display:flex;gap:6px;align-items:center;margin-top:4px}.ls-in input{flex:1;min-width:0;width:100%}.ls-rs{color:#667;font-weight:600}
 .ls-v{font-weight:600;margin-top:2px}
 @media(max-width:640px){.ls-row{grid-template-columns:1fr;gap:8px}.ls-step+.ls-step{border-left:0;padding-left:0;border-top:1px dashed #d5dae3;padding-top:8px}}
@@ -2199,7 +2200,7 @@ function loanSteps(c,canEd){
   const cells=LS_STEPS.map((s,i)=>{const on=lsReached(c,i),d=c[s.k],dateEd=canEd&&(srv||s.k==="disbD"),amtEd=canEd&&srv&&s.amt,byW=String(c[s.by]||"").trim();
     const dateUI=dateEd?`<div class="ls-in"><input type="date" id="${lsId(s.date)}" value="${d?ymd(d):""}" max="${ymd(Date.now())}" aria-label="${s.t} date"><button class="btn sm" type="button" data-lst="${i}">Today</button></div>`
       :`<div class="ls-v">${d?dd(d):on?'<span class="mute" style="font-weight:400">done – no date</span>':'<span class="mute" style="font-weight:400">not yet</span>'}</div>`;
-    const amtUI=!s.amt?"":amtEd?`<div class="ls-in"><span class="ls-rs">₹</span><input id="${lsId(s.amt)}" inputmode="numeric" value="${numOf(c[s.amt])||""}" placeholder="Amount, e.g. 2500000" aria-label="${s.amt}"></div>`
+    const amtUI=!s.amt?"":amtEd?`<div class="ls-in"><span class="ls-rs">₹</span><input id="${lsId(s.amt)}" data-lakh inputmode="numeric" value="${numOf(c[s.amt])||""}" placeholder="Amount, e.g. 2500000" aria-label="${s.amt}"></div><div class="small lakh"></div>`
       :numOf(c[s.amt])?`<div class="ls-v num">${inr(c[s.amt])}</div>`:"";
     return `<div class="ls-step ${on?"on":""}" data-ls="${i}"><div class="ls-dot">${on?"✓":i+1}</div>
       <div class="ls-b"><div class="ls-t">${s.ic} ${s.t}</div><div class="ls-h small mute">${on&&byW?"by "+esc(byW):s.hint}</div>
@@ -2207,6 +2208,9 @@ function loanSteps(c,canEd){
   const sum=[c["Bank Name"]?"Bank: <b>"+esc(c["Bank Name"])+"</b>":"",ask?"Asked "+inr(ask):"",numOf(c["Sanction amount"])?"Sanctioned "+inr(c["Sanction amount"]):"",numOf(c["Disbursed amount"])?"Disbursed "+inr(c["Disbursed amount"]):"",c["Disbursed Month"]?"Month "+esc(c["Disbursed Month"]):""].filter(Boolean).join(" · ");
   return `<div class="lsbox"><div class="ls-hd"><b>Loan progress</b><span class="small mute">${sum||"Fill each step when it happens"}</span></div><div class="ls-row">${cells}</div>
     ${canEd&&!srv&&ME&&ME.role==="Admin"?'<div class="small" style="margin-top:6px;color:#8a5300">Login / sanction dates and amounts can be saved after the server update (Version 11.14).</div>':""}</div>`}
+/* amount boxes show the amount in lakh / crore under them, e.g. "= ₹69 L" (Suraj, 26 Nov) */
+function lakhHints(){document.querySelectorAll("[data-lakh]").forEach(e=>{const box=e.closest(".ls-in")?e.closest(".ls-in").nextElementSibling:e.nextElementSibling;if(!box||!box.classList.contains("lakh"))return;
+  const up=()=>{const n=numOf(e.value);box.textContent=n?"= "+fmtL(n):""};e.addEventListener("input",up);up()})}
 function bindLoanSteps(c){
   const stSel=$("#cf_Status"),stNow=()=>stSel?stSel.value:c.Status,pick=v=>{if(stSel&&[...stSel.options].some(o=>o.value===v))stSel.value=v};
   const paint=()=>LS_STEPS.forEach((s,i)=>{const el=document.querySelector(`[data-ls="${i}"]`),inp=$("#"+lsId(s.date));if(!el)return;
@@ -2235,7 +2239,7 @@ function openCase(code){
     if(CASE_PICK.has(h)){const opts=caseOpts(h);const all=v&&!opts.includes(v)?[v,...opts]:opts;
       return `<div><label class="f" for="${id}">${h}</label><select id="${id}" style="width:100%"><option value="">${h==="Bank Name"?"— Choose bank —":"— Choose —"}</option>${all.map(o=>`<option ${o===v?"selected":""}>${esc(o)}</option>`).join("")}</select></div>`}
     const list=CASE_OPTS[h]||(h==="SM Name"?(S.allEmps||[]).filter(e=>(e.role==="Sales Manager"||isFieldSM(e))&&e.active).map(e=>e.name):null);
-    return `<div><label class="f" for="${id}">${h}</label><input id="${id}" type="${type}" value="${esc(v)}" style="width:100%" ${list?`list="${id}_l"`:""} ${h==="Amount Required"?'inputmode="numeric" placeholder="e.g. 500000"':""}>${list?`<datalist id="${id}_l">${list.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>`:""}</div>`};
+    return `<div><label class="f" for="${id}">${h}</label><input id="${id}" type="${type}" value="${esc(v)}" style="width:100%" ${list?`list="${id}_l"`:""} ${h==="Amount Required"?'data-lakh inputmode="numeric" placeholder="e.g. 500000"':""}>${h==="Amount Required"?'<div class="small lakh"></div>':""}${list?`<datalist id="${id}_l">${list.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>`:""}</div>`};
   const tlSel=canEd&&can("caseTL")?`<div><label class="f">Team Lead</label><select id="cf_TL" style="width:100%"><option value="">Not assigned</option>${String(c["Team Lead"]||"").trim()&&!(S.allEmps||[]).some(e=>e.id===c.tlId&&e.role==="Team Lead"&&e.active)?`<option value="__keep" selected>${esc(c["Team Lead"])} (has it now)</option>`:""}${(S.allEmps||[]).filter(e=>e.role==="Team Lead"&&e.active).map(e=>`<option value="${esc(e.id)}" ${c.tlId===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select></div>`:ro("With",esc(c["Team Lead"])||(c["Telecaller ID"]?esc(empName(c["Telecaller ID"])||"")+' <span class="small mute" style="font-weight:400">(not sent yet)</span>':""));
   $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(c["Customer Name"])}</div><div><div style="font-weight:700">${esc(c["Customer Name"])} · <span class="num">${esc(c.code)}</span></div>
      <div class="num mute small">${esc(c["Contact Number"])} · lead date ${esc(c["Lead Date"])} · shared by ${esc(c["Lead Shared by"])}</div></div><button class="x" id="mx">×</button></div>
@@ -2265,6 +2269,7 @@ function openCase(code){
    <div class="mf">${isLead()&&can("caseRemove")?`<button class="btn" id="crm" style="margin-right:auto;color:var(--red)">🗑 Remove case</button>`:""}${canTransferCase(c)?`<button class="btn" id="ctr">${!can("caseTransfer")&&ownerCanSend(c)?((S.handTo||[]).length===1?"📤 Send to "+esc(S.handTo[0].name)+" (documents ready)":"📤 Send case (documents ready)"):"⇄ Transfer case"}</button>`:""}<button class="btn" id="mc">${canEd?"Cancel":"Close"}</button>${canEd?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
   $("#modal").style.maxWidth="880px";$("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#mc").onclick=close;
   if(canEd)bindLoanSteps(c);
+  lakhHints();
   document.querySelectorAll("[data-fq]").forEach(b=>b.onclick=()=>{const v=b.dataset.fq;$("#cf_fu").value=v==="x"?"":ymd(sod(Date.now())+(+v)*DAY+3600e3)});
   const trb=$("#ctr");if(trb)trb.onclick=async()=>{
     const adm=can("caseTransfer")&&(S.transferTo||[]).length>0,cur=c["Team Lead"]||"",list=(adm?S.transferTo:S.handTo||[]).filter(x=>normName(x.name)!==normName(cur));
