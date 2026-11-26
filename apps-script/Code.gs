@@ -95,12 +95,12 @@ const CASE_HDR = ["Timestamp", "SM Name", "Customer Name", "Contact Number", "Pr
   "Unique Lead Code", "Bank Name", "Banker Name", "Banker Contact No", "Status", "Remarks", "Disbursed Date", "Disbursed Month",
   "Customer Status", "Contact ID", "Team Lead", "Telecaller ID", "Last updated", "Updated by",
   "Follow-up history", "Next follow-up", "Login date", "Sanction date",
-  "Login by", "Sanction by", "Disbursed by", "Sanction amount", "Disbursed amount"];   // columns after Follow-up history are added to the sheet automatically
+  "Login by", "Sanction by", "Disbursed by", "Sanction amount", "Disbursed amount", "CP Name"];   // 11.26: CP Name = the CP firm (Connector Name = the CP person)   // columns after Follow-up history are added to the sheet automatically
 const CASE_COLS = CASE_HDR.length, C_ = Object.fromEntries(CASE_HDR.map((h, i) => [h, i]));
 // what a Team Lead / Manager / Admin may change from the CRM (everything else is filled automatically)
 const CASE_EDIT = ["SM Name", "Lead Shared by", "Product", "Amount Required", "Lead Source", "Connector Name", "Connector Contact No", "Connector Location",
   "Lead Type", "Bank Name", "Banker Name", "Banker Contact No", "Status", "Remarks", "Disbursed Date", "Customer Status", "Next follow-up",
-  "Login date", "Sanction date", "Sanction amount", "Disbursed amount"];   // 11.14: loan progress dates and amounts
+  "Login date", "Sanction date", "Sanction amount", "Disbursed amount", "CP Name"];   // 11.14: loan progress dates and amounts · 11.26: CP Name
 const TARGET_HDR = ["Month", "Employee ID", "Name", "Calls", "Leads", "Cases", "Logins", "Disbursed cases", "Disbursal amount", "Set by", "Set at"];
 const SESSION_DAYS = 30;
 const MAX_FAILS = 5, LOCK_MIN = 15;
@@ -331,7 +331,7 @@ function loadAll_(me) {
     connectors: connectorsFor_(me, emps),
     cpData: true,
     pagePerms: true,
-    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true, phoneEdit: true, cpShared: true, pinView: true, sharedLoan: true, stageNew: true,   // 11.25: new case at its step; field SM leads = Own field work · 11.24: Lead Shared by sees their cases · 11.23: Admin sees PINs · 11.21: CP details when Lead Shared by = CP · 11.20: add a missing customer number in the case window · 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
+    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true, phoneEdit: true, cpShared: true, pinView: true, sharedLoan: true, stageNew: true, cpFirm: true,   // 11.26: CP name (firm) + CP person name · 11.25: new case at its step; field SM leads = Own field work · 11.24: Lead Shared by sees their cases · 11.23: Admin sees PINs · 11.21: CP details when Lead Shared by = CP · 11.20: add a missing customer number in the case window · 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
     stages: true,                                     // case window can save login / sanction dates and amounts (11.14+)
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
@@ -860,6 +860,7 @@ function prepareCase_(me, c, force, to, src) {
   if (cp) {                                                            // connector / CP who gave the lead
     row[C_["Connector Name"]] = properName_(cl(c["Connector Name"])); row[C_["Connector Contact No"]] = cph ? cph.slice(0, 5) + " " + cph.slice(5) : "";
     row[C_["Connector Location"]] = properName_(cl(c["Connector Location"]));
+    row[C_["CP Name"]] = properName_(cl(c["CP Name"])).slice(0, 100);
   }
   row[C_["Status"]] = "New";
   // 11.25: a case that already moved ahead can be added at its step – Login / Sanction / Disbursal with dates and amounts
