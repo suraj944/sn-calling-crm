@@ -828,7 +828,7 @@ function createCaseFor_(me, leadId) {                                  // open a
 // People without Lead Cases access fill only the basics and must send the case to someone for further process.
 function prepareCase_(me, c, force, to, src) {
   src = src || {};
-  const L = lists_(), emps = emps_(), now = new Date(), full = perms_(me).has("cases"), cp = full || perms_(me).has("leadForm") || String(c["Lead Shared by"] || "").trim() === "CP";   // 11.21: Lead Shared by = CP → anyone may name the CP   // 11.17: SM - Field work can name the CP who gave the lead
+  const L = lists_(), emps = emps_(), now = new Date(), full = perms_(me).has("cases"), cp = full || perms_(me).has("leadForm") || String(c["Lead Shared by"] || "").trim() === "CP" || c.fromCP === true || String(c["Lead Source"] || "").trim() === "CP";   // 11.21/11.22: a lead from a CP → anyone may name the CP   // 11.17: SM - Field work can name the CP who gave the lead
   // 11.18: nobody has to send the case on straight away – they can keep it until the documents come, then send it (Suraj, 25 Nov)
   const cl = v => String(v == null ? "" : v).replace(/[<>]/g, "").replace(/^[=+\-@]/, "").replace(/\s+/g, " ").trim().slice(0, 300);
   const need = (h, label) => { const v = cl(c[h]); if (!v) throw new Error("Fill in " + (label || h)); return v; };

@@ -2860,7 +2860,7 @@ function nfHTML(f,full,o={}){
   const tls=people.filter(x=>x.role==="Team Lead"),myTl=(ME&&(emp(ME.id)||{}).tl)||(tls.length===1?tls[0].id:"");
   if(ME&&isFieldSM(emp(ME.id))){const only=tls.filter(x=>x.id===myTl);people=only.length?only:tls;if(people.length===1&&!keep)f.to=people[0].id}   // SM - Field work: leads go to their Team Lead only (Suraj, 25 Nov)if(need&&!f.to&&myTl&&people.some(x=>x.id===myTl))f.to=myTl;   // callers: their own Team Lead is chosen already
   const fld=(h,req,inner,{hint="",wide=false,label=h}={})=>`<div class="fld" data-f="${esc(h)}"${wide?' style="grid-column:1/-1"':""}><label for="${id(h)}">${esc(label)}${req?"<i>*</i>":""}${hint?` <em>${hint}</em>`:""}</label>${inner}<div class="msg">${h==="Send this case to"?"Choose who will take this case":"Required"}</div></div>`;
-  const group=(h,cls)=>{const v=opt(h);if(!v.length)return`<input id="${id(h)}" value="${esc(f[h]||"")}">`;
+  const group=(h,cls)=>{const v=opt(h).filter(x=>!(h==="Lead Shared by"&&x==="CP"&&S.cpShared));   /* "From a CP?" is its own question now */if(!v.length)return`<input id="${id(h)}" value="${esc(f[h]||"")}">`;
     if(v.length>10)return`<select id="${id(h)}"><option value="">Choose…</option>${v.map(x=>`<option ${f[h]===x?"selected":""}>${esc(x)}</option>`).join("")}</select>`;
     return`<div class="${cls}" data-nfh="${esc(h)}" role="radiogroup">${v.map(x=>`<button type="button" class="chip ${f[h]===x?"on":""}" data-v="${esc(x)}" role="radio">${esc(x)}</button>`).join("")}</div>`};
   const sel=h=>`<select id="${id(h)}"><option value="">Choose…</option>${opt(h).map(x=>`<option ${f[h]===x?"selected":""}>${esc(x)}</option>`).join("")}</select>`;
@@ -2881,9 +2881,10 @@ function nfHTML(f,full,o={}){
      ${fld("SM Name",true,sel("SM Name"),{hint:"who called the customer"})}
      ${fld("Product",true,sel("Product"))}
      ${full?fld("Amount Required",!o.inCall,txt("Amount Required","e.g. 500000",'inputmode="numeric"')+'<div id="nf_amt" class="hint mute"></div>',{label:"Amount required (₹)"})+fld("Lead Source",!o.inCall,sel("Lead Source")):""}
-     ${noShared()?"":fld("Lead Shared by",true,group("Lead Shared by","pills"),{wide:true})}
-     ${full||(S.cpLead&&!o.inCall&&can("leadForm"))||S.cpShared?(()=>{const cpOn=f["Lead Shared by"]==="CP",onlyCP=!!S.cpShared&&!noShared();/* shown only when Lead Shared by = CP; field SM keep their own CP picker */const cps=S.cpLead&&!o.inCall?myCPs():[];const pickCP=cps.length?`<div class="fld" style="grid-column:1/-1"><label for="nf_cp">Choose from your field work <em>fills the details below</em></label><select id="nf_cp"><option value="">— Not from a CP / connector —</option>${cps.map(m=>`<option value="${esc(m.id)}" ${f.cp===m.id?"selected":""}>${esc(m.person||m.entity)}${m.ent?" · "+esc(m.ent):""}${m.location?" · "+esc(m.location):""}${m.phone?" · "+esc(m.phone):""}</option>`).join("")}</select></div>`:"";
-       return `<div class="fld" id="nf_cpBlock" data-onlycp="${onlyCP?1:""}" style="grid-column:1/-1${onlyCP&&!cpOn?";display:none":""}"><details ${f["Connector Name"]||f["Connector Contact No"]||f.cp||!full||cpOn?"open":""}><summary class="small"><b>${onlyCP?"CP details":full?"Connector details":"CP / connector who gave this lead"}</b> <span class="mute">${onlyCP?"– the CP who shared this lead (name is required)":"– optional, if a "+(full?"connector":"CP or connector")+" gave this lead"}</span></summary>
+     ${noShared()?"":fld("Lead Shared by",true,group("Lead Shared by","pills"),{wide:true,hint:"who shared it"})}
+     ${S.cpShared&&!noShared()?`<div class="fld" style="grid-column:1/-1"><label>Did this lead come from a CP?</label><div class="pills" id="nf_cpq" role="radiogroup"><button type="button" class="chip ${f.fromCP?"":"on"}" data-cpq="">No</button><button type="button" class="chip ${f.fromCP?"on":""}" data-cpq="1">Yes – from a CP</button></div></div>`:""}
+     ${full||(S.cpLead&&!o.inCall&&can("leadForm"))||S.cpShared?(()=>{const cpOn=!!f.fromCP||f["Lead Shared by"]==="CP",onlyCP=!!S.cpShared&&!noShared();/* shown only when Lead Shared by = CP; field SM keep their own CP picker */const cps=S.cpLead&&!o.inCall?myCPs():[];const pickCP=cps.length?`<div class="fld" style="grid-column:1/-1"><label for="nf_cp">Choose from your field work <em>fills the details below</em></label><select id="nf_cp"><option value="">— Not from a CP / connector —</option>${cps.map(m=>`<option value="${esc(m.id)}" ${f.cp===m.id?"selected":""}>${esc(m.person||m.entity)}${m.ent?" · "+esc(m.ent):""}${m.location?" · "+esc(m.location):""}${m.phone?" · "+esc(m.phone):""}</option>`).join("")}</select></div>`:"";
+       return `<div class="fld" id="nf_cpBlock" data-onlycp="${onlyCP?1:""}" style="grid-column:1/-1${onlyCP&&!cpOn?";display:none":""}"><details ${f["Connector Name"]||f["Connector Contact No"]||f.cp||!full||cpOn?"open":""}><summary class="small"><b>${onlyCP?"CP details":full?"Connector details":"CP / connector who gave this lead"}</b> <span class="mute">${onlyCP?"– which CP the lead came from (name is required)":"– optional, if a "+(full?"connector":"CP or connector")+" gave this lead"}</span></summary>
        <div class="lf-g" style="grid-template-columns:1fr 1fr 1fr">${pickCP}${fld("Connector Name",false,txt("Connector Name",""),{label:onlyCP?"CP name":full?"Connector Name":"CP / connector name"})}${fld("Connector Contact No",false,txt("Connector Contact No","",'inputmode="tel"'),{label:"Contact no"})}${fld("Connector Location",false,txt("Connector Location",""),{label:"Location"})}</div>${full?"":`<input type="hidden" id="nf_LeadSource" value="${esc(f["Lead Source"]||"")}">`}</details></div>`})():""}
      ${o.inCall?"":fld("Remarks",false,`<textarea id="nf_Remarks" maxlength="300" style="min-height:60px" placeholder="e.g. Salaried, wants the loan in 2 weeks">${esc(f.Remarks||"")}</textarea>`,{wide:true,hint:"optional"})}
     </div></div>
@@ -2893,13 +2894,15 @@ function nfHTML(f,full,o={}){
   </div>`}
 function bindNF(full){
   document.querySelectorAll("[data-nfh] .chip").forEach(b=>b.onclick=()=>{b.parentNode.querySelectorAll(".chip").forEach(x=>x.classList.remove("on"));b.classList.add("on");b.closest(".fld")&&b.closest(".fld").classList.remove("err");
-    if(b.parentNode.dataset.nfh==="Lead Shared by")cpShow(b.dataset.v==="CP",true)});
+    if(b.parentNode.dataset.nfh==="Lead Shared by"&&!$("#nf_cpq"))cpShow(b.dataset.v==="CP",true)});
+  document.querySelectorAll("#nf_cpq [data-cpq]").forEach(b=>b.onclick=()=>{document.querySelectorAll("#nf_cpq .chip").forEach(x=>x.classList.remove("on"));b.classList.add("on");const on=!!b.dataset.cpq;
+    cpShow(on,true);if(!on){["ConnectorName","ConnectorContactNo","ConnectorLocation"].forEach(k=>{const e=$("#nf_"+k);if(e)e.value=""});const ls=$("#nf_LeadSource");if(ls&&ls.value==="CP")ls.value=""}});
   /* Lead Shared by = CP → the CP / connector details open (Suraj, 26 Nov) */
   function cpShow(on,focus){const blk=$("#nf_cpBlock");if(!blk)return;if(blk.dataset.onlycp)blk.style.display=on?"":"none";const d=blk.querySelector("details");if(d&&on)d.open=true;
     const nm=$("#nf_ConnectorName");if(nm){const l=nm.closest(".fld")&&nm.closest(".fld").querySelector("label");if(l&&!l.dataset.base)l.dataset.base=l.innerHTML;if(l)l.innerHTML=l.dataset.base+(on?'<i>*</i>':"")}
     const ls=$("#nf_LeadSource");if(on&&ls&&!ls.value){const o=[...(ls.options||[])].find(x=>x.value==="CP");if(o||ls.type==="hidden")ls.value="CP"}
     if(on&&focus&&nm)setTimeout(()=>{blk.scrollIntoView({block:"center",behavior:"smooth"});nm.focus()},50)}
-  {const g=document.querySelector('[data-nfh="Lead Shared by"] .chip.on');if(g&&g.dataset.v==="CP")cpShow(true,false)}
+  {const g=document.querySelector('[data-nfh="Lead Shared by"] .chip.on'),q=document.querySelector('#nf_cpq .chip.on');if((q&&q.dataset.cpq)||(!q&&g&&g.dataset.v==="CP"))cpShow(true,false)}
   document.querySelectorAll("#nf_pp [data-to]").forEach(b=>b.onclick=()=>{document.querySelectorAll("#nf_pp [data-to]").forEach(x=>x.classList.remove("on"));b.classList.add("on");$("#nf_to").value=b.dataset.to;b.closest(".fld").classList.remove("err");
     const ms=$("#ms");if(ms&&$("#lfWrap")&&!can("cases"))ms.textContent=b.dataset.to?"Save call & send case":"Save call & open case"});
   const q=$("#nf_toq");if(q)q.oninput=()=>{const t=q.value.trim().toLowerCase();document.querySelectorAll("#nf_pp [data-n]").forEach(b=>b.style.display=!t||b.dataset.n.includes(t)?"":"none")};
@@ -2918,7 +2921,7 @@ function bindNF(full){
 function nfMark(miss){document.querySelectorAll(".lf .fld.err").forEach(x=>x.classList.remove("err"));let first=null;
   miss.forEach(h=>{const f=document.querySelector(`.lf .fld[data-f="${CSS.escape(h)}"]`);if(f){f.classList.add("err");first=first||f}});if(first)first.scrollIntoView({block:"center",behavior:"smooth"})}
 // what's missing before the form can be saved (Remarks and connector are optional)
-function nfMissing(o,full,inCall){return["Lead Type","Customer Name","Contact Number","SM Name","Product",...(noShared()?[]:["Lead Shared by"]),...(o["Lead Shared by"]==="CP"&&$("#nf_ConnectorName")?["Connector Name"]:[]),...(full&&!inCall?["Amount Required","Lead Source"]:[]),...(!full&&!fsmKeep()?["Send this case to"]:[])].filter(h=>!(h==="Send this case to"?o.to:o[h]))}
+function nfMissing(o,full,inCall){return["Lead Type","Customer Name","Contact Number","SM Name","Product",...(noShared()?[]:["Lead Shared by"]),...(o.fromCP&&$("#nf_ConnectorName")?["Connector Name"]:[]),...(full&&!inCall?["Amount Required","Lead Source"]:[]),...(!full&&!fsmKeep()?["Send this case to"]:[])].filter(h=>!(h==="Send this case to"?o.to:o[h]))}
 function nfSummary(o,full,who){const row=(k,v)=>v?`<tr><td class="mute" style="padding:2px 12px 2px 0">${esc(k)}</td><td><b>${esc(v)}</b></td></tr>`:"";
   return `<table class="small">${row("Customer",o["Customer Name"]+" · "+o["Contact Number"])}${row("Lead Type",o["Lead Type"])}${row("SM Name",o["SM Name"])}${row("Product",o.Product+(full&&numOf(o["Amount Required"])?" · "+fmtL(numOf(o["Amount Required"])):""))}${row("Lead Source",o["Lead Source"])}${row("Lead Shared by",o["Lead Shared by"])}${row("Connector",[o["Connector Name"],o["Connector Contact No"],o["Connector Location"]].filter(Boolean).join(" · "))}</table>
    <div class="small" style="margin-top:8px">${who?`The case goes to <b>${esc(who)}</b> straight away. You'll still see every update.`:"It stays with you until you send it – open the case and press <b>📤 Send</b> when the documents come."}</div>`}
@@ -2951,7 +2954,7 @@ function readNF(){const v=id=>{const e=$("#nf_"+id);return e?String(e.value).tri
   document.querySelectorAll("[data-nfh]").forEach(g=>{const on=g.querySelector(".chip.on");o[g.dataset.nfh]=on?on.dataset.v:""});
   [["Lead Type","LeadType"],["Lead Shared by","LeadSharedby"]].forEach(([h,id])=>{if(o[h]===undefined)o[h]=v(id)});
   o["Customer Name"]=v("CustomerName");o["Contact Number"]=v("ContactNumber");o["SM Name"]=v("SMName");o.Product=v("Product");o["Amount Required"]=v("AmountRequired");o["Lead Source"]=v("LeadSource");
-  o["Connector Name"]=v("ConnectorName");o["Connector Contact No"]=v("ConnectorContactNo");o["Connector Location"]=v("ConnectorLocation");o.Remarks=v("Remarks");o.to=v("to");o.cp=v("cp");return o}
+  o["Connector Name"]=v("ConnectorName");o["Connector Contact No"]=v("ConnectorContactNo");o["Connector Location"]=v("ConnectorLocation");o.Remarks=v("Remarks");o.to=v("to");o.cp=v("cp");{const q=document.querySelector("#nf_cpq .chip.on");o.fromCP=q?!!q.dataset.cpq:o["Lead Shared by"]==="CP"}return o}
 
 /* ---------- LEAD MODAL (log call / remark) ---------- */
 let M={};
