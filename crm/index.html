@@ -1971,10 +1971,12 @@ const fsmKeep=()=>!!S.keepLead;
 /* SM - Field work generate their own leads (or get them from CPs) – no "Lead Shared by" for them (Suraj, 25 Nov) – needs server 11.19 */
 const noShared=()=>!!S.fwNoShared&&!!ME&&isFieldSM(emp(ME.id));
 const isFsmOwn=me=>!!ME&&!!me&&me.id===ME.id&&isFieldSM(me);
+const fsmPool=me=>CASES().filter(c=>c["Telecaller ID"]===me.id||(!String(c["Telecaller ID"]||"").trim()&&normName(c["SM Name"])===normName(me.name))||normName(c["Team Lead"])===normName(me.name));
+const fsmRej=me=>fsmPool(me).filter(c=>/reject/i.test(c.Status||"")).sort((a,b)=>(b.upd||b.at||0)-(a.upd||a.at||0));   // all time (Suraj, 26 Nov)
 function fsmBar(me,on){
-  const pool=CASES().filter(c=>c["Telecaller ID"]===me.id||(!String(c["Telecaller ID"]||"").trim()&&normName(c["SM Name"])===normName(me.name))||normName(c["Team Lead"])===normName(me.name));
+  const pool=fsmPool(me);
   const fu=pool.filter(c=>caseStage(c)==="fu"),ln=pool.filter(atLoan),cl=pool.filter(c=>caseStage(c)==="closed"&&inRange(c.leadD||c.at));
-  const t=[["fw","Field work · "+meetingsInView().length,"pMeet"],["fu","My follow-up leads · "+fu.length+(fu.some(caseNew)?" 🔔":""),"pInt"],["cases","Login · Sanction · Disbursal · "+ln.length+(ln.some(caseNew)?" 🔔":""),"pLoan"],["closed","Closed · "+cl.length,"pLoan"]].filter(x=>pageOk(x[2]));
+  const t=[["fw","Field work · "+meetingsInView().length,"pMeet"],["fu","My follow-up leads · "+fu.length+(fu.some(caseNew)?" 🔔":""),"pInt"],["rej","Rejected · "+fsmRej(me).length,"pInt"],["cases","Login · Sanction · Disbursal · "+ln.length+(ln.some(caseNew)?" 🔔":""),"pLoan"],["closed","Closed · "+cl.length,"pLoan"]].filter(x=>pageOk(x[2]));
   return t.length>1?`<div class="tabs" style="margin-bottom:12px">${t.map(([k,l])=>`<button class="tab ${on===k?"on":""}" data-fsm="${k}">${l}</button>`).join("")}</div>`:""}
 function bindFsm(){document.querySelectorAll("[data-fsm]").forEach(b=>b.onclick=()=>{const k=b.dataset.fsm;if(k==="fw")view.etab="meet";else{view.etab="leads";view.ctab=k}render()})}
 const canLeadForm=()=>can("cases")||(!!S.leadForm&&can("leadForm"));
@@ -2009,6 +2011,7 @@ function renderEmp(){
   const oc=k=>calls.filter(g=>g.outcome===k).length;
   const ctOk=Object.keys(CTAB_PERM).filter(k=>pageOk(CTAB_PERM[k]));
   let ctab=ctOk.includes(view.ctab||(own?"today":"leads"))?(view.ctab||(own?"today":"leads")):(ctOk[0]||"none");
+  if(view.ctab==="rej"&&isFsmOwn(me)&&ctOk.includes("fu"))ctab="rej";   // SM - Field work: Rejected sub-tab
   const t0=sod(Date.now()),cbAll=mine.filter(l=>l.status==="cb"&&l.followUp&&l.followUp<t0+DAY).sort((a,b)=>a.followUp-b.followUp);
   const myLeadsP=leadsIn(mine),myLeads=mine.filter(isLeadC);
   /* Leads tab follows the date chosen above (by lead date) */
@@ -2056,7 +2059,7 @@ function renderEmp(){
   if(!fsm)h+=`<div class="tabs" style="margin-bottom:12px">${[["today",(own?"My day":"Today")+" · "+cbAll.length],["leads",(own?"My calling list":"Calling list")+" · "+mine.length],["fu",(own?"My follow-up":"Follow-up")+" · "+intCases.length+(intCases.some(caseNew)?" 🔔":"")],["cases","Login · Sanction · Disbursal · "+loanPool.length+(loanPool.some(caseNew)?" 🔔":"")],["closed","Closed · "+closedPool.length],["calls","Call history · "+calls.length]].filter(([k])=>ctOk.includes(k)).map(([k,l])=>`<button class="tab ${ctab===k?"on":""}" data-ctab="${k}">${l}</button>`).join("")}</div>`;
   /* search inside Follow-up / Login · Sanction · Disbursal / Closed (Suraj, 25 Nov) */
   const fq=view.fq||"",caseQ=c=>srch(fq,[c["Customer Name"],c.code,c["Bank Name"],c["Team Lead"],c["SM Name"],c.Product,c.Status],[c["Contact Number"]]);
-  if(["fu","cases","closed"].includes(ctab))h+=`<div class="card pad" style="margin-bottom:12px"><div class="row"><div class="sbox" style="flex:1;min-width:200px"><input id="fq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search name, number, lead code, bank" value="${esc(fq)}"><button type="button" class="btn sbtn" data-sgo="fq">🔍 Search</button></div>${fq?`<span class="small mute">Showing matches for “${esc(fq)}” · <a class="lnk" href="#" id="fqClr">clear</a></span>`:""}</div></div>`;
+  if(["fu","cases","closed","rej"].includes(ctab))h+=`<div class="card pad" style="margin-bottom:12px"><div class="row"><div class="sbox" style="flex:1;min-width:200px"><input id="fq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search name, number, lead code, bank" value="${esc(fq)}"><button type="button" class="btn sbtn" data-sgo="fq">🔍 Search</button></div>${fq?`<span class="small mute">Showing matches for “${esc(fq)}” · <a class="lnk" href="#" id="fqClr">clear</a></span>`:""}</div></div>`;
   if(ctab==="none")h+=noTabsMsg();
   if(ctab==="today"){
     const od=cbAll.filter(l=>l.followUp<t0),td=cbAll.filter(l=>l.followUp>=t0),fresh=mine.filter(l=>l.status==="new");
@@ -2086,6 +2089,9 @@ function renderEmp(){
     h+=`<div class="row" style="margin-bottom:10px;align-items:flex-start"><div class="small mute" style="flex:1;min-width:220px">Customers ${own?"you":"they"} marked <b>Interested</b> on a call whose <b>lead form is not filled yet</b>. Fill the form and the case goes to the Team Lead – then it shows in <b>Follow-up</b>.</div>${own&&can("cases")?`<button class="btn pri sm" data-newcase>📝 Fill lead form</button>`:""}</div>`;
     h+=`<div class="small" style="margin-bottom:8px">Showing <b>${esc(rangeLabel())}</b></div>`;
     h+=intNoCase.length?`<div class="card">${intNoCase.slice().sort((a,b)=>(leadAt(b)||0)-(leadAt(a)||0)).map(l=>leadRow(l)).join("")}</div>`:`<div class="card empty">Nobody waiting for a lead form in this period.${intCases.length?` Their cases are in <a class="lnk" href="#" data-ctab="fu">Follow-up</a>.`:""}</div>`;
+  }else if(ctab==="rej"){
+    h+=`<div class="small mute" style="margin-bottom:10px">Your cases marked <b>Case Rejected</b> – <b>all dates</b> (the date filter above does not change this list), latest update first. Open one to see why.</div>`;
+    h+=casesTable(fsmRej(me).filter(caseQ),{empty:fq?"No case matches your search.":"No rejected cases."});
   }else if(ctab==="closed"){
     h+=`<div class="small mute" style="margin-bottom:10px">Cases that ended as <b>Not interested</b>, <b>Cancelled</b>, <b>Rejected</b> or <b>Closed</b> – kept for the record. Showing <b>${esc(rangeLabel())}</b> (by lead date).</div>`;
     h+=casesTable(closedPool.filter(caseQ),{empty:fq?"No case matches your search.":"No closed cases in this period – try All time above."});
@@ -2230,7 +2236,7 @@ function openCase(code){
       return `<div><label class="f" for="${id}">${h}</label><select id="${id}" style="width:100%"><option value="">${h==="Bank Name"?"— Choose bank —":"— Choose —"}</option>${all.map(o=>`<option ${o===v?"selected":""}>${esc(o)}</option>`).join("")}</select></div>`}
     const list=CASE_OPTS[h]||(h==="SM Name"?(S.allEmps||[]).filter(e=>(e.role==="Sales Manager"||isFieldSM(e))&&e.active).map(e=>e.name):null);
     return `<div><label class="f" for="${id}">${h}</label><input id="${id}" type="${type}" value="${esc(v)}" style="width:100%" ${list?`list="${id}_l"`:""} ${h==="Amount Required"?'inputmode="numeric" placeholder="e.g. 500000"':""}>${list?`<datalist id="${id}_l">${list.map(o=>`<option value="${esc(o)}">`).join("")}</datalist>`:""}</div>`};
-  const tlSel=canEd&&can("caseTL")?`<div><label class="f">Team Lead</label><select id="cf_TL" style="width:100%"><option value="">Not assigned</option>${(S.allEmps||[]).filter(e=>e.role==="Team Lead"&&e.active).map(e=>`<option value="${esc(e.id)}" ${c.tlId===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select></div>`:ro("With",esc(c["Team Lead"])||(c["Telecaller ID"]?esc(empName(c["Telecaller ID"])||"")+' <span class="small mute" style="font-weight:400">(not sent yet)</span>':""));
+  const tlSel=canEd&&can("caseTL")?`<div><label class="f">Team Lead</label><select id="cf_TL" style="width:100%"><option value="">Not assigned</option>${String(c["Team Lead"]||"").trim()&&!(S.allEmps||[]).some(e=>e.id===c.tlId&&e.role==="Team Lead"&&e.active)?`<option value="__keep" selected>${esc(c["Team Lead"])} (has it now)</option>`:""}${(S.allEmps||[]).filter(e=>e.role==="Team Lead"&&e.active).map(e=>`<option value="${esc(e.id)}" ${c.tlId===e.id?"selected":""}>${esc(e.name)}</option>`).join("")}</select></div>`:ro("With",esc(c["Team Lead"])||(c["Telecaller ID"]?esc(empName(c["Telecaller ID"])||"")+' <span class="small mute" style="font-weight:400">(not sent yet)</span>':""));
   $("#modal").innerHTML=`<div class="mh"><div class="av">${initials(c["Customer Name"])}</div><div><div style="font-weight:700">${esc(c["Customer Name"])} · <span class="num">${esc(c.code)}</span></div>
      <div class="num mute small">${esc(c["Contact Number"])} · lead date ${esc(c["Lead Date"])} · shared by ${esc(c["Lead Shared by"])}</div></div><button class="x" id="mx">×</button></div>
    <div class="mb">
@@ -2282,9 +2288,9 @@ function openCase(code){
         o["Contact Number"]=d.slice(0,5)+" "+d.slice(5);const hit=CASES().filter(x=>x.code!==c.code&&String(x["Contact Number"]).replace(/\D/g,"").slice(-10)===d);
         if(hit.length)phDup=`<div class="small" style="margin-top:8px;padding:8px 10px;background:#fff4e0;border-radius:8px;color:#8a5300">⚠ This number is already on ${hit.slice(0,3).map(x=>`<b>${esc(x.code)}</b> (${esc(x["Customer Name"])})`).join(", ")}.</div>`}}
     const willClose=["disb","closed"].includes(stType(o.Status||c.Status));if(willClose)o["Next follow-up"]="";
-    const tl=$("#cf_TL");if(tl)o["Team Lead"]=tl.value;
+    const tl0=$("#cf_TL"),tl=tl0&&tl0.value!=="__keep"?tl0:null;if(tl&&tl.value!==(c.tlId||""))o["Team Lead"]=tl.value;   // only when it was changed (a holder who is not a Team Lead stays)
     const ch=Object.keys(o).filter(h=>h!=="code"&&h!=="Team Lead"&&(h==="Next follow-up"?(o[h]||"")!==(c.fu?ymd(c.fu):""):LS_DATE[h]?(o[h]||"")!==(c[LS_DATE[h]]?ymd(c[LS_DATE[h]]):""):LS_AMT.has(h)?numOf(o[h])!==numOf(c[h]):String(o[h])!==String(c[h]||""))).map(h=>[h,h==="Next follow-up"?(c.fu?dShort(c.fu):""):c[h]||"",h==="Next follow-up"&&o[h]?dShort(dayOf(o[h])):o[h]]);
-    if(tl&&tl.value!==c.tlId)ch.push(["Team Lead",c["Team Lead"]||"Not assigned",empName(tl.value)||"Not assigned"]);
+    if(tl&&tl.value!==(c.tlId||""))ch.push(["Team Lead",c["Team Lead"]||"Not assigned",empName(tl.value)||"Not assigned"]);
     if(!ch.length)return toast("Nothing changed");
     const cut=v=>esc(String(v).length>60?String(v).slice(0,60)+"…":v)||'<span class="mute">empty</span>';
     const noFu=!willClose&&!o["Next follow-up"]?`<div class="small" style="margin-top:8px;padding:8px 10px;background:#fff4e0;border-radius:8px;color:#8a5300">⚠ No next follow-up date – this case won't show in anyone's <b>Today</b> list.</div>`:"";

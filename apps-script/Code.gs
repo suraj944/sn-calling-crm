@@ -1038,7 +1038,7 @@ function saveCase_(me, c) {
   row[C_["Disbursed Month"]] = dd ? Utilities.formatDate(new Date(+dd[1], +dd[2] - 1, +dd[3]), "Asia/Kolkata", "MMM-yyyy") : "";
   if (c["Team Lead"] !== undefined && perms_(me).has("caseTL")) {   // people allowed to move a case to another Team Lead
     const t = emps.find(x => x.role === "Team Lead" && (x.id === c["Team Lead"] || norm_(x.name) === norm_(c["Team Lead"])));
-    row[C_["Team Lead"]] = t ? t.name : "";
+    if (t) row[C_["Team Lead"]] = t.name; else if (!String(c["Team Lead"]).trim()) row[C_["Team Lead"]] = "";   // 11.20: a holder who is not a Team Lead is kept
   }
   row[C_["Last updated"]] = now_(); row[C_["Updated by"]] = me.name;
   sh.getRange(i + 2, 1, 1, CASE_COLS).setValues([row]);
