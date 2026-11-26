@@ -2243,11 +2243,6 @@ function openCase(code){
     ${canEd?`<div class="row" style="margin-bottom:6px"><a class="btn call" href="${telHref(c["Contact Number"])}">📞 Call ${esc(c["Contact Number"])}</a>${casePill(c)}</div>`
       :sentByMe?`<div class="card pad" style="background:#eef6f0;border-color:#cfe6d6;margin-bottom:8px"><b>📨 You sent this case to ${esc(holderOf(c))}.</b><div class="small mute">You can follow every update here. Only ${esc(holderOf(c))} or Admin can change it.</div></div>`
       :(isLead()?`<div class="card pad" style="background:#f5f7fb;margin-bottom:8px"><b>View only.</b><div class="small mute">Editing lead cases is switched off for you – ask Admin if you need it.</div></div>`:`<div class="card pad" style="background:#f5f7fb;margin-bottom:8px"><b>This customer is with your Team Lead.</b><div class="small mute">You can see every update here; your Team Lead does the follow-up.</div></div>`)}
-    ${canEd?`<div class="fubox"><div><label class="f" for="cf_upd" style="margin-top:0">Today's update <span class="mute" style="font-weight:400">– added to Remarks with today's date</span></label><input id="cf_upd" maxlength="300" style="width:100%" placeholder="e.g. Documents received, login at HDFC tomorrow">
-       <div class="small mute" style="margin-top:6px">Latest: ${esc(lastLine(c))||"no remark yet"}</div></div>
-      <div><label class="f" for="cf_fu" style="margin-top:0">Next follow-up ${caseActive(c)&&!c.fu?'<span style="color:var(--amber);font-weight:600">· not set</span>':""}</label><input type="date" id="cf_fu" value="${c.fu?ymd(c.fu):""}" style="width:100%">
-       <div class="qb">${[[0,"Today"],[1,"Tomorrow"],[3,"In 3 days"],[7,"Next week"]].map(([n,l])=>`<button class="btn" type="button" data-fq="${n}">${l}</button>`).join("")}<button class="btn" type="button" data-fq="x">Clear</button></div></div></div>`
-     :`<div class="row" style="margin-bottom:10px;gap:14px">${ro("Next follow-up",c.fu?dShort(c.fu)+" · "+fuBadge(c):(caseActive(c)?'<span class="mute" style="font-weight:400">Not set</span>':"—"))}</div>`}
     ${loanSteps(c,canEd)}
     <div class="cgrid">
      ${phEd?`<div style="grid-column:1/-1"><label class="f" for="cf_ContactNumber">Customer mobile number${c["Contact Number"]?"":' <span style="color:var(--amber);font-weight:600">· missing – add it</span>'}</label><input id="cf_ContactNumber" inputmode="tel" maxlength="14" value="${esc(c["Contact Number"]||"")}" placeholder="10-digit mobile, e.g. 98XXX XXXXX" style="width:100%;max-width:320px"><div id="cf_phMsg" class="small" style="margin-top:4px"></div></div>`:""}
@@ -2256,7 +2251,14 @@ function openCase(code){
      ${inp("Bank Name")}${inp("Banker Name")}${inp("Banker Contact No","tel")}${inp("Lead Shared by")}
      ${inp("Connector Name")}${inp("Connector Contact No","tel")}${inp("Connector Location")}
     </div>
-    ${canEd?`<label class="f" for="cf_Remarks">Remarks</label><textarea id="cf_Remarks" style="width:100%;min-height:70px">${esc(c.Remarks)}</textarea>`:`<div style="margin-top:14px"><div class="small mute">Updates (newest first)</div>${updatesTimeline(c)}</div>`}
+    <h4 style="margin:16px 0 8px">📝 Update &amp; next follow-up</h4>
+    ${canEd?`<div class="fubox"><div><label class="f" for="cf_upd" style="margin-top:0">Today's update <span class="mute" style="font-weight:400">– added to Remarks with today's date</span></label><input id="cf_upd" maxlength="300" style="width:100%" placeholder="e.g. Documents received, login at HDFC tomorrow">
+       <div class="small mute" style="margin-top:6px">Latest: ${esc(lastLine(c))||"no remark yet"}</div></div>
+      <div><label class="f" for="cf_fu" style="margin-top:0">Next follow-up ${caseActive(c)&&!c.fu?'<span style="color:var(--amber);font-weight:600">· not set</span>':""}</label><input type="date" id="cf_fu" value="${c.fu?ymd(c.fu):""}" style="width:100%">
+       <div class="qb">${[[0,"Today"],[1,"Tomorrow"],[3,"In 3 days"],[7,"Next week"]].map(([n,l])=>`<button class="btn" type="button" data-fq="${n}">${l}</button>`).join("")}<button class="btn" type="button" data-fq="x">Clear</button></div></div></div>`
+     :`<div class="row" style="margin-bottom:10px;gap:14px">${ro("Next follow-up",c.fu?dShort(c.fu)+" · "+fuBadge(c):(caseActive(c)?'<span class="mute" style="font-weight:400">Not set</span>':"—"))}</div>`}
+    <div class="card pad" style="margin-top:4px"><b>📜 History</b> <span class="small mute">– every update with its date, newest first</span>${updatesTimeline(c)}</div>
+    ${canEd?`<details style="margin-top:10px"><summary class="small"><b>Edit the full remarks text</b> <span class="mute">– only to correct an old line</span></summary><textarea id="cf_Remarks" style="width:100%;min-height:70px;margin-top:6px">${esc(c.Remarks)}</textarea></details>`:""}
     ${c["Follow-up history"]?`<details style="margin-top:10px"><summary class="small"><b>Earlier follow-up history</b> <span class="mute">(from the old sheet)</span></summary><div class="small" style="margin-top:6px;white-space:pre-wrap;background:#f7f8fa;border-radius:8px;padding:8px 10px">${esc(c["Follow-up history"])}</div></details>`:""}
     <div class="small mute" style="margin-top:8px">Monthly: ${esc(c.Monthly)} · Last update ${c.upd?fmt(c.upd):"—"} by ${esc(c["Updated by"])}</div>
    </div>
@@ -2281,8 +2283,12 @@ function openCase(code){
     ["SM Name","Lead Shared by","Status","Customer Status","Product","Amount Required","Lead Type","Lead Source","Bank Name","Banker Name","Banker Contact No","Disbursed Date","Connector Name","Connector Contact No","Connector Location","Remarks",...(S.stages?LS_EXTRA:[])].forEach(h=>{const el=$("#cf_"+h.replace(/\W/g,""));if(el)o[h]=el.value.trim()});
     if(o.Status==="Disbursed"&&!o["Disbursed Date"])return toast("Add the disbursed date");
     const lsErr=loanStepsCheck(o);if(lsErr)return toast(lsErr);
-    const upd=($("#cf_upd")||{}).value;if(upd&&upd.trim()){const d=new Date();o.Remarks=`${d.getDate()}-${pad(d.getMonth()+1)} ${upd.trim()}`+(o.Remarks?" // "+o.Remarks:"")}
     const fuEl=$("#cf_fu");if(fuEl)o["Next follow-up"]=fuEl.value;
+    /* history line: today's update and/or a new follow-up date, with the date and who wrote it (Suraj, 26 Nov) */
+    const upd=String(($("#cf_upd")||{}).value||"").trim(),fuNew=fuEl&&fuEl.value&&fuEl.value!==(c.fu?ymd(c.fu):"")?fuEl.value:"";
+    if(upd||fuNew){const d=new Date();if(o.Remarks===undefined)o.Remarks=c.Remarks||"";
+      const line=`${d.getDate()}-${pad(d.getMonth()+1)} `+[upd,fuNew?(upd?"next follow-up ":"Next follow-up set to ")+dShort(dayOf(fuNew)):""].filter(Boolean).join(" · ")+(ME&&ME.name?" – "+ME.name:"");
+      o.Remarks=line+(o.Remarks?" // "+o.Remarks:"")}
     const phEl=$("#cf_ContactNumber");let phDup="";if(phEl){const d=String(phEl.value).replace(/\D/g,"").replace(/^(91|0)(?=\d{10}$)/,""),was=String(c["Contact Number"]||"").replace(/\D/g,"");
       if(d!==was){if(!d&&was)return toast("The customer number can't be emptied");if(!/^[6-9]\d{9}$/.test(d))return toast("Customer mobile should be a 10-digit number");
         o["Contact Number"]=d.slice(0,5)+" "+d.slice(5);const hit=CASES().filter(x=>x.code!==c.code&&String(x["Contact Number"]).replace(/\D/g,"").slice(-10)===d);
