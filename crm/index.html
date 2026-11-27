@@ -379,6 +379,7 @@ ol.tl{list-style:none;margin:6px 0 0;padding:0 0 0 14px;border-left:2px solid va
 }
 /* laptops just above that: keep one row by narrowing the Viewing as list */
 @media(min-width:1101px) and (max-width:1366px){#who{max-width:210px}}
+.ls-step.x .ls-dot{background:var(--red-soft);color:var(--red);border-color:#f1b5b5}.ls-step.x .ls-t{color:var(--red);text-decoration:line-through;text-decoration-thickness:1.5px}.ls-step.x .ls-h{color:var(--red)!important;font-weight:600}.ls-step.x input,.ls-step.x button{opacity:.45}.ls-xtag{font-size:12px;font-weight:700;color:var(--red);background:var(--red-soft);border-radius:999px;padding:2px 9px}
 .lf .fld{margin-top:12px;min-width:0}.lf .fld>label{display:block;font-size:12.5px;font-weight:600;color:#3d4350;margin-bottom:6px}
 .lf .fld>label i{font-style:normal;color:#c0392b;margin-left:2px}.lf .fld>label em{font-style:normal;font-weight:400;color:var(--mute)}
 .lf .fld input,.lf .fld select,.lf .fld textarea{width:100%}
@@ -2300,8 +2301,13 @@ function lakhHints(){document.querySelectorAll("[data-lakh]").forEach(e=>{const 
   const up=()=>{const n=numOf(e.value);box.textContent=n?"= "+fmtL(n):""};e.addEventListener("input",up);up()})}
 function bindLoanSteps(c){
   const stSel=$("#cf_Status"),stNow=()=>stSel?stSel.value:c.Status,pick=v=>{if(stSel&&[...stSel.options].some(o=>o.value===v))stSel.value=v};
-  const paint=()=>LS_STEPS.forEach((s,i)=>{const el=document.querySelector(`[data-ls="${i}"]`),inp=$("#"+lsId(s.date));if(!el)return;
-    const on=(inp?!!inp.value:!!c[s.k])||lsStage(stNow())>i;el.classList.toggle("on",on);el.querySelector(".ls-dot").textContent=on?"✓":i+1});
+  /* a cancelled / rejected / closed case: the steps it never reached get a red ✕ and the status name; done steps keep their ✓ (Suraj, 27 Nov) */
+  const paint=()=>{const st=stNow(),closed=stType(st)==="closed";let anyX=false;
+    LS_STEPS.forEach((s,i)=>{const el=document.querySelector(`[data-ls="${i}"]`),inp=$("#"+lsId(s.date));if(!el)return;
+    const on=(inp?!!inp.value:!!c[s.k])||lsStage(st)>i,x=!on&&closed;anyX=anyX||x;el.classList.toggle("on",on);el.classList.toggle("x",x);el.querySelector(".ls-dot").textContent=on?"✓":x?"✕":i+1;
+    const h=el.querySelector(".ls-h");if(h){if(h.dataset.hint===undefined)h.dataset.hint=h.textContent;h.textContent=x?st:h.dataset.hint}
+    el.querySelectorAll("input,button").forEach(b=>{b.disabled=x})});
+    const hd=document.querySelector(".lsbox .ls-hd");if(hd){let t=hd.querySelector(".ls-xtag");if(anyX){if(!t){t=document.createElement("span");t.className="ls-xtag";hd.querySelector("b").after(t)}t.textContent="✕ "+st}else if(t)t.remove()}};
   LS_STEPS.forEach((s,i)=>{const inp=$("#"+lsId(s.date));if(!inp)return;
     inp.onchange=()=>{if(inp.value){if(lsStage(stNow())<i+1&&stType(stNow())!=="closed")pick(s.st);
       if(i>=1){const l=$("#"+lsId("Login date"));if(l&&!l.value)l.value=inp.value}
@@ -2309,6 +2315,7 @@ function bindLoanSteps(c){
   document.querySelectorAll("[data-lst]").forEach(b=>b.onclick=()=>{const inp=$("#"+lsId(LS_STEPS[+b.dataset.lst].date));if(inp){inp.value=ymd(Date.now());inp.onchange()}});
   if(stSel)stSel.addEventListener("change",()=>{const i=lsStage(stSel.value)-1;
     if(i>=0){const inp=$("#"+lsId(LS_STEPS[i].date));if(inp&&!inp.value){inp.value=ymd(Date.now());inp.onchange()}}paint()});
+  paint();
 }
 function loanStepsCheck(o){
   const t=h=>o[h]?dayOf(o[h]):null,today=sod(Date.now())+DAY-1,L=t("Login date"),Sx=t("Sanction date"),D=t("Disbursed Date");
