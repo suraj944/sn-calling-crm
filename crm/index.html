@@ -2354,7 +2354,7 @@ function openCase(code){
 }
 /* 💰 Disbursal – Admin only: every disbursed case in the chosen dates (Suraj, 26 Nov) */
 function aDisb(){
-  const q=view.dq||"",dsm=view.dsm||"",smOf=c=>String(c["SM Name"]||"").trim()||"—",all=CASES().filter(c=>stType(c.Status)==="disb"||!!c.disbD),inDates=all.filter(c=>inRange(c.disbD||c.upd||c.at)),list=inDates.filter(c=>!dsm||smOf(c)===dsm).filter(c=>srch(q,[c["Customer Name"],c.code,c["Bank Name"],c["SM Name"],c["Team Lead"],c.Product,c["Lead Shared by"]],[c["Contact Number"]])).sort((a,b)=>(b.disbD||0)-(a.disbD||0));
+  const q=view.dq||"",dsm=view.dsm||"",smOf=c=>String(c["SM Name"]||"").trim()||"—",all=CASES().filter(c=>stType(c.Status)==="disb"||(!!c.disbD&&stType(c.Status)!=="closed"))   /* a cancelled / rejected case is not a disbursal even if its date is filled (27 Nov) */,inDates=all.filter(c=>inRange(c.disbD||c.upd||c.at)),list=inDates.filter(c=>!dsm||smOf(c)===dsm).filter(c=>srch(q,[c["Customer Name"],c.code,c["Bank Name"],c["SM Name"],c["Team Lead"],c.Product,c["Lead Shared by"]],[c["Contact Number"]])).sort((a,b)=>(b.disbD||0)-(a.disbD||0));
   const sum=k=>list.reduce((s,c)=>s+(numOf(c[k])||0),0),dTot=list.reduce((s,c)=>s+dAmt(c),0),sTot=sum("Sanction amount"),aTot=sum("Amount Required");
   let h=rangeBar();
   h+=`<div class="stats"><div class="card stat sclk" data-dsm="" title="Show every disbursed case"><span>Disbursed cases</span><b style="color:var(--green)">${list.length}</b><div class="small mute">in the dates above</div></div>
