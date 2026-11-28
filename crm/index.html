@@ -380,6 +380,12 @@ ol.tl{list-style:none;margin:6px 0 0;padding:0 0 0 14px;border-left:2px solid va
 /* laptops just above that: keep one row by narrowing the Viewing as list */
 @media(min-width:1101px) and (max-width:1366px){#who{max-width:210px}}
 .ls-step.x .ls-dot{background:var(--red-soft);color:var(--red);border-color:#f1b5b5}.ls-step.x .ls-t{color:var(--red);text-decoration:line-through;text-decoration-thickness:1.5px}.ls-step.x .ls-h{color:var(--red)!important;font-weight:600}.ls-step.x input,.ls-step.x button{opacity:.45}.ls-xtag{font-size:12px;font-weight:700;color:var(--red);background:var(--red-soft);border-radius:999px;padding:2px 9px}
+.rrbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 14px;margin:0 0 12px;border-radius:10px;background:#fdecea;border:1px solid #f5c2bd;color:#7a1d14}
+.rrbar>span:first-child{flex:1;min-width:220px}.rrbar .small{color:#9a4a42}.rrbar.mine{background:#f5f7fb;border-color:#dfe5ef;color:inherit}
+.rrcard{background:#fff6f5;border-color:#f5c2bd;margin-bottom:8px}
+.rrrow{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-start;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line,#e6e9ef)}.rrrow:last-child{border-bottom:0}
+.rr-m{flex:1;min-width:240px;display:grid;gap:3px}.rr-why{font-size:14px;background:#f7f8fa;border-radius:8px;padding:6px 10px;margin:2px 0}
+.rr-a{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-end}
 .lf .fld{margin-top:12px;min-width:0}.lf .fld>label{display:block;font-size:12.5px;font-weight:600;color:#3d4350;margin-bottom:6px}
 .lf .fld>label i{font-style:normal;color:#c0392b;margin-left:2px}.lf .fld>label em{font-style:normal;font-weight:400;color:var(--mute)}
 .lf .fld input,.lf .fld select,.lf .fld textarea{width:100%}
@@ -628,6 +634,7 @@ const Live={
   async saveCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async createCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async removeCase(){throw new Error("Open the website version of the CRM for lead cases")},
+  async requestRemove(){throw new Error("Open the website version of the CRM for lead cases")},async cancelRemoveReq(){throw new Error("Open the website version of the CRM for lead cases")},async decideRemove(){throw new Error("Open the website version of the CRM for lead cases")},
   async removeLogs(){throw new Error("Open the website version of the CRM to remove call logs")},
   async transferCase(){throw new Error("Open the website version of the CRM for lead cases")},
   async transferCases(){throw new Error("Open the website version of the CRM for lead cases")},
@@ -655,7 +662,7 @@ const Script={
     return j},
   async login(login,pin){const j=await this.req("login",{login,pin});store(AUTH_KEY,{token:j.token,me:j.me});ME=j.me},
   async logout(){try{await this.req("logout",{})}catch(e){}store(AUTH_KEY,null);ME=null},
-  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.leadForm=!!j.leadForm;S.cpLead=!!j.cpLead;S.meetLoc=!!j.meetLoc;S.keepLead=!!j.keepLead;S.fwNoShared=!!j.fwNoShared;S.phoneEdit=!!j.phoneEdit;S.cpShared=!!j.cpShared;S.pinView=!!j.pinView;S.sharedLoan=!!j.sharedLoan;S.stageNew=!!j.stageNew;S.cpFirm=!!j.cpFirm;S.cpFirms=Array.isArray(j.cpFirms)?j.cpFirms.map(r=>({id:r[0]||"",name:r[1]||"",person:r[2]||"",phone:String(r[3]||"").split("/")[0].trim(),loc:r[4]||""})).filter(f=>f.name):[];S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
+  async load(){const j=this._fresh||await this.req("load");this._fresh=null;S=build(j.employees||[],j.leads||[],j.logs||[]);S.meetings=buildMeetings(j.meetings);S.meetErr=j.meetingsError||"";S.cases=buildCases(j.cases);S.conns=buildConns(j.connectors);S.connSrv=Array.isArray(j.connectors);S.cpData=!!j.cpData;S.pagePerms=!!j.pagePerms;S.leadForm=!!j.leadForm;S.cpLead=!!j.cpLead;S.meetLoc=!!j.meetLoc;S.keepLead=!!j.keepLead;S.fwNoShared=!!j.fwNoShared;S.phoneEdit=!!j.phoneEdit;S.cpShared=!!j.cpShared;S.pinView=!!j.pinView;S.sharedLoan=!!j.sharedLoan;S.stageNew=!!j.stageNew;S.cpFirm=!!j.cpFirm;S.removeReq=!!j.removeReq;S.rr=Array.isArray(j.removeReqs)?j.removeReqs.map(r=>({id:r[0],at:r[1],code:r[2],name:r[3],phone:r[4],by:r[5],byId:r[6],reason:r[7],st:r[8],dAt:r[9],dBy:r[10],note:r[11]})):[];S.cpFirms=Array.isArray(j.cpFirms)?j.cpFirms.map(r=>({id:r[0]||"",name:r[1]||"",person:r[2]||"",phone:String(r[3]||"").split("/")[0].trim(),loc:r[4]||""})).filter(f=>f.name):[];S.stages=!!j.stages;S.srv2=Array.isArray(j.cases);S.transferTo=Array.isArray(j.transferTo)?j.transferTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.banks=Array.isArray(j.banks)?j.banks:null;S.lists=j.lists&&typeof j.lists==="object"?j.lists:null;S.stype=j.statusType||{};S.handTo=Array.isArray(j.handTo)?j.handTo.map(r=>({id:r[0],name:r[1],role:r[2]})):[];S.board=j.board&&typeof j.board==="object"?j.board:null;S.targets=Array.isArray(j.targets)?j.targets:[];S.boardNames=Array.isArray(j.boardNames)?j.boardNames:[];ME=j.me;SHEET_URL=j.sheetUrl||"";
     const a=stored(AUTH_KEY);if(a){a.me=j.me;store(AUTH_KEY,a)}lastSync=Date.now()},
   async logCall(leadId,out,remark,fu,by,form,force,connector){return await this.req("logCall",{leadId,outcome:OUTCOMES[out].label,remark,followUp:toSheetTime(fu),form,force,connector})},
   async assign(ids,to){await this.req("assign",{ids,to:to||""})},
@@ -669,6 +676,9 @@ const Script={
   async saveCase(c){await this.req("saveCase",{c})},
   async createCase(leadId){await this.req("createCase",{leadId})},
   async removeCase(code){await this.req("removeCase",{code})},
+  async requestRemove(code,reason){await this.req("requestRemove",{code,reason})},
+  async cancelRemoveReq(id){await this.req("cancelRemoveReq",{id})},
+  async decideRemove(id,ok,note){await this.req("decideRemove",{id,ok,note})},
   async removeLogs(ids){await this.req("removeLogs",{ids})},
   async transferCase(code,to,note){await this.req("transferCase",{code,to,note})},
   async saveConnector(c,force){return await this.req("saveConnector",{c,force:!!force})},
@@ -842,7 +852,7 @@ function wireSearch(id,set){const el=$("#"+id);if(!el)return;const go=()=>{set(e
   const b=document.querySelector(`[data-sgo="${id}"]`);if(b)b.onclick=go}
 function softRender(){clearTimeout(softT);softT=setTimeout(()=>{softAfter=true;render()},150)}
 // keep the focused search box and replace everything else (also when the data refreshes in the background while someone is typing)
-function setApp(h,root){const app=root||$("#app"),a=document.activeElement;
+function setApp(h,root){const app=root||$("#app"),a=document.activeElement;if(!root&&MODE==="live")h=rrBar()+h;
   if(a&&SEARCH_IDS.has(a.id)&&app.contains(a)){const t=document.createElement("div");t.innerHTML=h;if(patchKeep(app,t,a))return}
   app.innerHTML=h}
 function patchKeep(live,fresh,keep){const path=[];let n=keep;while(n&&n!==live){path.unshift([...n.parentNode.childNodes].indexOf(n));n=n.parentNode}
@@ -1016,6 +1026,39 @@ function caseNew(c){if(!ME||!c||!c.upd||!isMine(c)||heldByMe(c))return false;let
   if(m[c.code]==null){m[c.code]=+c.upd;seenPut(m);return false}
   return +c.upd>m[c.code]&&normName(c["Updated by"]||"")!==normName(ME.name)}
 function caseSeen(c){if(!ME||!c||!c.upd)return;const m=seenGet()||{};m[c.code]=+c.upd;seenPut(m)}
+/* Remove requests (Suraj, 28 Nov): a Team Lead asks, Admin approves – only then the case is removed (server 11.28) */
+const canAskRemove=()=>!!S.removeReq&&!!ME&&ME.role==="Team Lead"&&!can("caseRemove");
+const rrPend=code=>(S.rr||[]).find(r=>r.code===code&&r.st==="Pending");
+const rrLast=code=>(S.rr||[]).filter(r=>r.code===code).slice(-1)[0];
+const rrChip=c=>rrPend(c.code)?' <span class="pill" style="background:#fde8e6;color:#b42318;font-size:11px" title="A Team Lead asked Admin to remove this case">🗑 Removal asked</span>':"";
+const rrWhen=t=>{const d=new Date(String(t||"").replace(" ","T"));return isNaN(d)?esc(t||""):d.toLocaleString("en-IN",{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"})};
+function rrBar(){if(!S.removeReq||!ME)return"";const L=S.rr||[],p=L.filter(r=>r.st==="Pending");
+  if(ME.role==="Admin")return p.length?`<div class="rrbar"><span>🗑 <b>${p.length} case${p.length===1?"":"s"}</b> waiting for your OK to remove</span><span class="small">${esc([...new Set(p.map(r=>r.by))].join(", "))} asked</span><button class="btn sm pri" data-rrlist>Review</button></div>`:"";
+  if(!canAskRemove())return"";const dn=L.filter(r=>r.st!=="Pending"&&r.st!=="Cancelled");if(!p.length&&!dn.length)return"";
+  return `<div class="rrbar mine"><span>🗑 Your removal requests: ${[p.length?`<b>${p.length}</b> waiting for Admin`:"",dn.filter(r=>r.st==="Approved").length?`<b>${dn.filter(r=>r.st==="Approved").length}</b> removed`:"",dn.filter(r=>r.st==="Rejected").length?`<b style="color:#b42318">${dn.filter(r=>r.st==="Rejected").length}</b> not approved`:""].filter(Boolean).join(" · ")}</span><button class="btn sm" data-rrlist>See list</button></div>`}
+function openRRList(){const adm=ME&&ME.role==="Admin",L=(S.rr||[]).slice().filter(r=>r.st!=="Cancelled").sort((a,b)=>(b.st==="Pending")-(a.st==="Pending")||String(b.at).localeCompare(String(a.at)));
+  const stP=r=>r.st==="Pending"?'<span class="pill" style="background:#fff1d6;color:#8a5300">⏳ Waiting for Admin</span>':r.st==="Approved"?'<span class="pill" style="background:#e3f4e8;color:#1e7a3c">✓ Removed</span>':'<span class="pill" style="background:#fde8e6;color:#b42318">✕ Not approved</span>';
+  $("#modal").innerHTML=`<div class="mh"><div class="av">🗑</div><div><div style="font-weight:700">${adm?"Requests to remove lead cases":"My requests to remove cases"}</div><div class="small mute">${adm?"A Team Lead asked to remove these cases. Nothing is removed until you approve.":"Admin decides – the case stays until Admin approves."} Last 14 days.</div></div><button class="x" id="mx">×</button></div>
+   <div class="mb">${L.length?L.map(r=>`<div class="rrrow"><div class="rr-m"><div><b class="num">${esc(r.code)}</b> · <b>${esc(r.name)}</b> <span class="small mute num">${esc(r.phone)}</span></div>
+      <div class="small">Asked by <b>${esc(r.by)}</b> · ${rrWhen(r.at)}</div><div class="rr-why">“${esc(r.reason)}”</div>
+      ${r.st!=="Pending"?`<div class="small mute">${r.st==="Approved"?"Removed":"Kept"} by ${esc(r.dBy)} · ${rrWhen(r.dAt)}${r.note?` · <i>${esc(r.note)}</i>`:""}</div>`:""}</div>
+      <div class="rr-a">${stP(r)}${r.st==="Pending"?(adm?`<button class="btn sm" data-rropen="${esc(r.code)}">Open case</button><button class="btn sm" data-rrno="${esc(r.id)}">✕ Keep case</button><button class="btn sm danger" data-rrok="${esc(r.id)}">✓ Approve &amp; remove</button>`:`<button class="btn sm" data-rropen="${esc(r.code)}">Open case</button><button class="btn sm" data-rrcan="${esc(r.id)}">Cancel request</button>`):""}</div></div>`).join(""):`<div class="empty">No requests in the last 14 days.</div>`}</div>
+   <div class="mf"><button class="btn" id="mc">Close</button></div>`;
+  $("#modal").style.maxWidth="760px";$("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#mc").onclick=close;
+  document.querySelectorAll("[data-rropen]").forEach(b=>b.onclick=()=>{if(!CASES().some(c=>c.code===b.dataset.rropen))return toast("This case is not in your list any more");openCase(b.dataset.rropen)});
+  const re=()=>{if((S.rr||[]).some(r=>r.st==="Pending"))openRRList();else close()};
+  document.querySelectorAll("[data-rrok]").forEach(b=>b.onclick=async()=>{const r=L.find(x=>x.id===b.dataset.rrok);if(await rrDecide(r,true,b))re()});
+  document.querySelectorAll("[data-rrno]").forEach(b=>b.onclick=async()=>{const r=L.find(x=>x.id===b.dataset.rrno);if(await rrDecide(r,false,b))re()});
+  document.querySelectorAll("[data-rrcan]").forEach(b=>b.onclick=async()=>{const r=L.find(x=>x.id===b.dataset.rrcan);if(await rrCancel(r,b))openRRList()})}
+async function rrDecide(r,ok,btn){if(!r)return false;
+  const pr=askOk({title:ok?"Remove case "+r.code+"?":"Keep case "+r.code+"?",ok:ok?"Yes, remove":"Keep the case",danger:ok,body:`<b>${esc(r.name)}</b> · ${esc(r.phone)}<div class="small" style="margin:6px 0 10px"><b>${esc(r.by)}</b> asked: “${esc(r.reason)}”</div>
+    ${ok?`The case leaves Lead Cases for everyone. A copy is kept in the <b>Removed Cases</b> tab with who asked and who approved.`:`The case stays as it is. ${esc(r.by)} will see that you did not approve.`}
+    <label class="f" for="rrNote" style="margin-top:10px">Note for ${esc(r.by)} (optional)</label><input id="rrNote" maxlength="200" style="width:100%" placeholder="${ok?"e.g. OK, duplicate removed":"e.g. Customer still interested – keep following up"}">`});
+  if(!await pr)return false;const note=($("#rrNote")||{}).value||"";const done=btn?btnBusy(btn,ok?"Removing…":"Saving…"):()=>{};
+  const res=await write(api=>api.decideRemove(r.id,ok,note.trim()),ok?"Case "+r.code+" removed":"Case "+r.code+" kept – "+r.by+" will see it",ok?"Removing case "+r.code+"…":"Saving…");if(!res)done();return !!res}
+async function rrCancel(r,btn){if(!r)return false;if(!await askOk({title:"Cancel your request for "+r.code+"?",ok:"Yes, cancel request",body:"The case stays and Admin won't see this request any more."}))return false;
+  const done=btn?btnBusy(btn,"Cancelling…"):()=>{};const res=await write(api=>api.cancelRemoveReq(r.id),"Request cancelled","Cancelling…");if(!res)done();return !!res}
+document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-rrlist]");if(b){e.preventDefault();openRRList()}});
 const bell=c=>caseNew(c)?' <span class="pill" style="background:#fff1d6;color:#8a5300;font-size:11px">🔔 Updated</span>':"";
 /* a lead case that reached Login (or Sanction / Disbursal) leaves the Interested lists – it is followed in Lead Cases */
 const isCPLead=c=>!!c&&(/\bcp\b|connector|channel partner/i.test(String(c["Lead Source"]||""))||!!String(c["CP Name"]||"").trim()||!!String(c["Connector Name"]||"").trim());
@@ -2262,7 +2305,7 @@ const inr=v=>{const n=parseFloat(String(v).replace(/[^\d.]/g,""));return isFinit
 function casesTable(list,{empty="No lead cases yet.",sel=false}={}){
   const S2=view.csel||new Set(),allOn=sel&&list.length&&list.every(c=>S2.has(c.code));
   return `<div class="card tw"><table class="ctab"><tr>${sel?`<th style="width:28px"><input type="checkbox" id="cselAll" title="Select all shown (${list.length})" ${allOn?"checked":""}></th>`:""}<th>Lead code</th><th>Lead date</th><th>Customer</th><th>SM</th><th>Product</th><th>Amount</th><th>Shared by</th><th>With</th><th>Bank</th><th>Status</th><th>Next follow-up</th><th>Last update</th><th></th></tr>
-   ${list.map(c=>`<tr${sel&&S2.has(c.code)?' class="selrow"':""}>${sel?`<td><input type="checkbox" data-csel="${esc(c.code)}" ${S2.has(c.code)?"checked":""}></td>`:""}<td class="num" style="white-space:nowrap"><b>${esc(c.code)}</b>${bell(c)}</td><td class="small num" style="white-space:nowrap">${esc(c["Lead Date"])}</td>
+   ${list.map(c=>`<tr${sel&&S2.has(c.code)?' class="selrow"':""}>${sel?`<td><input type="checkbox" data-csel="${esc(c.code)}" ${S2.has(c.code)?"checked":""}></td>`:""}<td class="num" style="white-space:nowrap"><b>${esc(c.code)}</b>${bell(c)}${rrChip(c)}</td><td class="small num" style="white-space:nowrap">${esc(c["Lead Date"])}</td>
      <td><b>${esc(c["Customer Name"])}</b><div class="small mute num" style="white-space:nowrap">${isLead()?`<a class="lnk" href="${telHref(c["Contact Number"])}">${esc(c["Contact Number"])}</a>`:esc(c["Contact Number"])}</div></td>
      <td class="small" style="white-space:nowrap">${c["SM Name"]?`<span class="smtag">${esc(c["SM Name"])}</span>`:'<span class="mute">—</span>'}</td><td class="small">${esc(c.Product)||'<span class="mute">—</span>'}</td><td class="num" style="white-space:nowrap">${inr(c["Amount Required"])||'<span class="mute">—</span>'}${numOf(c["Sanction amount"])?`<div class="small" style="color:#1f6feb" title="Sanction amount">✅ ${inr(c["Sanction amount"])}</div>`:""}${numOf(c["Disbursed amount"])?`<div class="small" style="color:var(--green)" title="Disbursed amount">💰 ${inr(c["Disbursed amount"])}</div>`:""}</td>
      <td class="small">${esc(c["Lead Shared by"])}</td><td class="small" style="white-space:nowrap">${esc(c["Team Lead"])||NA}</td><td class="small">${esc(c["Bank Name"])||'<span class="mute">—</span>'}</td>
@@ -2341,6 +2384,8 @@ function openCase(code){
     ${canEd?`<div class="row" style="margin-bottom:6px"><a class="btn call" href="${telHref(c["Contact Number"])}">📞 Call ${esc(c["Contact Number"])}</a>${casePill(c)}</div>`
       :sentByMe?`<div class="card pad" style="background:#eef6f0;border-color:#cfe6d6;margin-bottom:8px"><b>📨 You sent this case to ${esc(holderOf(c))}.</b><div class="small mute">You can follow every update here. Only ${esc(holderOf(c))} or Admin can change it.</div></div>`
       :(isLead()?`<div class="card pad" style="background:#f5f7fb;margin-bottom:8px"><b>View only.</b><div class="small mute">Editing lead cases is switched off for you – ask Admin if you need it.</div></div>`:`<div class="card pad" style="background:#f5f7fb;margin-bottom:8px"><b>This customer is with your Team Lead.</b><div class="small mute">You can see every update here; your Team Lead does the follow-up.</div></div>`)}
+    ${(()=>{const p=rrPend(c.code),l=rrLast(c.code);if(p)return `<div class="card pad rrcard"><b>🗑 ${esc(p.by)} asked Admin to remove this case</b> <span class="small mute">· ${rrWhen(p.at)}</span><div class="small" style="margin-top:4px">Reason: “${esc(p.reason)}”</div>${ME&&ME.role==="Admin"?`<div class="row" style="margin-top:8px;gap:8px"><button class="btn sm danger" id="rrOk">✓ Approve &amp; remove</button><button class="btn sm" id="rrNo">✕ Keep case</button></div>`:`<div class="small mute" style="margin-top:4px">The case stays until Admin approves.</div>`}</div>`;
+      if(l&&l.st==="Rejected"&&canAskRemove())return `<div class="card pad" style="background:#f5f7fb;margin-bottom:8px"><b>Admin did not approve removing this case</b> <span class="small mute">· ${esc(l.dBy)}, ${rrWhen(l.dAt)}</span>${l.note?`<div class="small" style="margin-top:4px">Note: “${esc(l.note)}”</div>`:""}</div>`;return ""})()}
     ${loanSteps(c,canEd)}
     <div class="cgrid">
      ${phEd?`<div style="grid-column:1/-1"><label class="f" for="cf_ContactNumber">Customer mobile number${c["Contact Number"]?"":' <span style="color:var(--amber);font-weight:600">· missing – add it</span>'}</label><input id="cf_ContactNumber" inputmode="tel" maxlength="14" value="${esc(c["Contact Number"]||"")}" placeholder="10-digit mobile, e.g. 98XXX XXXXX" style="width:100%;max-width:320px"><div id="cf_phMsg" class="small" style="margin-top:4px"></div></div>`:""}
@@ -2362,8 +2407,8 @@ function openCase(code){
     ${c["Follow-up history"]?`<details style="margin-top:10px"><summary class="small"><b>Earlier follow-up history</b> <span class="mute">(from the old sheet)</span></summary><div class="small" style="margin-top:6px;white-space:pre-wrap;background:#f7f8fa;border-radius:8px;padding:8px 10px">${esc(c["Follow-up history"])}</div></details>`:""}
     <div class="small mute" style="margin-top:8px">Monthly: ${esc(c.Monthly)} · Last update ${c.upd?fmt(c.upd):"—"} by ${esc(c["Updated by"])}</div>
    </div>
-   <div class="mf">${isLead()&&can("caseRemove")?`<button class="btn" id="crm" style="margin-right:auto;color:var(--red)">🗑 Remove case</button>`:""}${canTransferCase(c)?`<button class="btn" id="ctr">${!can("caseTransfer")&&ownerCanSend(c)?((S.handTo||[]).length===1?"📤 Send to "+esc(S.handTo[0].name)+" (documents ready)":"📤 Send case (documents ready)"):"⇄ Transfer case"}</button>`:""}<button class="btn" id="mc">${canEd?"Cancel":"Close"}</button>${canEd?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
-  $("#modal").style.maxWidth="880px";$("#mbg").classList.add("show");const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#mc").onclick=close;
+   <div class="mf">${isLead()&&can("caseRemove")?`<button class="btn" id="crm" style="margin-right:auto;color:var(--red)">🗑 Remove case</button>`:canAskRemove()?(rrPend(c.code)?`<button class="btn" id="crqc" style="margin-right:auto" title="Admin has not decided yet">⏳ Removal asked · Cancel request</button>`:`<button class="btn" id="crq" style="margin-right:auto;color:var(--red)">🗑 Ask Admin to remove</button>`):""}${canTransferCase(c)?`<button class="btn" id="ctr">${!can("caseTransfer")&&ownerCanSend(c)?((S.handTo||[]).length===1?"📤 Send to "+esc(S.handTo[0].name)+" (documents ready)":"📤 Send case (documents ready)"):"⇄ Transfer case"}</button>`:""}<button class="btn" id="mc">${canEd?"Cancel":"Close"}</button>${canEd?`<button class="btn pri" id="csave">Save case</button>`:""}</div>`;
+  $("#modal").style.maxWidth="880px";$("#mbg").classList.add("show");$("#modal").scrollTop=0;$("#mbg").scrollTop=0;const close=()=>$("#mbg").classList.remove("show");$("#mx").onclick=close;$("#mc").onclick=close;
   if(canEd)bindLoanSteps(c);
   lakhHints();cpFirmPick("cf");
   document.querySelectorAll("#cf_cpq [data-cpq]").forEach(b=>b.onclick=()=>{document.querySelectorAll("#cf_cpq .chip").forEach(x=>x.classList.remove("on"));b.classList.add("on");const on=!!b.dataset.cpq,blk=$("#cf_cpBlk");if(blk)blk.style.display=on?"contents":"none";
@@ -2382,6 +2427,16 @@ function openCase(code){
   const rmb=$("#crm");if(rmb)rmb.onclick=async()=>{
     if(!await askOk({title:"Remove case "+c.code+"?",ok:"Yes, remove",danger:true,body:`<b>${esc(c["Customer Name"])}</b> · ${esc(c["Contact Number"])}<br>The case leaves Lead Cases for everyone. A copy is kept in the <b>Removed Cases</b> tab of the sheet with your name and the time. The contact stays in the Calling List and can get a new case later.`}))return;
     const done=btnBusy(rmb,"Removing…");if(await write(api=>api.removeCase(c.code),"Case "+c.code+" removed","Removing case "+c.code+"…"))close();else done()};
+  const rqb=$("#crq");if(rqb)rqb.onclick=async()=>{
+    const pr=askOk({title:"Ask Admin to remove "+c.code+"?",ok:"Send to Admin",danger:true,body:`<b>${esc(c["Customer Name"])}</b> · ${esc(c["Contact Number"])}<div class="small mute" style="margin:2px 0 10px">The case is <b>not removed now</b> – Admin gets your request and decides. You'll see the answer here.</div>
+      <label class="f" for="rqWhy">Why should it be removed?</label><div class="chips" style="margin:0 0 6px">${["Duplicate case","Test case","Wrong entry","Customer not interested"].map(x=>`<button type="button" class="chip" data-rqw="${x}">${x}</button>`).join("")}</div>
+      <textarea id="rqWhy" maxlength="300" style="width:100%;min-height:60px" placeholder="e.g. Duplicate of SNFS-619 – same customer"></textarea>`});
+    const w=$("#rqWhy"),y=$("#cfmYes"),chk=()=>y.disabled=w.value.trim().length<3;chk();w.oninput=chk;
+    document.querySelectorAll("[data-rqw]").forEach(b=>b.onclick=()=>{w.value=b.dataset.rqw+(w.value.trim()&&!w.value.startsWith(b.dataset.rqw)?" – "+w.value.trim():"");chk();w.focus()});
+    if(!await pr)return;const why=w.value.trim();if(why.length<3)return;
+    const done=btnBusy(rqb,"Sending…");if(await write(api=>api.requestRemove(c.code,why),"Sent to Admin – "+c.code+" stays until Admin approves","Sending request…"))close();else done()};
+  const rqc=$("#crqc");if(rqc)rqc.onclick=async()=>{if(await rrCancel(rrPend(c.code),rqc))close()};
+  const rok=$("#rrOk"),rno=$("#rrNo");if(rok)rok.onclick=async()=>{if(await rrDecide(rrPend(c.code),true,rok))close()};if(rno)rno.onclick=async()=>{if(await rrDecide(rrPend(c.code),false,rno))close()};
   const sv=$("#csave");if(sv)sv.onclick=async()=>{const o={code:c.code};
     ["SM Name","Lead Shared by","Status","Customer Status","Product","Amount Required","Lead Type","Lead Source","Bank Name","Banker Name","Banker Contact No","Disbursed Date",...(S.cpFirm?["CP Name"]:[]),"Connector Name","Connector Contact No","Connector Location","Remarks",...(S.stages?LS_EXTRA:[])].forEach(h=>{const el=$("#cf_"+h.replace(/\W/g,""));if(el)o[h]=el.value.trim()});
     if(o.Status==="Disbursed"&&!o["Disbursed Date"])return toast("Add the disbursed date");

@@ -148,6 +148,9 @@ function act_(me, b) {
         case "newCase":    return newCase_(me, b.c || {}, !!b.force, String(b.to || ""));
         case "createCase": can_(me, "caseEdit"); return createCaseFor_(me, b.leadId);
         case "removeCase": can_(me, "caseRemove"); return removeCase_(me, b.code);
+        case "requestRemove": return requestRemove_(me, b.code, b.reason);        // 11.28: Team Lead asks, Admin approves
+        case "cancelRemoveReq": return cancelRemoveReq_(me, b.id);
+        case "decideRemove": return decideRemove_(me, b.id, !!b.ok, b.note);
         case "removeLogs": if (me.role !== "Admin") throw new Error("Only Admin can remove call logs"); return removeLogs_(me, b.ids || []);
         case "transferCase": return transferCase_(me, b.code, b.to, b.note);
         case "transferCases": return transferCases_(me, b.codes || [], b.to);   // Admin (caseTransfer) or the SM who filled the case, while it's still with them
@@ -331,7 +334,7 @@ function loadAll_(me) {
     connectors: connectorsFor_(me, emps),
     cpData: true,
     pagePerms: true,
-    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true, phoneEdit: true, cpShared: true, pinView: true, sharedLoan: true, stageNew: true, cpFirm: true, cpFirms: cpFirms_(),   // 11.27: CP firm drop-down from the "CP List" tab · 11.26: CP name (firm) + CP person name · 11.25: new case at its step; field SM leads = Own field work · 11.24: Lead Shared by sees their cases · 11.23: Admin sees PINs · 11.21: CP details when Lead Shared by = CP · 11.20: add a missing customer number in the case window · 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
+    leadForm: true, cpLead: true, meetLoc: true, keepLead: true, fwNoShared: true, phoneEdit: true, cpShared: true, pinView: true, sharedLoan: true, stageNew: true, cpFirm: true, cpFirms: cpFirms_(), removeReq: canAskRemove_(me) || me.role === "Admin", removeReqs: removeReqsFor_(me),   // 11.28: Team Lead asks Admin to remove a case · 11.27: CP firm drop-down from the "CP List" tab · 11.26: CP name (firm) + CP person name · 11.25: new case at its step; field SM leads = Own field work · 11.24: Lead Shared by sees their cases · 11.23: Admin sees PINs · 11.21: CP details when Lead Shared by = CP · 11.20: add a missing customer number in the case window · 11.19: no "Lead Shared by" for SM - Field work · 11.18: whoever fills the lead form can keep it until documents come · 11.17: Location in field work, CP in the lead form · 11.16: "SM - Field work" role and the "Fill the lead form" permission                                  // Admin can switch each tab on / off, incl. a person's own page tabs (11.15+)                                     // this server knows "CP data" contacts (11.13+)
     stages: true,                                     // case window can save login / sanction dates and amounts (11.14+)
     ...perfOut_(me, emps, allLogs),
     serverTime: now_()
@@ -1013,7 +1016,7 @@ function removeLogs_(me, ids) {
   });
   return { saved: true, removed: hit.length };
 }
-function removeCase_(me, code) {
+function removeCase_(me, code, by) {
   const sh = caseSheet_(), rows = caseRows_();
   const i = rows.findIndex(r => String(r[C_["Unique Lead Code"]]).trim() === String(code || "").trim());
   if (i < 0) throw new Error("Case " + code + " not found");
@@ -1023,9 +1026,69 @@ function removeCase_(me, code) {
   const hdr = sh.getRange(1, 1, 1, nc).getDisplayValues()[0], row = sh.getRange(i + 2, 1, 1, nc).getValues()[0];
   let rm = ss.getSheetByName("Removed Cases");
   if (!rm) { rm = ss.insertSheet("Removed Cases"); rm.getRange(1, 1, 1, nc + 2).setValues([hdr.concat(["Removed at", "Removed by"])]); rm.setFrozenRows(1); }
-  rm.appendRow(row.concat(Array(Math.max(0, nc - row.length)).fill(""), [now_(), me.name]));
+  rm.appendRow(row.concat(Array(Math.max(0, nc - row.length)).fill(""), [now_(), by || me.name]));
   sh.deleteRow(i + 2);
   return { saved: true, removed: code };
+}
+/* ---------------- 11.28: Team Lead asks to remove a case, Admin approves (Suraj, 28 Nov) ----------------
+   "Remove Requests" tab: one row per request. The case is only removed when Admin clicks Approve
+   (then it goes to Removed Cases like any removal, with who asked and who approved). */
+const RR_HDR = ["Request ID", "Requested at", "Lead Code", "Customer", "Contact", "Requested by", "Requested by ID", "Reason", "Status", "Decided at", "Decided by", "Admin note"];
+function rrSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName("Remove Requests");
+  if (!sh) { sh = ss.insertSheet("Remove Requests"); sh.getRange(1, 1, 1, RR_HDR.length).setValues([RR_HDR]); sh.setFrozenRows(1); }
+  return sh;
+}
+function rrRows_() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Remove Requests"); if (!sh) return [];
+  const n = sh.getLastRow() - 1; if (n < 1) return [];
+  return sh.getRange(2, 1, n, RR_HDR.length).getDisplayValues().map((r, i) => (r.row = i + 2, r)).filter(r => String(r[0]).trim());
+}
+function canAskRemove_(me) { return me.role === "Team Lead" && !perms_(me).has("caseRemove"); }
+function requestRemove_(me, code, reason) {
+  if (!canAskRemove_(me)) throw new Error("Only a Team Lead can ask Admin to remove a case");
+  code = String(code || "").trim(); reason = tidyText_(String(reason || "").replace(/[<>]/g, "").replace(/^[=+\-@]+/, "").trim()).slice(0, 300);
+  if (reason.length < 3) throw new Error("Write why this case should be removed");
+  const rows = caseRows_(), c = rows.find(r => String(r[C_["Unique Lead Code"]]).trim() === code);
+  if (!c) throw new Error("Case " + code + " not found");
+  const emps = emps_();
+  if (!canSeeCase_(me, c, emps, teamFor_(me, emps))) throw new Error("This case isn't in your list");
+  const all = rrRows_();
+  if (all.some(r => r[2] === code && r[8] === "Pending")) throw new Error("Removal of " + code + " is already waiting for Admin");
+  const n = all.reduce((m, r) => Math.max(m, +(String(r[0]).match(/\d+/) || [0])[0]), 0) + 1;
+  rrSheet_().appendRow(["RR-" + n, "'" + now_(), code, String(c[C_["Customer Name"]] || ""), "'" + String(c[C_["Contact Number"]] || ""), me.name, me.id, reason, "Pending", "", "", ""]);
+  return { saved: true, request: "RR-" + n };
+}
+function cancelRemoveReq_(me, id) {
+  const r = rrRows_().find(x => x[0] === String(id || "").trim());
+  if (!r) throw new Error("Request not found");
+  if (r[6] !== me.id && me.role !== "Admin") throw new Error("You can cancel only your own request");
+  if (r[8] !== "Pending") throw new Error("This request is already " + r[8].toLowerCase());
+  rrSheet_().getRange(r.row, 9, 1, 4).setValues([["Cancelled", "'" + now_(), me.name, ""]]);
+  return { saved: true };
+}
+function decideRemove_(me, id, ok, note) {
+  if (me.role !== "Admin") throw new Error("Only Admin can approve a removal");
+  const r = rrRows_().find(x => x[0] === String(id || "").trim());
+  if (!r) throw new Error("Request not found");
+  if (r[8] !== "Pending") throw new Error("This request is already " + r[8].toLowerCase());
+  note = String(note || "").replace(/[<>]/g, "").replace(/^[=+\-@]+/, "").trim().slice(0, 200);
+  let status = ok ? "Approved" : "Rejected";
+  if (ok) {
+    const there = caseRows_().some(x => String(x[C_["Unique Lead Code"]]).trim() === r[2]);
+    if (there) removeCase_(me, r[2], me.name + " – approved " + r[0] + " asked by " + r[5] + ": " + r[7]);
+    else { status = "Approved"; note = (note ? note + " · " : "") + "case was already removed"; }
+  }
+  rrSheet_().getRange(r.row, 9, 1, 4).setValues([[status, "'" + now_(), me.name, note]]);
+  return { saved: true, status: status };
+}
+// Admin gets every pending request + the last 14 days; a Team Lead gets her own (pending + last 14 days)
+function removeReqsFor_(me) {
+  try {
+    const cut = Date.now() - 14 * 864e5, recent = r => r[8] === "Pending" || new Date(String(r[9]).replace(" ", "T")).getTime() >= cut;
+    return rrRows_().filter(r => (me.role === "Admin" || r[6] === me.id) && recent(r)).map(r => r.slice(0, RR_HDR.length));
+  } catch (e) { return []; }
 }
 function saveCase_(me, c) {
   const sh = caseSheet_(), rows = caseRows_(), emps = emps_();
